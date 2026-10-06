@@ -29,6 +29,57 @@ import UserNotifications
     NSWorkspace.shared.open(
       URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
   }
+  @Published var archiveInventory = ArchiveInventory()
+  @Published var archiveRoot = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Developer/Xcode/Archives")
+  @Published var archiveScanDate: Date?
+  @Published var archivesLoading = false
+  @Published var pinnedArchives = Set(
+    UserDefaults.standard.stringArray(forKey: "pinnedArchives") ?? [])
+  @AppStorage("archiveKeep") var archiveKeep = 3
+  func pinArchive(_ path: String, _ pin: Bool) {
+    if pin { pinnedArchives.insert(path) } else { pinnedArchives.remove(path) }
+    UserDefaults.standard.set(Array(pinnedArchives).sorted(), forKey: "pinnedArchives")
+  }
+  func chooseArchiveRoot() {
+    guard !busy else { return }
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    if panel.runModal() == .OK, let url = panel.url {
+      archiveRoot = url
+      scanArchives()
+    }
+  }
+  func scanArchives() {
+    guard !busy else { return }
+    busy = true
+    archivesLoading = true
+    archiveInventory = ArchiveInventory()
+    archiveScanDate = nil
+    cancellation = Cancellation()
+    let token = cancellation
+    let root = archiveRoot
+    status = t("Читаем архивы Xcode…", "Reading Xcode archives…")
+    task = Task {
+      let result = await Task.detached {
+        XcodeArchives.scan(root: root, cancellation: token) { count in
+          Task { @MainActor in
+            guard self.cancellation === token, self.archivesLoading else { return }
+            self.status = self.t("Проверено архивов: \(count)", "Archives checked: \(count)")
+          }
+        }
+      }.value
+      archiveInventory = result
+      archiveScanDate = Date()
+      archivesLoading = false
+      busy = false
+      status =
+        result.complete
+        ? t("Архивы прочитаны", "Archive inventory complete")
+        : t("Обход архивов неполный. См. ошибки.", "Archive inventory incomplete. See issues.")
+    }
+  }
   @Published var page = "overview"
   @Published var roots: [URL] = [URL(fileURLWithPath: "/")]
   @Published var volumes: [ScanVolume] = Volumes.discover()

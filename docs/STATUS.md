@@ -81,3 +81,11 @@ Ordinary-directory quarantine via disk-map list context menu. Tree manifests inc
 ## 0.1.8 update
 
 Review-only cleanup advisor with two deterministic local rules: old installers in the user's Downloads (90 days), and large unmodified files in personal folders (500 MB, 180 days). Protected data, known dependencies, app/photo-library packages and hard links are excluded; overlapping rules emit one candidate. Refresh runs off the main actor with generation guards. Candidate reveal validates original file identity; exclusions persist. 45 tests pass locally, including threshold boundaries, rule precedence, path scope and deduplication. Combined 0.1.7/0.1.8 installed locally with backup of app and 55 MB saved scan; original partial scan restored with 237450 files. No real cleanup performed.
+
+## 0.1.9 update
+
+Read-only Xcode archive inventory parses bounded Info.plist metadata and enumerates local contents for logical size and dSYM package count. Retention groups by Bundle ID/team; latest N plus additional pinned archives; missing team/date/version/build, unsupported metadata and traversal issues require manual review. Pins and limit persist in preferences; results remain in memory and are re-read on demand. Search, review filter, Finder reveal and cancellation included. No deletion, symbol UUID validation, archive backup or automatic release identification. 50 local tests pass. Installed 0.1.9 with app and scan backup; previous 237450-file partial scan restored. Installed UI read 98 real Xcode archives and displayed metadata, dSYM counts and retention labels; no archive changed. Protected-directory probes still report denied after ad-hoc update; permission continuity remains unresolved.
+
+Next: verify dSYM UUID associations and backup requirements before enabling archive quarantine; then DerivedData and simulator lifecycle policies. Agent-specific session adapters and automatic app updates remain planned.
+
+Apple reference: [Locating a missing debug symbol file](https://developer.apple.com/documentation/xcode/locating-a-missing-debug-symbol-file). Released archives and matching symbols should be retained for crash diagnosis.

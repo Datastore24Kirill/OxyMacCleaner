@@ -109,7 +109,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.8 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.9 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -420,8 +420,7 @@ struct RootView: View {
               vm.page = "files"
             }
             Button(vm.t("Архивы Xcode", "Xcode archives")) {
-              vm.scan([vm.home.appendingPathComponent("Library/Developer/Xcode/Archives")])
-              vm.page = "files"
+              vm.scanArchives()
             }
             Button(vm.t("Выбрать проект", "Choose project")) {
               vm.chooseRoots()
@@ -429,6 +428,7 @@ struct RootView: View {
             }
           }.disabled(vm.busy)
         }
+        card { XcodeArchiveView().environmentObject(vm) }
         card {
           Label(vm.t("Симуляторы", "Simulators"), systemImage: "iphone").font(.title2.bold())
           HStack {
@@ -654,8 +654,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.8 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.8 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.9 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.9 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)
