@@ -10,7 +10,7 @@ struct DeveloperReportView: View {
           Text(vm.developerResult).font(.caption).textSelection(.enabled).frame(
             maxWidth: .infinity, alignment: .leading)
         }.frame(maxHeight: 240)
-      }
+      }.oxyHelp(.report)
     }
   }
 }
@@ -34,14 +34,15 @@ struct SimulatorCleanupView: View {
         )
       ).foregroundStyle(.secondary)
       HStack {
-        Button(vm.t("Обновить список", "Refresh inventory")) { vm.readSimulators() }
+        Button(vm.t("Обновить список", "Refresh inventory")) { vm.readSimulators() }.oxyHelp(
+          .simRead)
         Spacer()
         Button(
           vm.t(
             "Удалить выбранные (\(vm.selectedDevices.count + vm.selectedRuntimes.count))…",
             "Delete selected (\(vm.selectedDevices.count + vm.selectedRuntimes.count))…"),
           role: .destructive
-        ) { vm.deleteSelectedSimulators() }.disabled(
+        ) { vm.deleteSelectedSimulators() }.oxyHelp(.simDelete).disabled(
           vm.selectedDevices.isEmpty && vm.selectedRuntimes.isEmpty)
       }.disabled(vm.busy)
       DeveloperReportView()
@@ -50,18 +51,20 @@ struct SimulatorCleanupView: View {
         Button(vm.t("Отметить недоступные", "Select unavailable")) {
           vm.selectedDevices.formUnion(
             vm.simulatorInventory.devices.filter { !$0.isAvailable && $0.removable }.map(\.id))
-        }
+        }.oxyHelp(.simUnavailable)
         Button(vm.t("Снять выбор", "Clear selection")) {
           vm.selectedDevices = []
           vm.selectedRuntimes = []
-        }
+        }.oxyHelp(.clearSelection)
       }.disabled(vm.busy)
       TextField(vm.t("Поиск устройства или версии ОС", "Search device or OS"), text: $query)
+        .oxyHelp(.search)
         .textFieldStyle(.roundedBorder)
       HStack {
-        Button(vm.t("Назад", "Previous")) { page -= 1 }.disabled(page == 0)
+        Button(vm.t("Назад", "Previous")) { page -= 1 }.oxyHelp(.previous).disabled(page == 0)
         Text("\(page + 1)/\(max(1, (devices.count + 9) / 10)) · \(devices.count)")
-        Button(vm.t("Далее", "Next")) { page += 1 }.disabled((page + 1) * 10 >= devices.count)
+        Button(vm.t("Далее", "Next")) { page += 1 }.oxyHelp(.next).disabled(
+          (page + 1) * 10 >= devices.count)
       }
       ForEach(devices.dropFirst(page * 10).prefix(10)) { device in
         Toggle(
@@ -93,7 +96,7 @@ struct SimulatorCleanupView: View {
               ).font(.caption).foregroundStyle(.orange)
             }
           }
-        }.toggleStyle(.checkbox).disabled(vm.busy || !device.removable)
+        }.oxyHelp(.selectDevice).toggleStyle(.checkbox).disabled(vm.busy || !device.removable)
       }
       Divider()
       Text(vm.t("Runtimes — версии ОС", "Runtimes — OS versions")).font(.headline)
@@ -102,7 +105,7 @@ struct SimulatorCleanupView: View {
           vm.simulatorInventory.runtimes.filter {
             $0.unused(days: 90) && Simulators.canRemove($0, devices: vm.simulatorInventory.devices)
           }.map(\.id))
-      }.disabled(vm.busy)
+      }.oxyHelp(.simOld).disabled(vm.busy)
       Text(
         vm.t(
           "Возраст не означает, что версия вам не нужна. Проверьте выбор. Удаление runtime оставит связанные устройства без ОС; их данные автоматически не удаляются.",
@@ -146,7 +149,7 @@ struct SimulatorCleanupView: View {
               ).font(.caption).foregroundStyle(.orange)
             }
           }
-        }.toggleStyle(.checkbox).disabled(
+        }.oxyHelp(.selectRuntime).toggleStyle(.checkbox).disabled(
           vm.busy || !Simulators.canRemove(runtime, devices: vm.simulatorInventory.devices))
       }
       Text(
@@ -172,13 +175,15 @@ struct DerivedDataView: View {
         )
       ).foregroundStyle(.secondary)
       HStack {
-        Button(vm.t("Прочитать DerivedData", "Read DerivedData")) { vm.readDerivedData() }
+        Button(vm.t("Прочитать DerivedData", "Read DerivedData")) { vm.readDerivedData() }.oxyHelp(
+          .derivedRead)
         Spacer()
         Button(
           vm.t(
             "В карантин выбранные (\(vm.selectedDerived.count))…",
             "Quarantine selected (\(vm.selectedDerived.count))…")
-        ) { vm.quarantineDerivedData() }.disabled(vm.selectedDerived.isEmpty)
+        ) { vm.quarantineDerivedData() }.oxyHelp(.derivedQuarantine).disabled(
+          vm.selectedDerived.isEmpty)
       }.disabled(vm.busy)
       Text(
         vm.t(
@@ -213,7 +218,7 @@ struct DerivedDataView: View {
               ).font(.caption).foregroundStyle(.orange)
             }
           }
-        }.toggleStyle(.checkbox).disabled(vm.busy || cache.issues > 0)
+        }.oxyHelp(.selectDerived).toggleStyle(.checkbox).disabled(vm.busy || cache.issues > 0)
       }
       Text(DerivedData.root.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
       if let date = vm.derivedReadAt {

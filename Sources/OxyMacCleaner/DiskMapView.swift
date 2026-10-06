@@ -19,11 +19,13 @@ struct DiskMapView: View {
           vm.mapPath = URL(fileURLWithPath: vm.mapPath).deletingLastPathComponent().path
         } label: {
           Label(vm.t("Выше", "Up"), systemImage: "arrow.up")
-        }
-        .disabled(vm.roots.contains { $0.path == vm.mapPath } || vm.busy)
+        }.oxyHelp(.up)
+          .disabled(vm.roots.contains { $0.path == vm.mapPath } || vm.busy)
         Menu(vm.t("Корень", "Root")) {
-          ForEach(vm.roots, id: \.path) { root in Button(root.path) { vm.mapPath = root.path } }
-        }.fixedSize()
+          ForEach(vm.roots, id: \.path) { root in
+            Button(root.path) { vm.mapPath = root.path }.oxyHelp(.mapRoot)
+          }
+        }.oxyHelp(.mapRoot).fixedSize()
         Text(vm.mapPath).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
         Spacer()
         Text(size(nodes.reduce(0) { $0 + $1.bytes })).monospacedDigit()
@@ -42,36 +44,7 @@ struct DiskMapView: View {
           ZStack(alignment: .topLeading) {
             ForEach(tiles, id: \.index) { tile in
               let node = shown[tile.index]
-              Button {
-                if node.directory {
-                  vm.mapPath = node.path
-                } else if node.path != "remaining" {
-                  vm.reveal(node.path)
-                }
-              } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                  if tile.width > 65 && tile.height > 40 {
-                    Text(
-                      node.path == "remaining"
-                        ? vm.t("Остальное · см. список", "Remaining · see list") : node.name
-                    ).font(.caption.bold()).lineLimit(2)
-                    Text(size(node.bytes)).font(.caption2).lineLimit(1)
-                  }
-                }.padding(tile.width > 40 ? 8 : 0).frame(
-                  width: max(0, tile.width - 3), height: max(0, tile.height - 3),
-                  alignment: .topLeading
-                )
-                .background(
-                  Color(hue: Double(tile.index % 12) / 12, saturation: 0.5, brightness: 0.55),
-                  in: RoundedRectangle(cornerRadius: 6)
-                )
-                .foregroundStyle(.white).clipped()
-              }.buttonStyle(.plain).offset(x: tile.x, y: tile.y)
-                .help(node.path + " · " + size(node.bytes))
-                .accessibilityLabel(
-                  (node.path == "remaining"
-                    ? vm.t("Остальные объекты", "Remaining items") : node.name) + " "
-                    + size(node.bytes))
+              mapTile(node: node, tile: tile)
             }
           }
         }.frame(minHeight: 180, idealHeight: 250, maxHeight: 320)
@@ -81,21 +54,22 @@ struct DiskMapView: View {
               if node.directory { vm.mapPath = node.path } else { vm.reveal(node.path) }
             } label: {
               Label(node.name, systemImage: node.directory ? "folder" : "doc")
-            }.buttonStyle(.plain)
+            }.oxyHelp(.mapNode).buttonStyle(.plain)
             Spacer()
             Text(size(node.bytes)).monospacedDigit()
             Button {
               vm.reveal(node.path)
             } label: {
               Image(systemName: "arrow.up.right.square")
-            }.buttonStyle(.borderless)
+            }.oxyHelp(.finder).buttonStyle(.borderless)
           }.contextMenu {
             if node.directory {
               Button(vm.t("Переместить папку в карантин…", "Quarantine folder…")) {
                 vm.quarantineDirectory(node.path)
-              }.disabled(vm.busy)
+              }.oxyHelp(.quarantine).disabled(vm.busy)
             }
             Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(node.path) }
+              .oxyHelp(.protect)
           }
         }
         Text(
@@ -107,5 +81,48 @@ struct DiskMapView: View {
         .font(.caption).foregroundStyle(.secondary)
       }
     }
+  }
+  private func tileHelp(_ node: DiskNode) -> String {
+    if node.path == "remaining" {
+      return vm.t(
+        "Остальные объекты перечислены в списке под картой.",
+        "Remaining items are listed below the map.")
+    }
+    return node.path + " · " + size(node.bytes) + "\n"
+      + vm.t(
+        node.directory ? "Открыть состав папки в карте." : "Показать файл в Finder.",
+        node.directory ? "Explore this folder in the map." : "Reveal this file in Finder.")
+  }
+  private func mapTile(node: DiskNode, tile: DiskLayout.Tile) -> some View {
+    Button {
+      if node.directory {
+        vm.mapPath = node.path
+      } else if node.path != "remaining" {
+        vm.reveal(node.path)
+      }
+    } label: {
+      VStack(alignment: .leading, spacing: 4) {
+        if tile.width > 65 && tile.height > 40 {
+          Text(
+            node.path == "remaining"
+              ? vm.t("Остальное · см. список", "Remaining · see list") : node.name
+          ).font(.caption.bold()).lineLimit(2)
+          Text(size(node.bytes)).font(.caption2).lineLimit(1)
+        }
+      }.padding(tile.width > 40 ? 8 : 0).frame(
+        width: max(0, tile.width - 3), height: max(0, tile.height - 3),
+        alignment: .topLeading
+      )
+      .background(
+        Color(hue: Double(tile.index % 12) / 12, saturation: 0.5, brightness: 0.55),
+        in: RoundedRectangle(cornerRadius: 6)
+      )
+      .foregroundStyle(.white).clipped()
+    }.buttonStyle(.plain).offset(x: tile.x, y: tile.y)
+      .help(tileHelp(node)).accessibilityHint(tileHelp(node))
+      .accessibilityLabel(
+        (node.path == "remaining"
+          ? vm.t("Остальные объекты", "Remaining items") : node.name) + " "
+          + size(node.bytes))
   }
 }

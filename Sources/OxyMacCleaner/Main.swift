@@ -58,6 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 }
 struct RootView: View {
   @State private var developerSection = "archives"
+  @State private var showHelp = false
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
     ("overview", "Обзор", "Overview", "square.grid.2x2"),
@@ -102,7 +103,8 @@ struct RootView: View {
                 .padding(11).background(
                   vm.page == p.0 ? Color.mint.opacity(0.18) : .clear,
                   in: RoundedRectangle(cornerRadius: 10))
-              }.buttonStyle(.plain)
+              }.help(vm.t("Открыть раздел: ", "Open section: ") + vm.t(p.1, p.2)).buttonStyle(
+                .plain)
             }
           }
         }
@@ -110,16 +112,25 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.11 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.12 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
           Text(pages.first { $0.0 == vm.page }.map { vm.t($0.1, $0.2) } ?? "").font(
             .largeTitle.bold())
           Spacer()
+          Button {
+            showHelp = true
+          } label: {
+            Label(vm.t("Как пользоваться", "How to use"), systemImage: "questionmark.circle")
+          }.oxyHelp(.help)
+            .popover(isPresented: $showHelp) {
+              SectionHelpView(page: vm.page, developerSection: developerSection).environmentObject(
+                vm)
+            }
           if vm.busy {
             if !vm.isScanning { ProgressView().controlSize(.small) }
-            Button(vm.t("Стоп", "Stop")) { vm.cancel() }
+            Button(vm.t("Стоп", "Stop")) { vm.cancel() }.oxyHelp(.stop)
           }
         }.padding(.top, 22)
         if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
@@ -204,18 +215,18 @@ struct RootView: View {
           if vm.volumeID == "custom" {
             Text(vm.t("Выбранная папка", "Selected folder")).tag("custom")
           }
-        }.labelsHidden().frame(maxWidth: 340)
+        }.oxyHelp(.volume).labelsHidden().frame(maxWidth: 340)
         Button {
           vm.refreshVolumes()
         } label: {
           Image(systemName: "arrow.clockwise")
-        }.help(vm.t("Обновить список дисков", "Refresh disks"))
+        }.oxyHelp(.refreshVolumes)
         Spacer()
         Button(
           vm.t(
             vm.volumeID == "custom" ? "Сканировать папку" : "Сканировать диск",
             vm.volumeID == "custom" ? "Scan folder" : "Scan disk")
-        ) { vm.scan() }.buttonStyle(.borderedProminent).tint(.teal)
+        ) { vm.scan() }.oxyHelp(.scan).buttonStyle(.borderedProminent).tint(.teal)
       }.disabled(vm.busy)
       if let disk = vm.volumes.first(where: { $0.id == vm.volumeID }) {
         ProgressView(value: Double(disk.used), total: Double(max(1, disk.total))).tint(.teal)
@@ -226,12 +237,13 @@ struct RootView: View {
       }
       HStack {
         Button(vm.t("Выбрать отдельную папку…", "Choose a specific folder…")) { vm.chooseRoots() }
+          .oxyHelp(.folder)
           .buttonStyle(.link).disabled(vm.busy)
         Spacer()
         Button(vm.t("Доступ к диску", "Disk access")) {
           vm.pendingDiskScan = false
           vm.showDiskAccess = true
-        }.buttonStyle(.link)
+        }.oxyHelp(.access).buttonStyle(.link)
       }
       note(
         "Проверяем доступные данные выбранного диска. Защищённые macOS объекты будут отмечены в отчёте; для расширенного сканирования может понадобиться полный доступ к диску.",
@@ -274,7 +286,7 @@ struct RootView: View {
           ) {
             Text(vm.report.issues.prefix(100).joined(separator: "\n")).font(.caption).textSelection(
               .enabled)
-          }
+          }.oxyHelp(.disclosure)
         }
         card {
           Label(vm.t("Первая тестовая версия", "First preview"), systemImage: "testtube.2").font(
@@ -311,30 +323,33 @@ struct RootView: View {
         ForEach(FileCategory.allCases, id: \.rawValue) { kind in
           Text(vm.t(kind.russian, kind.english)).tag(kind.rawValue)
         }
-      }
+      }.oxyHelp(.category)
       HStack {
         Picker(vm.t("Размер", "Size"), selection: $vm.minimumMB) {
           Text(vm.t("Любой", "Any")).tag(0)
           Text("≥ 100 MB").tag(100)
           Text("≥ 1 GB").tag(1000)
           Text("≥ 10 GB").tag(10000)
-        }
+        }.oxyHelp(.size)
         Picker(vm.t("Не изменялись", "Unmodified for"), selection: $vm.olderThanDays) {
           Text(vm.t("Любая дата", "Any date")).tag(0)
           Text(vm.t("30 дней", "30 days")).tag(30)
           Text(vm.t("90 дней", "90 days")).tag(90)
           Text(vm.t("Год", "One year")).tag(365)
-        }
+        }.oxyHelp(.age)
       }
-      TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search)
-        .textFieldStyle(.roundedBorder)
+      TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search).oxyHelp(
+        .search
+      )
+      .textFieldStyle(.roundedBorder)
       HStack {
         Text(vm.t("Файлы отсортированы по размеру", "Files sorted by size")).font(.caption)
           .foregroundStyle(.secondary)
         Spacer()
         Text("\(vm.selected.count)")
-        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.disabled(
-          vm.selected.isEmpty || vm.busy)
+        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.oxyHelp(.quarantine)
+          .disabled(
+            vm.selected.isEmpty || vm.busy)
       }
       List(visibleFiles.prefix(2000), selection: $vm.selected) { f in
         HStack {
@@ -349,10 +364,11 @@ struct RootView: View {
             vm.reveal(f.path)
           } label: {
             Image(systemName: "folder")
-          }.buttonStyle(.borderless)
+          }.oxyHelp(.finder).buttonStyle(.borderless)
         }.tag(f.path).contextMenu {
-          Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(f.path) }
-          Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(f.path) }
+          Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(f.path) }.oxyHelp(
+            .protect)
+          Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(f.path) }.oxyHelp(.finder)
         }
       }
       DisclosureGroup(
@@ -368,11 +384,11 @@ struct RootView: View {
                 vm.reveal(p.key)
               } label: {
                 Image(systemName: "folder")
-              }
+              }.oxyHelp(.finder)
             }.font(.caption)
           }
         }.frame(maxHeight: 180)
-      }
+      }.oxyHelp(.disclosure)
       note(
         "Показаны первые 2000 совпадений. Защищённые файлы и внутренние файлы пакетов не перемещаются.",
         "First 2,000 matches shown. Protected files and package internals cannot be moved.")
@@ -385,11 +401,14 @@ struct RootView: View {
         "Scan first. Contents are verified; hard links are not separate copies. Select extras while retaining at least one copy."
       )
       HStack {
-        Button(vm.t("Найти точные копии", "Find exact duplicates")) { vm.findDuplicates() }
-          .disabled(vm.busy || vm.report.files.isEmpty)
+        Button(vm.t("Найти точные копии", "Find exact duplicates")) { vm.findDuplicates() }.oxyHelp(
+          .duplicates
+        )
+        .disabled(vm.busy || vm.report.files.isEmpty)
         Spacer()
-        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.disabled(
-          vm.selected.isEmpty || vm.busy)
+        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.oxyHelp(.quarantine)
+          .disabled(
+            vm.selected.isEmpty || vm.busy)
       }
       List {
         ForEach(Array(vm.duplicates.enumerated()), id: \.offset) { _, group in
@@ -399,7 +418,7 @@ struct RootView: View {
                 isOn: Binding(
                   get: { vm.selected.contains(f.path) },
                   set: { if $0 { vm.selected.insert(f.path) } else { vm.selected.remove(f.path) } })
-              ) { Text(f.path).font(.caption).textSelection(.enabled) }
+              ) { Text(f.path).font(.caption).textSelection(.enabled) }.oxyHelp(.selectDuplicate)
             }
           }
         }
@@ -412,7 +431,7 @@ struct RootView: View {
         Text(vm.t("Архивы Xcode", "Xcode archives")).tag("archives")
         Text("DerivedData").tag("derived")
         Text(vm.t("Симуляторы", "Simulators")).tag("simulators")
-      }.pickerStyle(.segmented)
+      }.oxyHelp(.developerTab).pickerStyle(.segmented)
       ScrollView {
         if developerSection == "archives" {
           card { XcodeArchiveView().environmentObject(vm) }
@@ -430,7 +449,7 @@ struct RootView: View {
         card {
           Picker(vm.t("Агент", "Agent"), selection: $vm.agent) {
             ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
-          }.onChange(of: vm.agent) { _, _ in
+          }.oxyHelp(.agent).onChange(of: vm.agent) { _, _ in
             vm.transcript = nil
             vm.output = ""
           }
@@ -451,11 +470,12 @@ struct RootView: View {
                 Button(vm.t("Размер", "Size")) {
                   vm.scan([url])
                   vm.page = "files"
-                }.disabled(vm.busy)
+                }.oxyHelp(.agentSize).disabled(vm.busy)
               }
             }
           }
           Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
+            .oxyHelp(.importSession)
             .disabled(vm.busy)
           note(
             "TXT / MD / JSON / JSONL. Прямое чтение баз и запуск новой сессии пока не реализованы. Результат можно скопировать в новый чат нужного агента.",
@@ -475,14 +495,16 @@ struct RootView: View {
                 Text(vm.t("Бережный", "Careful")).tag("Бережный")
                 Text(vm.t("Сбалансированный", "Balanced")).tag("Сбалансированный")
                 Text(vm.t("Краткий", "Concise")).tag("Краткий")
-              }
-              Button(vm.t("Подготовить контекст", "Prepare handoff")) { vm.summarize() }
-                .buttonStyle(.borderedProminent).disabled(vm.busy || vm.model.isEmpty)
+              }.oxyHelp(.summaryStyle)
+              Button(vm.t("Подготовить контекст", "Prepare handoff")) { vm.summarize() }.oxyHelp(
+                .summarize
+              )
+              .buttonStyle(.borderedProminent).disabled(vm.busy || vm.model.isEmpty)
             }
             if vm.model.isEmpty {
               Button(vm.t("Настроить локальную модель", "Set up local model")) {
                 vm.page = "engine"
-              }
+              }.oxyHelp(.engine)
             }
           }
         }
@@ -497,11 +519,12 @@ struct RootView: View {
               Button(vm.t("Копировать", "Copy")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(vm.output, forType: .string)
-              }
-              Button(vm.t("Экспорт MD", "Export MD")) { vm.exportContext() }
+              }.oxyHelp(.copy)
+              Button(vm.t("Экспорт MD", "Export MD")) { vm.exportContext() }.oxyHelp(.export)
             }
-            TextEditor(text: $vm.output).font(.system(.body, design: .monospaced)).frame(
-              minHeight: 320)
+            TextEditor(text: $vm.output).oxyHelp(.editor).font(.system(.body, design: .monospaced))
+              .frame(
+                minHeight: 320)
             note(
               "Пересказ может потерять детали и не всегда короче оригинала. Проверьте решения и следующие шаги. Резервная копия сохранена.",
               "A summary can lose details and may not be shorter. Review decisions and next steps. A verified backup is retained."
@@ -523,9 +546,10 @@ struct RootView: View {
           HStack {
             Button(vm.t("Скачать и установить Ollama", "Download and install Ollama")) {
               vm.installOllama()
-            }.disabled(vm.busy)
-            Button(vm.t("Запустить", "Launch")) { vm.launchOllama() }
-            Button(vm.t("Проверить", "Check")) { vm.refreshModels() }.disabled(vm.busy)
+            }.oxyHelp(.installEngine).disabled(vm.busy)
+            Button(vm.t("Запустить", "Launch")) { vm.launchOllama() }.oxyHelp(.launchEngine)
+            Button(vm.t("Проверить", "Check")) { vm.refreshModels() }.oxyHelp(.checkEngine)
+              .disabled(vm.busy)
           }
         }
         card {
@@ -534,13 +558,13 @@ struct RootView: View {
             vm.t("Память Mac: ", "Mac memory: ")
               + size(Int64(ProcessInfo.processInfo.physicalMemory)))
           HStack {
-            Button("Qwen 2.5 · 3B (~2 GB)") { vm.pull("qwen2.5:3b") }
-            Button("Qwen 2.5 · 7B (~5 GB)") { vm.pull("qwen2.5:7b") }
+            Button("Qwen 2.5 · 3B (~2 GB)") { vm.pull("qwen2.5:3b") }.oxyHelp(.pull)
+            Button("Qwen 2.5 · 7B (~5 GB)") { vm.pull("qwen2.5:7b") }.oxyHelp(.pull)
           }.disabled(vm.busy)
           Picker(vm.t("Установленная модель", "Installed model"), selection: $vm.model) {
             Text(vm.t("Выберите модель", "Select model")).tag("")
             ForEach(vm.models, id: \.self) { Text($0).tag($0) }
-          }
+          }.oxyHelp(.model)
           note(
             "Начните с 3B. Качество пересказа зависит от модели; длинная история обрабатывается частями, без молчаливого обрезания. Другие задачи Ollama не останавливаются.",
             "Start with 3B. Quality depends on the model. Long histories are processed in chunks without silent truncation. Other Ollama tasks are not stopped."
@@ -557,16 +581,19 @@ struct RootView: View {
       )
       HStack {
         Button(vm.t("Напоминать каждые 5 дней", "Remind every 5 days")) { vm.enableNotifications() }
+          .oxyHelp(.notify)
         Button(vm.t("Проверить незавершённые операции", "Check interrupted operations")) {
           vm.recoverQuarantine()
-        }.disabled(vm.busy)
-        Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }
+        }.oxyHelp(.recover).disabled(vm.busy)
+        Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }.oxyHelp(
+          .finder)
         Button(
           vm.t("Удалить все архивы из карантина…", "Permanently delete quarantined archives…"),
           role: .destructive
-        ) { vm.eraseQuarantinedArchives() }
-        .disabled(
-          vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.archiveBackup != nil })
+        ) { vm.eraseQuarantinedArchives() }.oxyHelp(.eraseArchives)
+          .disabled(
+            vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.archiveBackup != nil }
+          )
       }
       List(
         vm.entries.filter {
@@ -584,13 +611,14 @@ struct RootView: View {
             Text(size(e.bytes))
             Text(e.date.formatted())
             Spacer()
-            Button(vm.t("Вернуть", "Restore")) { vm.restore(e) }
-            Button(vm.t("Вернуть в…", "Restore to…")) { vm.restore(e, alternate: true) }
+            Button(vm.t("Вернуть", "Restore")) { vm.restore(e) }.oxyHelp(.restore)
+            Button(vm.t("Вернуть в…", "Restore to…")) { vm.restore(e, alternate: true) }.oxyHelp(
+              .restoreElsewhere)
             Button(role: .destructive) {
               vm.erase(e)
             } label: {
               Image(systemName: "trash")
-            }.disabled(e.state != "quarantined")
+            }.oxyHelp(.erase).disabled(e.state != "quarantined")
           }.font(.caption)
         }.padding(.vertical, 6)
       }.disabled(vm.busy)
@@ -602,11 +630,11 @@ struct RootView: View {
         Text(vm.t("Системное", "System")).tag("system")
         Text(vm.t("Светлое", "Light")).tag("light")
         Text(vm.t("Тёмное", "Dark")).tag("dark")
-      }
+      }.oxyHelp(.theme)
       Picker("Language / Язык", selection: $vm.language) {
         Text("Русский").tag("ru")
         Text("English").tag("en")
-      }
+      }.oxyHelp(.language)
       Section(vm.t("Исключения", "Exclusions")) {
         ForEach(vm.exclusions, id: \.self) { p in
           HStack {
@@ -615,7 +643,7 @@ struct RootView: View {
             Button(vm.t("Убрать", "Remove")) {
               vm.exclusions.removeAll { $0 == p }
               UserDefaults.standard.set(vm.exclusions, forKey: "exclusions")
-            }
+            }.oxyHelp(.removeExclusion)
           }
         }
       }
@@ -623,7 +651,7 @@ struct RootView: View {
         Button(vm.t("Проверить доступ к диску", "Check disk access")) {
           vm.pendingDiskScan = false
           vm.showDiskAccess = true
-        }
+        }.oxyHelp(.access)
         Text(
           vm.t(
             "Выбирайте диск или отдельную папку для сканирования. Недоступные объекты будут перечислены в отчёте. Доступ к записи экрана не нужен.",
@@ -631,17 +659,17 @@ struct RootView: View {
           ))
         Button(vm.t("Папка данных приложения", "Application data folder")) {
           vm.reveal(vm.support.path)
-        }
+        }.oxyHelp(.finder)
       }
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.11 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.11 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.12 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.12 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)
-        }
+        }.oxyHelp(.releases)
       }
     }.formStyle(.grouped)
   }

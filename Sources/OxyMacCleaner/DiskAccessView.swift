@@ -39,10 +39,11 @@ struct DiskAccessView: View {
         .textSelection(.enabled).font(.callout)
         HStack {
           Button(vm.t("Открыть настройки macOS", "Open macOS settings")) { vm.openDiskSettings() }
+            .oxyHelp(.openSettings)
             .buttonStyle(.borderedProminent)
           Button(vm.t("Показать приложение", "Show app in Finder")) {
             vm.reveal(Bundle.main.bundlePath)
-          }
+          }.oxyHelp(.finder)
         }
         Text(
           vm.t(
@@ -61,7 +62,7 @@ struct DiskAccessView: View {
       }
       HStack {
         if !available {
-          Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }
+          Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }.oxyHelp(.recheck)
           if let date = vm.diskAccessCheckedAt {
             Text(date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(
               .secondary)
@@ -79,7 +80,7 @@ struct DiskAccessView: View {
           vm.diskAccessAcknowledged = true
           dismiss()
           if scan { vm.scan() }
-        }
+        }.oxyHelp(.accessDone)
       }
     }.padding(28).frame(width: available ? 440 : 660)
       .onAppear { vm.checkDiskAccess() }

@@ -37,8 +37,10 @@ struct CleanupAdvisorView: View {
         ).font(.caption).foregroundStyle(.secondary)
         Spacer()
         if vm.recommendationsLoading { ProgressView().controlSize(.small) }
-        Button(vm.t("Обновить анализ", "Refresh analysis")) { vm.refreshRecommendations() }
-          .disabled(vm.busy || vm.recommendationsLoading)
+        Button(vm.t("Обновить анализ", "Refresh analysis")) { vm.refreshRecommendations() }.oxyHelp(
+          .advisor
+        )
+        .disabled(vm.busy || vm.recommendationsLoading)
       }
       HStack {
         Picker(vm.t("Правило", "Rule"), selection: $rule) {
@@ -46,9 +48,11 @@ struct CleanupAdvisorView: View {
           Text(vm.t("Установщики · от 90 дней", "Installers · 90+ days")).tag("oldInstaller")
           Text(vm.t("Крупные старые · от 500 MB и 180 дней", "Large & old · 500 MB and 180+ days"))
             .tag("largeOldFile")
-        }
-        TextField(vm.t("Поиск по имени или пути", "Search name or path"), text: $query)
-          .textFieldStyle(.roundedBorder)
+        }.oxyHelp(.rule)
+        TextField(vm.t("Поиск по имени или пути", "Search name or path"), text: $query).oxyHelp(
+          .search
+        )
+        .textFieldStyle(.roundedBorder)
       }
       if vm.snapshotDate == nil {
         ContentUnavailableView(
@@ -81,10 +85,10 @@ struct CleanupAdvisorView: View {
             HStack {
               Button(vm.t("Проверить и показать", "Validate & reveal")) {
                 vm.reviewCandidate(candidate)
-              }.disabled(vm.busy)
+              }.oxyHelp(.review).disabled(vm.busy)
               Button(vm.t("Не предлагать этот файл", "Exclude this file")) {
                 vm.protect(candidate.file.path)
-              }.disabled(vm.busy)
+              }.oxyHelp(.protect).disabled(vm.busy)
             }
           }.padding(.vertical, 8)
         }
@@ -98,7 +102,7 @@ struct CleanupAdvisorView: View {
         Spacer()
         Button(vm.t("Проверить точные дубликаты", "Check exact duplicates")) {
           vm.page = "duplicates"
-        }
+        }.oxyHelp(.duplicatesPage)
       }
       Text(
         vm.t(

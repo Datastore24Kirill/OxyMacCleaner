@@ -110,41 +110,43 @@ struct ScanProgressView: View {
             }.help(label(item.key))
           }
         }.font(.system(size: 10))
-        Button(vm.t("Все категории", "All categories")) { showCategories = true }
-          .buttonStyle(.link).font(.caption)
-          .popover(isPresented: $showCategories) {
-            VStack(alignment: .leading, spacing: 12) {
-              Text(vm.t("Состав найденных файлов", "Scanned file breakdown")).font(.headline)
-              ScrollView {
-                ForEach(ranked, id: \.key) { item in
-                  HStack {
-                    Circle().fill(color(item.key)).frame(width: 8, height: 8)
-                    Text(label(item.key))
-                    Spacer()
-                    Text(size(item.value)).monospacedDigit()
-                    Text(
-                      String(
-                        format: "%.1f%%", Double(item.value) * 100 / Double(max(1, progress.bytes)))
-                    )
-                    .foregroundStyle(.secondary).frame(width: 55, alignment: .trailing)
-                    Button(vm.t("Файлы", "Files")) {
-                      vm.categoryFilter = item.key
-                      vm.search = ""
-                      vm.page = "files"
-                      showCategories = false
-                    }.disabled(active)
-                  }.padding(.vertical, 4)
-                }
-              }.frame(maxHeight: 360)
-              Text(
-                vm.t(
-                  "Классификация по пути и типу файла. Игры определяются по известным папкам. Категория не означает, что файл можно безопасно удалить.",
-                  "Classification uses paths and file types. Games use known library locations. Categories do not imply that files are safe to delete."
-                )
+        Button(vm.t("Все категории", "All categories")) { showCategories = true }.oxyHelp(
+          .categories
+        )
+        .buttonStyle(.link).font(.caption)
+        .popover(isPresented: $showCategories) {
+          VStack(alignment: .leading, spacing: 12) {
+            Text(vm.t("Состав найденных файлов", "Scanned file breakdown")).font(.headline)
+            ScrollView {
+              ForEach(ranked, id: \.key) { item in
+                HStack {
+                  Circle().fill(color(item.key)).frame(width: 8, height: 8)
+                  Text(label(item.key))
+                  Spacer()
+                  Text(size(item.value)).monospacedDigit()
+                  Text(
+                    String(
+                      format: "%.1f%%", Double(item.value) * 100 / Double(max(1, progress.bytes)))
+                  )
+                  .foregroundStyle(.secondary).frame(width: 55, alignment: .trailing)
+                  Button(vm.t("Файлы", "Files")) {
+                    vm.categoryFilter = item.key
+                    vm.search = ""
+                    vm.page = "files"
+                    showCategories = false
+                  }.oxyHelp(.categoryFiles).disabled(active)
+                }.padding(.vertical, 4)
+              }
+            }.frame(maxHeight: 360)
+            Text(
+              vm.t(
+                "Классификация по пути и типу файла. Игры определяются по известным папкам. Категория не означает, что файл можно безопасно удалить.",
+                "Classification uses paths and file types. Games use known library locations. Categories do not imply that files are safe to delete."
               )
-              .font(.caption).foregroundStyle(.secondary)
-            }.padding(20).frame(width: 540)
-          }
+            )
+            .font(.caption).foregroundStyle(.secondary)
+          }.padding(20).frame(width: 540)
+        }
         Text(
           active
             ? progress.currentPath

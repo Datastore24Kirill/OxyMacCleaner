@@ -22,9 +22,13 @@ struct XcodeArchiveView: View {
       Label(vm.t("Архивы приложений", "Application archives"), systemImage: "archivebox").font(
         .title2.bold())
       HStack {
-        Button(vm.t("Прочитать архивы Xcode", "Read Xcode archives")) { vm.scanArchives() }
-          .disabled(vm.busy)
-        Button(vm.t("Другая папка…", "Another folder…")) { vm.chooseArchiveRoot() }.disabled(
+        Button(vm.t("Прочитать архивы Xcode", "Read Xcode archives")) { vm.scanArchives() }.oxyHelp(
+          .archiveRead
+        )
+        .disabled(vm.busy)
+        Button(vm.t("Другая папка…", "Another folder…")) { vm.chooseArchiveRoot() }.oxyHelp(
+          .archiveRoot
+        ).disabled(
           vm.busy)
         Spacer()
         if vm.archivesLoading { ProgressView().controlSize(.small) }
@@ -38,7 +42,7 @@ struct XcodeArchiveView: View {
         Spacer()
         Button(vm.t("Все сверх лимита → карантин…", "Quarantine all beyond limit…")) {
           vm.quarantineExcessArchives()
-        }.disabled(vm.busy || beyond.isEmpty)
+        }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
       }
       Text(
         vm.t(
@@ -46,6 +50,19 @@ struct XcodeArchiveView: View {
           "The batch action first creates or verifies backups in a chosen folder, then offers transfer. To free space, open Quarantine and confirm permanent deletion. Backups on this disk also take space."
         )
       ).font(.caption).foregroundStyle(.secondary)
+      DisclosureGroup(
+        vm.t("Зачем проверять символы и делать копию?", "Why check symbols and make a backup?")
+      ) {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(vm.t(HelpTopic.symbols.text.ru, HelpTopic.symbols.text.en))
+          Text(vm.t(HelpTopic.backup.text.ru, HelpTopic.backup.text.en))
+          Text(
+            vm.t(
+              "Порядок очистки: резервная копия → карантин → окончательное удаление. Копию выпущенной версии сохраните для разбора будущих сбоев.",
+              "Cleanup order: backup → quarantine → permanent deletion. Keep released-version backups for diagnosing future crashes."
+            ))
+        }.font(.callout).foregroundStyle(.secondary).padding(.top, 6)
+      }.oxyHelp(.disclosure)
       DeveloperReportView()
       Text(vm.archiveRoot.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
       Stepper(value: $vm.archiveKeep, in: 1...20) {
@@ -53,7 +70,7 @@ struct XcodeArchiveView: View {
           vm.t(
             "Сохранять последние \(vm.archiveKeep) для каждого приложения",
             "Keep the latest \(vm.archiveKeep) per application"))
-      }.disabled(vm.busy)
+      }.oxyHelp(.retention).disabled(vm.busy)
       Text(
         vm.t(
           "«Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
@@ -63,8 +80,10 @@ struct XcodeArchiveView: View {
       .font(.caption).foregroundStyle(.secondary)
       HStack {
         TextField(vm.t("Поиск приложения / Bundle ID", "Search app / Bundle ID"), text: $query)
+          .oxyHelp(.search)
           .textFieldStyle(.roundedBorder)
-        Toggle(vm.t("Только сверх лимита", "Only beyond limit"), isOn: $onlyReview)
+        Toggle(vm.t("Только сверх лимита", "Only beyond limit"), isOn: $onlyReview).oxyHelp(
+          .beyondFilter)
       }
       if let date = vm.archiveScanDate {
         Text(
@@ -87,10 +106,11 @@ struct XcodeArchiveView: View {
       }
       if !archives.isEmpty {
         HStack {
-          Button(vm.t("Назад", "Previous")) { archivePage -= 1 }.disabled(archivePage == 0)
+          Button(vm.t("Назад", "Previous")) { archivePage -= 1 }.oxyHelp(.previous).disabled(
+            archivePage == 0)
           Text(
             vm.t("Страница ", "Page ") + "\(archivePage + 1)/\(max(1, (archives.count + 9) / 10))")
-          Button(vm.t("Далее", "Next")) { archivePage += 1 }.disabled(
+          Button(vm.t("Далее", "Next")) { archivePage += 1 }.oxyHelp(.next).disabled(
             (archivePage + 1) * 10 >= archives.count)
         }
       }
@@ -114,8 +134,8 @@ struct XcodeArchiveView: View {
             decisions[archive.path] == .review ? Color.orange : Color.teal)
           Text(
             vm.t(
-              "Пакетов dSYM: \(archive.dsymCount). Проверка UUID запускается отдельно.",
-              "dSYM packages: \(archive.dsymCount). UUID verification is run separately.")
+              "Пакетов dSYM: \(archive.dsymCount). Проверка соответствия символов запускается отдельно.",
+              "dSYM packages: \(archive.dsymCount). Symbol matching is checked separately.")
           ).font(.caption)
           if let report = vm.archiveSymbols[archive.path] {
             Text(
@@ -141,10 +161,14 @@ struct XcodeArchiveView: View {
             ).font(.caption).foregroundStyle(.secondary)
           }
           HStack {
-            Button(vm.t("Проверить UUID", "Verify UUIDs")) { vm.checkArchiveSymbols(archive) }
-            Button(vm.t("Создать копию…", "Create backup…")) { vm.backupArchive(archive) }
+            Button(vm.t("Проверить символы отладки", "Check debug symbols")) {
+              vm.checkArchiveSymbols(archive)
+            }.oxyHelp(.symbols)
+            Button(vm.t("Резервная копия…", "Back up archive…")) { vm.backupArchive(archive) }
+              .oxyHelp(.backup)
             if decisions[archive.path] == .review {
-              Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineArchive(archive) }
+              Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineArchive(archive) }.oxyHelp(
+                .archiveQuarantine)
             }
           }.disabled(vm.busy)
           if !archive.issues.isEmpty {
@@ -159,9 +183,10 @@ struct XcodeArchiveView: View {
               isOn: Binding(
                 get: { vm.pinnedArchives.contains(archive.path) },
                 set: { vm.pinArchive(archive.path, $0) })
-            ).toggleStyle(.checkbox).disabled(vm.busy)
+            ).oxyHelp(.pin).toggleStyle(.checkbox).disabled(vm.busy)
             Spacer()
-            Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(archive.path) }
+            Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(archive.path) }.oxyHelp(
+              .finder)
           }
         }.padding(14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
       }
