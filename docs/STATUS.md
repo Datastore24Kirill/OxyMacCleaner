@@ -1,4 +1,4 @@
-# Implementation status — 0.1.6 Preview
+# Implementation status — 0.1.7 Preview
 
 This milestone starts implementation of SPEC-RU.md. It does not claim full version-one acceptance.
 
@@ -10,7 +10,7 @@ This milestone starts implementation of SPEC-RU.md. It does not claim full versi
 | Archives | Extension-based filtering | Versions, grouping, configurable retention |
 | Xcode | DerivedData and archive inspection, read-only simctl inventory | Archive metadata/dSYM retention, active-build detection and supported runtime deletion |
 | Projects | Generated-file classification; Git directories protected from movement | Safe generated-folder cleanup and worktree lifecycle checks |
-| Quarantine | Individual files on the same volume; journal, restore, conflict refusal, integrity check, confirmed erase | Whole directories, cross-volume verified transfer, crash-injection testing and richer recovery states |
+| Quarantine | Files and ordinary directories on the same volume; tree integrity, journal recovery, conflict refusal, confirmed erase | Cross-volume verified transfer, active-app detection, filesystem fault injection and richer recovery states |
 | Notifications | Repeating five-day notification while nonempty; in-app reminder | Long-duration OS delivery validation; refreshed notification count after inventory changes |
 | Agents | Discovery hints for 11 products; generic export import per agent | Versioned native adapters and supported automatic handoff paths |
 | Context | Verified backup, line-numbered chunks, local generation, editable result, copy/export | Real-model semantic benchmarks, conflict reconciliation across chunks, citations validator, model-specific token budgeting |
@@ -73,3 +73,7 @@ Successful disk-access checks now show a compact confirmation without recovery c
 ## 0.1.6 update
 
 Atomic local binary-plist snapshots preserve completed and cancelled scan reports, roots, progress and timestamp. Snapshot permissions are 0600 under a 0700 directory. Restored files retain original identities for pre-action revalidation. Disk index and persistence execute outside the main actor. Added proportional treemap and immediate-child navigation without nested double counting, plus size and modification-age filters. 32 tests pass, including snapshot round-trip/corruption/privacy, stale-file validation and map area/boundary checks. Installed UI verified with synthetic fixture, folder navigation and relaunch restoring the same result. Intelligent cleanup remains a documented roadmap in SMART-CLEANUP-PLAN-RU.md; directory quarantine remains next.
+
+## 0.1.7 update
+
+Ordinary-directory quarantine via disk-map list context menu. Tree manifests include empty directories, content hashes and identity metadata; protected descendants, exclusions, Git projects, links, cloud data and broad user/system roots are blocked. Same-volume exclusive rename; post-move verification; directory restore and alternate destination; journal reconciliation for prepared/restoring operations. Recovery tests simulate interrupted journal commits after transfer/restore. No automatic active-process detection or cross-volume directory transfer is claimed. 41 local tests pass. User scan remains running in 0.1.6; local update is deferred until it completes.

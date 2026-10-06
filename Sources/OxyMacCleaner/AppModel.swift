@@ -281,6 +281,79 @@ import UserNotifications
     a.addButton(withTitle: t("Отмена", "Cancel"))
     return a.runModal() == .alertFirstButtonReturn
   }
+  func recoverQuarantine() {
+    guard !busy else { return }
+    busy = true
+    status = t("Проверяем журнал карантина…", "Checking quarantine journal…")
+    let store = quarantine
+    task = Task {
+      do { try await Task.detached { try store.recover() }.value } catch {
+        self.error = error.localizedDescription
+      }
+      entries = store.entries()
+      busy = false
+      status = t("Проверка журнала завершена", "Journal check complete")
+    }
+  }
+  func quarantineDirectory(_ path: String) {
+    guard !busy else { return }
+    busy = true
+    status = t("Проверяем состав папки…", "Inspecting folder contents…")
+    cancellation = Cancellation()
+    let token = cancellation
+    let store = quarantine
+    let protected = exclusions
+    task = Task {
+      do {
+        let source = URL(fileURLWithPath: path)
+        let manifest = try await Task.detached {
+          try DirectoryManifest.capture(source, cancellation: token) { candidate in
+            guard !QuarantineStore.protected(candidate),
+              !protected.contains(where: {
+                Scanner.inside(candidate, $0) || Scanner.inside($0, candidate)
+              })
+            else { throw CleanerError.message("Folder contains protected data") }
+          }
+        }.value
+        try token.check()
+        guard
+          confirm(
+            t("Переместить папку целиком?", "Move entire folder?"),
+            path + "\n"
+              + ByteCountFormatter.string(fromByteCount: manifest.bytes, countStyle: .file)
+              + " · \(manifest.items.count) " + t("объектов", "items") + "\n"
+              + t(
+                "Закройте приложения, использующие эту папку. Все вложенные файлы будут перемещены. Место не освободится до окончательного удаления.",
+                "Close applications using this folder. All nested files will be moved. Space is not freed until permanent deletion."
+              ))
+        else {
+          busy = false
+          status = t("Отменено", "Cancelled")
+          return
+        }
+        status = t(
+          "Переносим папку и проверяем целостность…", "Moving folder and checking integrity…")
+        _ = try await Task.detached {
+          try store.moveDirectory(
+            source, expected: manifest, protectedPaths: protected, cancellation: token)
+        }.value
+        log("Quarantined directory: " + path)
+        // Keep the saved scan visibly dated; its entries are always revalidated before actions.
+        status = t(
+          "Папка в карантине. Обновите сканирование для актуальной карты.",
+          "Folder quarantined. Rescan to refresh the map.")
+        page = "quarantine"
+      } catch {
+        if !(error is CancellationError) { self.error = error.localizedDescription }
+        status = t(
+          "Операция остановлена. Проверьте журнал карантина.",
+          "Operation stopped. Check quarantine journal.")
+      }
+      entries = store.entries()
+      busy = false
+      scheduleReminder()
+    }
+  }
   func quarantineSelected() {
     let files = report.files.filter { selected.contains($0.path) }
     guard !files.isEmpty && !busy else { return }

@@ -23,7 +23,7 @@ struct DiskMapView: View {
         .disabled(vm.roots.contains { $0.path == vm.mapPath } || vm.busy)
         Menu(vm.t("Корень", "Root")) {
           ForEach(vm.roots, id: \.path) { root in Button(root.path) { vm.mapPath = root.path } }
-        }
+        }.fixedSize()
         Text(vm.mapPath).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
         Spacer()
         Text(size(nodes.reduce(0) { $0 + $1.bytes })).monospacedDigit()
@@ -89,6 +89,13 @@ struct DiskMapView: View {
             } label: {
               Image(systemName: "arrow.up.right.square")
             }.buttonStyle(.borderless)
+          }.contextMenu {
+            if node.directory {
+              Button(vm.t("Переместить папку в карантин…", "Quarantine folder…")) {
+                vm.quarantineDirectory(node.path)
+              }.disabled(vm.busy)
+            }
+            Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(node.path) }
           }
         }
         Text(

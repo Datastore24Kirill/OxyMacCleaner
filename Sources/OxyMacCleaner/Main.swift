@@ -102,7 +102,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.6 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.7 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -271,8 +271,8 @@ struct RootView: View {
           Label(vm.t("Первая тестовая версия", "First preview"), systemImage: "testtube.2").font(
             .headline)
           note(
-            "Очистка отдельных файлов через карантин готова. Каталоги проектов и симуляторы пока анализируются без удаления. Истории агентов импортируются вручную; базы чатов не изменяются.",
-            "Individual-file quarantine is available. Project folders and simulators are analysis-only. Agent histories are imported manually; chat databases are never modified."
+            "Карантин файлов и обычных папок на одном диске готов. Каталоги проектов, служебные данные и симуляторы пока анализируются без удаления. Истории агентов импортируются вручную; базы чатов не изменяются.",
+            "File and ordinary-folder quarantine on the same disk is available. Projects, service data and simulators are analysis-only. Agent histories are imported manually; chat databases are never modified."
           )
         }
       }
@@ -573,11 +573,22 @@ struct RootView: View {
       )
       HStack {
         Button(vm.t("Напоминать каждые 5 дней", "Remind every 5 days")) { vm.enableNotifications() }
+        Button(vm.t("Проверить незавершённые операции", "Check interrupted operations")) {
+          vm.recoverQuarantine()
+        }.disabled(vm.busy)
         Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }
       }
-      List(vm.entries.filter { $0.state == "quarantined" || $0.state == "prepared" }) { e in
+      List(
+        vm.entries.filter {
+          ["quarantined", "prepared", "restoring", "attention"].contains($0.state)
+        }
+      ) { e in
         VStack(alignment: .leading, spacing: 8) {
           Text(URL(fileURLWithPath: e.original).lastPathComponent).font(.headline)
+          Text(
+            (e.kind == "directory" ? vm.t("Папка", "Folder") : vm.t("Файл", "File")) + " · "
+              + e.state
+          ).font(.caption).foregroundStyle(.secondary)
           Text(e.original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
           HStack {
             Text(size(e.bytes))
@@ -589,7 +600,7 @@ struct RootView: View {
               vm.erase(e)
             } label: {
               Image(systemName: "trash")
-            }
+            }.disabled(e.state != "quarantined")
           }.font(.caption)
         }.padding(.vertical, 6)
       }.disabled(vm.busy)
@@ -635,8 +646,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.6 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.6 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.7 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.7 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct QuarantineEntry: Codable, Identifiable, Sendable {
@@ -6,6 +7,8 @@ public struct QuarantineEntry: Codable, Identifiable, Sendable {
   public let bytes: Int64
   public let date: Date
   public let hash: String
+  public var kind: String? = nil
+  public var restoreDestination: String? = nil
   public var state: String
 }
 public final class QuarantineStore: @unchecked Sendable {
@@ -104,6 +107,107 @@ public final class QuarantineStore: @unchecked Sendable {
     try save(entry)
     return entry
   }
+  public func moveDirectory(
+    _ source: URL, expected: DirectoryManifest, protectedPaths: [String] = [],
+    cancellation: Cancellation = Cancellation()
+  ) throws -> QuarantineEntry {
+    lock.lock()
+    defer { lock.unlock() }
+    let fm = FileManager.default
+    let path = source.standardizedFileURL.path
+    guard
+      !Scanner.inside(path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path),
+      !["Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music"].contains(where: {
+        source == fm.homeDirectoryForCurrentUser.appendingPathComponent($0)
+      }),
+      source.resolvingSymlinksInPath().path == path,
+      !Self.protected(path), !Scanner.inside(path, root.path), !Scanner.inside(root.path, path),
+      path != fm.homeDirectoryForCurrentUser.path,
+      ![
+        "/", "/Users", "/Applications",
+        fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path,
+      ].contains(path)
+    else { throw CleanerError.message("Protected directory") }
+    var ancestor = source
+    while ancestor.path != "/" {
+      guard !fm.fileExists(atPath: ancestor.appendingPathComponent(".git").path) else {
+        throw CleanerError.message("Project directories are analysis-only")
+      }
+      ancestor.deleteLastPathComponent()
+    }
+    let device = (try fm.attributesOfItem(atPath: root.path)[.systemNumber] as? NSNumber)?
+      .uint64Value
+    guard expected.items.first(where: { $0.relative.isEmpty })?.device == device else {
+      throw CleanerError.message(
+        "Cross-volume folder quarantine is not supported; source is intact")
+    }
+    let actual = try DirectoryManifest.capture(source, cancellation: cancellation) { candidate in
+      guard !Self.protected(candidate),
+        !protectedPaths.contains(where: {
+          Scanner.inside(candidate, $0) || Scanner.inside($0, candidate)
+        })
+      else {
+        throw CleanerError.message("Folder contains protected or excluded data: \(candidate)")
+      }
+    }
+    guard expected == actual else {
+      throw CleanerError.message("Directory changed after preview; review it again")
+    }
+    var entry = QuarantineEntry(
+      id: UUID(), original: path, bytes: expected.bytes, date: Date(), hash: try expected.digest,
+      kind: "directory", state: "prepared")
+    try fm.createDirectory(
+      at: folder(entry.id), withIntermediateDirectories: false,
+      attributes: [.posixPermissions: 0o700])
+    try save(entry)
+    try cancellation.check()
+    let payload = folder(entry.id).appendingPathComponent("payload")
+    guard renameatx_np(AT_FDCWD, path, AT_FDCWD, payload.path, UInt32(RENAME_EXCL)) == 0 else {
+      throw CleanerError.message("Could not move directory; source retained")
+    }
+    // Once moved, finish verification even if cancellation was requested.
+    guard try DirectoryManifest.capture(payload).digest == entry.hash else {
+      entry.state = "attention"
+      try save(entry)
+      throw CleanerError.message(
+        "Directory changed during transfer. Payload retained in quarantine for inspection")
+    }
+    entry.state = "quarantined"
+    try save(entry)
+    return entry
+  }
+  private func payloadHash(_ entry: QuarantineEntry, _ payload: URL) throws -> String {
+    if entry.kind == "directory" { return try DirectoryManifest.capture(payload).digest }
+    return try Scanner.hash(payload)
+  }
+  public func recover() throws {
+    lock.lock()
+    defer { lock.unlock() }
+    let fm = FileManager.default
+    for dir in try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+      guard
+        var entry = try? JSONDecoder().decode(
+          QuarantineEntry.self, from: Data(contentsOf: dir.appendingPathComponent("entry.json"))),
+        dir.lastPathComponent == entry.id.uuidString
+      else { continue }
+      let payload = folder(entry.id).appendingPathComponent("payload")
+      if entry.state == "prepared" || entry.state == "restoring" {
+        if fm.fileExists(atPath: payload.path) {
+          entry.state =
+            (try? payloadHash(entry, payload)) == entry.hash ? "quarantined" : "attention"
+        } else if entry.state == "restoring", let destination = entry.restoreDestination,
+          (try? payloadHash(entry, URL(fileURLWithPath: destination))) == entry.hash
+        {
+          entry.state = "restored"
+        } else if entry.state == "prepared", fm.fileExists(atPath: entry.original) {
+          entry.state = "cancelled"
+        } else {
+          entry.state = "attention"
+        }
+        try save(entry)
+      }
+    }
+  }
   public func restore(_ entry: QuarantineEntry, destination: URL? = nil) throws {
     lock.lock()
     defer { lock.unlock() }
@@ -116,15 +220,28 @@ public final class QuarantineStore: @unchecked Sendable {
       dest.deletingLastPathComponent().resolvingSymlinksInPath()
         == dest.deletingLastPathComponent().standardizedFileURL
     else { throw CleanerError.message("Destination parent contains symbolic links") }
-    guard try Scanner.hash(payload) == entry.hash else {
+    guard try payloadHash(entry, payload) == entry.hash else {
       throw CleanerError.message("Integrity check failed; quarantine retained")
     }
     guard FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path) else {
       throw CleanerError.message("Original folder missing; choose another destination")
     }
-    // COPYFILE_EXCL semantics through moveItem: do not overwrite conflicts.
-    try FileManager.default.moveItem(at: payload, to: dest)
+    let sourceDevice =
+      (try FileManager.default.attributesOfItem(atPath: payload.path)[.systemNumber] as? NSNumber)?
+      .uint64Value
+    let destinationDevice =
+      (try FileManager.default.attributesOfItem(atPath: dest.deletingLastPathComponent().path)[
+        .systemNumber] as? NSNumber)?.uint64Value
+    guard sourceDevice == destinationDevice else {
+      throw CleanerError.message("Restore to the same disk; cross-volume restore is not supported")
+    }
     var saved = entry
+    saved.state = "restoring"
+    saved.restoreDestination = dest.path
+    try save(saved)
+    guard renameatx_np(AT_FDCWD, payload.path, AT_FDCWD, dest.path, UInt32(RENAME_EXCL)) == 0 else {
+      throw CleanerError.message("Restore failed; quarantine retained")
+    }
     saved.state = "restored"
     try save(saved)
   }
@@ -132,6 +249,9 @@ public final class QuarantineStore: @unchecked Sendable {
     lock.lock()
     defer { lock.unlock() }
     let payload = folder(entry.id).appendingPathComponent("payload")
+    guard entry.state == "quarantined", try payloadHash(entry, payload) == entry.hash else {
+      throw CleanerError.message("Payload needs inspection; permanent deletion blocked")
+    }
     guard FileManager.default.fileExists(atPath: payload.path) else {
       throw CleanerError.message("No quarantined payload")
     }
