@@ -6,8 +6,31 @@ struct ScanProgressView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let progress: ScanProgress
   let active: Bool
-  private let kinds = ["DerivedData", "Xcode Archive", "Build", "Archive", "File"]
-  private let colors: [Color] = [.cyan, .purple, .mint, .orange, .blue]
+  @State private var showCategories = false
+  private var ranked: [(key: String, value: Int64)] {
+    progress.categories.filter { $0.value > 0 }.sorted {
+      $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+    }
+  }
+  private var segments: [(key: String, value: Int64)] {
+    let largest = Array(ranked.prefix(5))
+    let remaining = ranked.dropFirst(5).reduce(Int64(0)) { $0 + $1.value }
+    return remaining > 0 ? largest + [(key: "remaining", value: remaining)] : largest
+  }
+  private func label(_ key: String) -> String {
+    guard let kind = FileCategory(rawValue: key) else { return vm.t("Остальное", "Remaining") }
+    return vm.t(kind.russian, kind.english)
+  }
+  private func color(_ key: String) -> Color {
+    guard let kind = FileCategory(rawValue: key),
+      let index = FileCategory.allCases.firstIndex(of: kind)
+    else { return .gray }
+    let palette: [Color] = [
+      .cyan, .purple, .mint, .indigo, .pink, .teal, .brown, .green, .blue, .orange, .yellow, .red,
+      .purple, .gray, .secondary,
+    ]
+    return palette[index]
+  }
   private var title: String {
     switch progress.phase {
     case .enumerating: return vm.t("Исследуем диск", "Exploring your disk")
@@ -67,21 +90,61 @@ struct ScanProgressView: View {
         }
         GeometryReader { geometry in
           HStack(spacing: 0) {
-            ForEach(Array(kinds.enumerated()), id: \.offset) { index, kind in
-              colors[index].frame(
-                width: geometry.size.width * Double(progress.categories[kind, default: 0])
-                  / Double(max(1, progress.bytes)))
+            ForEach(segments, id: \.key) { item in
+              color(item.key).frame(
+                width: geometry.size.width * Double(item.value) / Double(max(1, progress.bytes))
+              )
+              .help(label(item.key) + " · " + size(item.value))
             }
           }.clipShape(Capsule())
-        }.frame(height: 7).background(.quaternary, in: Capsule())
-        HStack(spacing: 12) {
-          ForEach(Array(kinds.enumerated()), id: \.offset) { index, kind in
-            HStack(spacing: 4) {
-              Circle().fill(colors[index]).frame(width: 5, height: 5)
-              Text(kind == "File" ? vm.t("Другие", "Other") : kind)
-            }
+        }.frame(height: 8).background(.quaternary, in: Capsule())
+        LazyVGrid(
+          columns: [GridItem(.adaptive(minimum: 170), alignment: .leading)], alignment: .leading,
+          spacing: 6
+        ) {
+          ForEach(segments, id: \.key) { item in
+            HStack(spacing: 5) {
+              Circle().fill(color(item.key)).frame(width: 6, height: 6)
+              Text(label(item.key)).lineLimit(1)
+              Text(size(item.value)).foregroundStyle(.secondary)
+            }.help(label(item.key))
           }
-        }.font(.system(size: 10)).foregroundStyle(.secondary)
+        }.font(.system(size: 10))
+        Button(vm.t("Все категории", "All categories")) { showCategories = true }
+          .buttonStyle(.link).font(.caption)
+          .popover(isPresented: $showCategories) {
+            VStack(alignment: .leading, spacing: 12) {
+              Text(vm.t("Состав найденных файлов", "Scanned file breakdown")).font(.headline)
+              ScrollView {
+                ForEach(ranked, id: \.key) { item in
+                  HStack {
+                    Circle().fill(color(item.key)).frame(width: 8, height: 8)
+                    Text(label(item.key))
+                    Spacer()
+                    Text(size(item.value)).monospacedDigit()
+                    Text(
+                      String(
+                        format: "%.1f%%", Double(item.value) * 100 / Double(max(1, progress.bytes)))
+                    )
+                    .foregroundStyle(.secondary).frame(width: 55, alignment: .trailing)
+                    Button(vm.t("Файлы", "Files")) {
+                      vm.categoryFilter = item.key
+                      vm.search = ""
+                      vm.page = "files"
+                      showCategories = false
+                    }.disabled(active)
+                  }.padding(.vertical, 4)
+                }
+              }.frame(maxHeight: 360)
+              Text(
+                vm.t(
+                  "Классификация по пути и типу файла. Игры определяются по известным папкам. Категория не означает, что файл можно безопасно удалить.",
+                  "Classification uses paths and file types. Games use known library locations. Categories do not imply that files are safe to delete."
+                )
+              )
+              .font(.caption).foregroundStyle(.secondary)
+            }.padding(20).frame(width: 540)
+          }
         Text(
           active
             ? progress.currentPath

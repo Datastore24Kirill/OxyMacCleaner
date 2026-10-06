@@ -45,7 +45,7 @@ final class CoreTests: XCTestCase {
     XCTAssertEqual(updates.last?.phase, .finished)
     XCTAssertEqual(updates.last?.files, report.files.count)
     XCTAssertEqual(updates.last?.bytes, report.total)
-    XCTAssertEqual(updates.last?.categories["Archive"], 5)
+    XCTAssertEqual(updates.last?.categories["Caches"], 8)
     XCTAssertEqual(updates.last?.categories.values.reduce(0, +), report.total)
     XCTAssertTrue(updates.contains { $0.phase == .sorting })
   }

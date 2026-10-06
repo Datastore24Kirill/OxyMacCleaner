@@ -39,6 +39,7 @@ import UserNotifications
   @Published var status = ""
   @Published var error: String?
   @Published var search = ""
+  @Published var categoryFilter = "all"
   @Published var agent = "codex"
   @Published var transcript: Transcript?
   @Published var output = ""

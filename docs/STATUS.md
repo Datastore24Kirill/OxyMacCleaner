@@ -61,3 +61,7 @@ Icon Composer asset and compiled Assets.car remove legacy icon framing. Scan pro
 ## 0.1.3 update
 
 Added a disk-access guide on first launch and each new version, read-only in-process directory probes with limited/available/unconfirmed outcomes, recheck on app activation, and exact-copy recovery guidance. No TCC mutation or automatic permission grant. Distribution remains ad-hoc signed; permission continuity is unresolved until a stable signing identity is used. Package script accepts OXYMAC_SIGNING_IDENTITY for future Developer ID builds without weakening designated requirements. 25 local tests pass.
+
+## 0.1.4 update
+
+15 path/extension-based categories with container precedence (known game libraries, app bundles, caches, app data and development outputs). Top-five size legend with remainder and full category breakdown, localized labels and file filter. 28 tests pass including container precedence, uppercase extensions and fallback classification. No content-based photo detection or exhaustive game catalog is claimed. Version 0.1.4 installed locally; access guide verified in the running app and correctly reports restricted access. No permission granted automatically.

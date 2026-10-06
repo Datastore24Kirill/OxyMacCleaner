@@ -88,6 +88,7 @@ struct RootView: View {
           Button {
             vm.page = p.0
             vm.search = ""
+            vm.categoryFilter = "all"
           } label: {
             Label(vm.t(p.1, p.2), systemImage: p.3).frame(maxWidth: .infinity, alignment: .leading)
               .padding(11).background(
@@ -99,7 +100,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.3 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.4 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -275,12 +276,19 @@ struct RootView: View {
   var visibleFiles: [FileRecord] {
     vm.report.files.filter {
       (vm.page != "archives" || $0.category == "Archive")
+        && (vm.categoryFilter == "all" || $0.category == vm.categoryFilter)
         && (vm.search.isEmpty || $0.path.localizedCaseInsensitiveContains(vm.search))
     }
   }
   var files: some View {
     VStack(alignment: .leading) {
       scanButtons
+      Picker(vm.t("Категория", "Category"), selection: $vm.categoryFilter) {
+        Text(vm.t("Все категории", "All categories")).tag("all")
+        ForEach(FileCategory.allCases, id: \.rawValue) { kind in
+          Text(vm.t(kind.russian, kind.english)).tag(kind.rawValue)
+        }
+      }
       TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search)
         .textFieldStyle(.roundedBorder)
       HStack {
@@ -599,8 +607,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.3 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.3 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.4 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.4 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

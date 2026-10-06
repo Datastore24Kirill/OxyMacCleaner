@@ -34,19 +34,7 @@ public struct FileRecord: Identifiable, Codable, Hashable, Sendable {
   public let device: UInt64
   public let links: UInt64
   public var name: String { URL(fileURLWithPath: path).lastPathComponent }
-  public var category: String {
-    if path.contains("/DerivedData/") { return "DerivedData" }
-    if path.contains(".xcarchive/") { return "Xcode Archive" }
-    if ["zip", "dmg", "pkg", "ipa", "xip", "tar", "gz"].contains(
-      URL(fileURLWithPath: path).pathExtension.lowercased())
-    {
-      return "Archive"
-    }
-    if path.contains("/node_modules/") || path.contains("/.build/") || path.contains("/build/") {
-      return "Build"
-    }
-    return "File"
-  }
+  public var category: String { FileCategory.classify(path).rawValue }
   public static func read(_ url: URL) throws -> FileRecord {
     let v = try url.resourceValues(forKeys: [
       .isSymbolicLinkKey, .isRegularFileKey, .isUbiquitousItemKey,
