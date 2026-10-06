@@ -3,6 +3,28 @@ import SwiftUI
 import UserNotifications
 
 @MainActor final class AppModel: ObservableObject {
+  @Published var showDiskAccess = false
+  @Published var diskAccess: DiskAccess.Result?
+  @Published var diskAccessCheckedAt: Date?
+  var diskAccessAcknowledged = false
+  var pendingDiskScan = false
+  var permissionBuild: String {
+    (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") + ":"
+      + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")
+  }
+  func checkDiskAccess() {
+    diskAccess = DiskAccess.check()
+    diskAccessCheckedAt = Date()
+  }
+  func prepareDiskAccess() {
+    if UserDefaults.standard.string(forKey: "permissionReviewedBuild") != permissionBuild {
+      showDiskAccess = true
+    }
+  }
+  func openDiskSettings() {
+    NSWorkspace.shared.open(
+      URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+  }
   @Published var page = "overview"
   @Published var roots: [URL] = [URL(fileURLWithPath: "/")]
   @Published var volumes: [ScanVolume] = Volumes.discover()
@@ -83,6 +105,13 @@ import UserNotifications
   func scan(_ explicit: [URL]? = nil) {
     guard !busy else { return }
     if explicit == nil && volumeID != "custom" {
+      if !diskAccessAcknowledged {
+        pendingDiskScan = true
+        showDiskAccess = true
+        return
+      }
+      // Never trust a cached permission bit after returning from System Settings.
+      checkDiskAccess()
       refreshVolumes()
       guard volumes.contains(where: { $0.id == volumeID }) else {
         error = t(

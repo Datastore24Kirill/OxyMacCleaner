@@ -57,3 +57,7 @@ Approved neon logo is now used by the packaged app, sidebar and README. Startup-
 ## 0.1.2 update
 
 Icon Composer asset and compiled Assets.car remove legacy icon framing. Scan progress uses throttled real filesystem snapshots, terminal snapshots are always emitted, and stale UI callbacks cannot overwrite completion. Animated radar honours Reduce Motion; byte composition is explicitly distinct from completion percentage. 21 tests pass locally; live scan and cancellation checked in the installed app.
+
+## 0.1.3 update
+
+Added a disk-access guide on first launch and each new version, read-only in-process directory probes with limited/available/unconfirmed outcomes, recheck on app activation, and exact-copy recovery guidance. No TCC mutation or automatic permission grant. Distribution remains ad-hoc signed; permission continuity is unresolved until a stable signing identity is used. Package script accepts OXYMAC_SIGNING_IDENTITY for future Developer ID builds without weakening designated requirements. 25 local tests pass.

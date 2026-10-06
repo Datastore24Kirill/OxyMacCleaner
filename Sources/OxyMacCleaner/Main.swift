@@ -13,6 +13,7 @@ import UserNotifications
         .onAppear {
           delegate.model = vm
           vm.scheduleReminder()
+          vm.prepareDiskAccess()
         }
     }.windowStyle(.hiddenTitleBar).defaultSize(width: 1180, height: 800)
       .commands { CommandGroup(replacing: .newItem) {} }
@@ -98,7 +99,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.2 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.3 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -144,14 +145,15 @@ struct RootView: View {
           Spacer()
         }.padding(.bottom, 16)
       }.padding(.horizontal, 28)
-    }.alert(
-      vm.t("Обратите внимание", "Attention"),
-      isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })
-    ) {
-      Button("OK") { vm.error = nil }
-    } message: {
-      Text(vm.error ?? "")
-    }
+    }.sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
+      .alert(
+        vm.t("Обратите внимание", "Attention"),
+        isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })
+      ) {
+        Button("OK") { vm.error = nil }
+      } message: {
+        Text(vm.error ?? "")
+      }
   }
   func note(_ ru: String, _ en: String) -> some View {
     Text(vm.t(ru, en)).font(.callout).foregroundStyle(.secondary).fixedSize(
@@ -206,9 +208,8 @@ struct RootView: View {
           .buttonStyle(.link).disabled(vm.busy)
         Spacer()
         Button(vm.t("Доступ к диску", "Disk access")) {
-          NSWorkspace.shared.open(
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-          )
+          vm.pendingDiskScan = false
+          vm.showDiskAccess = true
         }.buttonStyle(.link)
       }
       note(
@@ -582,6 +583,10 @@ struct RootView: View {
         }
       }
       Section(vm.t("Доступ и данные", "Access & data")) {
+        Button(vm.t("Проверить доступ к диску", "Check disk access")) {
+          vm.pendingDiskScan = false
+          vm.showDiskAccess = true
+        }
         Text(
           vm.t(
             "Выбирайте диск или отдельную папку для сканирования. Недоступные объекты будут перечислены в отчёте. Доступ к записи экрана не нужен.",
@@ -594,8 +599,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.2 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.2 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.3 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.3 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

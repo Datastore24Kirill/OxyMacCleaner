@@ -6,7 +6,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.2 Preview — implemented
+## 0.1.3 Preview — implemented
 
 - Native SwiftUI app for macOS 14+ on Apple Silicon, Russian/English UI, light/dark/system appearance.
 - Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
@@ -23,7 +23,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.2-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.3-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -62,3 +62,9 @@ Disk selection follows the volume-first pattern described in [CleanMyMac Space L
 Scanning shows live file/folder counts, logical bytes, current path, elapsed time and throughput. The animated radar indicates activity; the coloured bar shows the composition of scanned bytes, not a completion percentage.
 
 Building requires Xcode 26 or later to compile the Icon Composer asset; running requires macOS 14+ on Apple Silicon.
+
+### Disk permissions
+
+A guided access check appears on first launch and after each release update, and is always available from Settings. macOS Full Disk Access must be granted by the user in System Settings. The app does not reset TCC, write its database, or bypass user consent. The probe opens three protected directory handles and closes them without enumerating contents; it reports observed access, not a definitive global permission flag. Missing directories produce an unconfirmed result.
+
+Preview releases are ad-hoc signed: macOS may require granting access again after replacement. Reuse one Developer ID identity for production builds via `OXYMAC_SIGNING_IDENTITY`; signing alone is not notarization. Never replace the designated requirement with an identifier-only rule. Until signed releases are available, follow the in-app recovery instructions for the exact installed copy.
