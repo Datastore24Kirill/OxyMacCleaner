@@ -4,65 +4,75 @@ import SwiftUI
 struct DiskAccessView: View {
   @EnvironmentObject var vm: AppModel
   @Environment(\.dismiss) var dismiss
+  private var available: Bool { vm.diskAccess?.state == .available }
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
       Label(vm.t("Доступ к диску", "Disk access"), systemImage: "externaldrive.badge.person.crop")
         .font(.title2.bold())
-      Text(
-        vm.t(
-          "Для полного обхода диска включите OxyMac Cleaner в настройках macOS → Конфиденциальность и безопасность → Полный доступ к диску.",
-          "For broader disk scanning, enable OxyMac Cleaner in System Settings → Privacy & Security → Full Disk Access."
-        ))
       Label(
         status, systemImage: vm.diskAccess?.state == .available ? "checkmark.shield" : "info.circle"
       )
       .foregroundStyle(vm.diskAccess?.state == .available ? Color.teal : Color.orange)
-      Text(
-        vm.t(
-          "Проверка открывает только три защищённые папки без чтения их содержимого. Успешная проверка не гарантирует доступ ко всем файлам и не отменяет ограничения macOS.",
-          "The check only opens three protected directories without reading their contents. A successful check does not guarantee access to every file or override macOS restrictions."
+      if available {
+        Text(vm.t("Можно приступать к сканированию.", "You can start scanning."))
+          .foregroundStyle(.secondary)
+      } else {
+        Text(
+          vm.t(
+            "Для полного обхода диска включите OxyMac Cleaner в настройках macOS → Конфиденциальность и безопасность → Полный доступ к диску.",
+            "For broader disk scanning, enable OxyMac Cleaner in System Settings → Privacy & Security → Full Disk Access."
+          ))
+        Text(
+          vm.t(
+            "Проверка открывает только три защищённые папки без чтения их содержимого. Успешная проверка не гарантирует доступ ко всем файлам и не отменяет ограничения macOS.",
+            "The check only opens three protected directories without reading their contents. A successful check does not guarantee access to every file or override macOS restrictions."
+          )
         )
-      )
-      .font(.caption).foregroundStyle(.secondary)
-      Divider()
-      Text(
-        vm.t(
-          "1. Откройте настройки и включите приложение. Если его нет в списке — добавьте через «+» или перетащите из Finder.\n2. Используйте именно эту установленную копию:\n",
-          "1. Open settings and enable the app. If it is missing, add it with “+” or drag it from Finder.\n2. Use this exact installed copy:\n"
-        ) + Bundle.main.bundlePath
-      )
-      .textSelection(.enabled).font(.callout)
-      HStack {
-        Button(vm.t("Открыть настройки macOS", "Open macOS settings")) { vm.openDiskSettings() }
-          .buttonStyle(.borderedProminent)
-        Button(vm.t("Показать приложение", "Show app in Finder")) {
-          vm.reveal(Bundle.main.bundlePath)
+        .font(.caption).foregroundStyle(.secondary)
+        Divider()
+        Text(
+          vm.t(
+            "1. Откройте настройки и включите приложение. Если его нет в списке — добавьте через «+» или перетащите из Finder.\n2. Используйте именно эту установленную копию:\n",
+            "1. Open settings and enable the app. If it is missing, add it with “+” or drag it from Finder.\n2. Use this exact installed copy:\n"
+          ) + Bundle.main.bundlePath
+        )
+        .textSelection(.enabled).font(.callout)
+        HStack {
+          Button(vm.t("Открыть настройки macOS", "Open macOS settings")) { vm.openDiskSettings() }
+            .buttonStyle(.borderedProminent)
+          Button(vm.t("Показать приложение", "Show app in Finder")) {
+            vm.reveal(Bundle.main.bundlePath)
+          }
         }
+        Text(
+          vm.t(
+            "После обновления проверяем доступ заново. Если галочка уже включена, но проверка показывает отказ: полностью закройте приложение и запустите эту копию. Если отказ остаётся — удалите только старую запись OxyMac Cleaner кнопкой «−», добавьте эту копию через «+» и снова запустите её.",
+            "Access is checked again after updates. If the toggle is enabled but access is denied, quit and reopen this copy. If access is still denied, remove only the old OxyMac Cleaner entry with “−”, add this copy with “+”, and reopen it."
+          )
+        )
+        .font(.callout)
+        Text(
+          vm.t(
+            "В этой Preview-сборке нет Developer ID: сохранение разрешения между обновлениями пока не гарантируется. Приложение не сбрасывает ваши разрешения автоматически.",
+            "This preview has no Developer ID signature: permissions may not persist across updates. The app never resets your permissions automatically."
+          )
+        )
+        .font(.caption).foregroundStyle(.secondary)
       }
-      Text(
-        vm.t(
-          "После обновления проверяем доступ заново. Если галочка уже включена, но проверка показывает отказ: полностью закройте приложение и запустите эту копию. Если отказ остаётся — удалите только старую запись OxyMac Cleaner кнопкой «−», добавьте эту копию через «+» и снова запустите её.",
-          "Access is checked again after updates. If the toggle is enabled but access is denied, quit and reopen this copy. If access is still denied, remove only the old OxyMac Cleaner entry with “−”, add this copy with “+”, and reopen it."
-        )
-      )
-      .font(.callout)
-      Text(
-        vm.t(
-          "В этой Preview-сборке нет Developer ID: сохранение разрешения между обновлениями пока не гарантируется. Приложение не сбрасывает ваши разрешения автоматически.",
-          "This preview has no Developer ID signature: permissions may not persist across updates. The app never resets your permissions automatically."
-        )
-      )
-      .font(.caption).foregroundStyle(.secondary)
       HStack {
-        Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }
-        if let date = vm.diskAccessCheckedAt {
-          Text(date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(
-            .secondary)
+        if !available {
+          Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }
+          if let date = vm.diskAccessCheckedAt {
+            Text(date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(
+              .secondary)
+          }
         }
         Spacer()
         Button(
           vm.pendingDiskScan
-            ? vm.t("Сканировать доступное", "Scan accessible files") : vm.t("Готово", "Done")
+            ? (available
+              ? vm.t("Начать сканирование", "Start scanning")
+              : vm.t("Сканировать доступное", "Scan accessible files")) : vm.t("Готово", "Done")
         ) {
           let scan = vm.pendingDiskScan
           vm.pendingDiskScan = false
@@ -71,7 +81,7 @@ struct DiskAccessView: View {
           if scan { vm.scan() }
         }
       }
-    }.padding(28).frame(width: 660)
+    }.padding(28).frame(width: available ? 440 : 660)
       .onAppear { vm.checkDiskAccess() }
       .onReceive(
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)

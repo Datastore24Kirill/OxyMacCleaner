@@ -65,3 +65,7 @@ Added a disk-access guide on first launch and each new version, read-only in-pro
 ## 0.1.4 update
 
 15 path/extension-based categories with container precedence (known game libraries, app bundles, caches, app data and development outputs). Top-five size legend with remainder and full category breakdown, localized labels and file filter. 28 tests pass including container precedence, uppercase extensions and fallback classification. No content-based photo detection or exhaustive game catalog is claimed. Version 0.1.4 installed locally; access guide verified in the running app and correctly reports restricted access. No permission granted automatically.
+
+## 0.1.5 update
+
+Successful disk-access checks now show a compact confirmation without recovery controls. Startup and scan skip the guide when access probes succeed. Restricted and unknown states retain recovery instructions. 28 local tests passed. Installed 0.1.5; macOS denied protected-directory access after replacing the ad-hoc signed app, so success UI is not claimed as manually validated with renewed permission.

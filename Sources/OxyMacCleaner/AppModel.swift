@@ -17,7 +17,11 @@ import UserNotifications
     diskAccessCheckedAt = Date()
   }
   func prepareDiskAccess() {
-    if UserDefaults.standard.string(forKey: "permissionReviewedBuild") != permissionBuild {
+    checkDiskAccess()
+    if diskAccess?.state == .available {
+      diskAccessAcknowledged = true
+      UserDefaults.standard.set(permissionBuild, forKey: "permissionReviewedBuild")
+    } else if UserDefaults.standard.string(forKey: "permissionReviewedBuild") != permissionBuild {
       showDiskAccess = true
     }
   }
@@ -106,13 +110,12 @@ import UserNotifications
   func scan(_ explicit: [URL]? = nil) {
     guard !busy else { return }
     if explicit == nil && volumeID != "custom" {
-      if !diskAccessAcknowledged {
+      checkDiskAccess()
+      if diskAccess?.state != .available && !diskAccessAcknowledged {
         pendingDiskScan = true
         showDiskAccess = true
         return
       }
-      // Never trust a cached permission bit after returning from System Settings.
-      checkDiskAccess()
       refreshVolumes()
       guard volumes.contains(where: { $0.id == volumeID }) else {
         error = t(
