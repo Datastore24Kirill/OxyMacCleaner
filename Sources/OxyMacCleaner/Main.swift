@@ -57,7 +57,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
   }
 }
 struct RootView: View {
-  @State private var developerSection = "archives"
   @State private var showHelp = false
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
@@ -112,7 +111,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.15 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.16 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -125,7 +124,7 @@ struct RootView: View {
             Label(vm.t("Как пользоваться", "How to use"), systemImage: "questionmark.circle")
           }.oxyHelp(.help)
             .popover(isPresented: $showHelp) {
-              SectionHelpView(page: vm.page, developerSection: developerSection).environmentObject(
+              SectionHelpView(page: vm.page, developerSection: vm.developerSection).environmentObject(
                 vm)
             }
           if vm.busy {
@@ -427,15 +426,15 @@ struct RootView: View {
   }
   var developer: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Picker(vm.t("Раздел", "Section"), selection: $developerSection) {
+      Picker(vm.t("Раздел", "Section"), selection: $vm.developerSection) {
         Text(vm.t("Архивы Xcode", "Xcode archives")).tag("archives")
         Text("DerivedData").tag("derived")
         Text(vm.t("Симуляторы", "Simulators")).tag("simulators")
       }.oxyHelp(.developerTab).pickerStyle(.segmented)
       ScrollView {
-        if developerSection == "archives" {
+        if vm.developerSection == "archives" {
           card { XcodeArchiveView().environmentObject(vm) }
-        } else if developerSection == "derived" {
+        } else if vm.developerSection == "derived" {
           card { DerivedDataView().environmentObject(vm) }
         } else {
           card { SimulatorCleanupView().environmentObject(vm) }
@@ -677,8 +676,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.15 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.15 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.16 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.16 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

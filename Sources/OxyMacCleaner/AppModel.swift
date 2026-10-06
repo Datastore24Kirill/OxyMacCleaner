@@ -205,6 +205,11 @@ import UserNotifications
     }
   }
   @Published var page = "overview"
+  @Published var developerSection = "archives"
+  @Published var duplicatesReadAt: Date?
+  @Published var simulatorReadAt: Date?
+  @Published var simulatorReadIssue: String?
+  @Published var derivedReadIssue: String?
   @Published var roots: [URL] = [URL(fileURLWithPath: "/")]
   @Published var volumes: [ScanVolume] = Volumes.discover()
   @Published var volumeID = "/"
@@ -390,6 +395,7 @@ import UserNotifications
     scanProgress = ScanProgress()
     selected = []
     duplicates = []
+    duplicatesReadAt = nil
     report = ScanReport()
     diskIndex = DiskIndex(report: ScanReport())
     snapshotDate = nil
@@ -473,6 +479,7 @@ import UserNotifications
           }
         }.value
         duplicates = groups
+        duplicatesReadAt = Date()
         status = t("Групп дубликатов: \(groups.count)", "Duplicate groups: \(groups.count)")
       } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
       busy = false
@@ -630,6 +637,7 @@ import UserNotifications
       entries = store.entries()
       busy = false
       duplicates = []
+      duplicatesReadAt = nil
       report.folders = [:]
       if results.contains(where: { $0.1 != nil }) {
         error = results.compactMap { $0.1 }.joined(separator: "\n")

@@ -9,13 +9,14 @@ extension AppModel {
     task = Task {
       do {
         simulatorInventory = try await Task.detached { try Simulators.inventory() }.value
+        simulatorReadAt = Date(); simulatorReadIssue = nil
         selectedDevices.formIntersection(simulatorInventory.devices.filter(\.removable).map(\.id))
         selectedRuntimes.formIntersection(
           simulatorInventory.runtimes.filter {
             Simulators.canRemove($0, devices: simulatorInventory.devices)
           }.map(\.id))
         status = t("Список симуляторов обновлён", "Simulator inventory refreshed")
-      } catch { self.error = error.localizedDescription }
+      } catch { simulatorReadIssue = error.localizedDescription; self.error = error.localizedDescription }
       busy = false
     }
   }
@@ -100,7 +101,8 @@ extension AppModel {
           .value
         selectedDerived = []
         derivedReadAt = Date()
-      } catch { self.error = error.localizedDescription }
+        derivedReadIssue = nil
+      } catch { derivedReadIssue = error.localizedDescription; self.error = error.localizedDescription }
       busy = false
       status = t("Проверка DerivedData завершена", "DerivedData inspection complete")
     }

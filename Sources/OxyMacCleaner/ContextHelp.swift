@@ -338,8 +338,8 @@ enum HelpTopic {
       )
     case .advisor:
       return (
-        "Пересчитывает предложения по текущему снимку. Не запускает новое сканирование и не выбирает файлы для удаления.",
-        "Recalculates suggestions from the current snapshot. Does not rescan the disk or select files for deletion."
+        "Обновить по снимку пересчитывает личные файлы. Обновить сводку также читает архивы Xcode, DerivedData и симуляторы. Дубликаты проверяются отдельно. Действия ничего не удаляют.",
+        "Refresh from snapshot recalculates personal files. Refresh summary also reads Xcode archives, DerivedData and simulators. Duplicates are checked separately. Neither action deletes anything."
       )
     case .rule:
       return (
