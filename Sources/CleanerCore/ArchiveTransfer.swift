@@ -1,12 +1,12 @@
 import Darwin
 import Foundation
 
-/// A read-only preview tied to both the source and an independently selected backup.
+/// A read-only preview tied to both the source and an optional independently selected backup.
 public struct ArchiveTransferPlan: Sendable {
   public let source: URL
-  public let backup: URL
+  public let backup: URL?
   public let manifest: DirectoryManifest
-  let backupManifest: DirectoryManifest
+  let backupManifest: DirectoryManifest?
 }
 public enum ArchiveTransfer {
   public static func createBackup(
@@ -47,31 +47,35 @@ public enum ArchiveTransfer {
       }
   }
   public static func prepare(
-    archive expectedArchive: XcodeArchive, backup: URL, cancellation: Cancellation = Cancellation()
+    archive expectedArchive: XcodeArchive, backup: URL? = nil,
+    cancellation: Cancellation = Cancellation()
   )
     throws -> ArchiveTransferPlan
   {
     let source = URL(fileURLWithPath: expectedArchive.path)
-    guard source.pathExtension == "xcarchive", backup.pathExtension == "xcarchive",
-      !Scanner.inside(source.path, backup.path), !Scanner.inside(backup.path, source.path)
-    else {
-      throw CleanerError.message("Choose a separate complete .xcarchive backup")
+    guard source.pathExtension == "xcarchive" else {
+      throw CleanerError.message("Not an Xcode archive")
+    }
+    if let backup {
+      guard backup.pathExtension == "xcarchive",
+        !Scanner.inside(source.path, backup.path), !Scanner.inside(backup.path, source.path)
+      else { throw CleanerError.message("Choose a separate complete .xcarchive backup") }
     }
     let archive = try XcodeArchives.read(source, cancellation: cancellation)
     guard archive == expectedArchive, archive.eligibleForRetention else {
       throw CleanerError.message("Archive metadata is incomplete")
     }
     let expected = try DirectoryManifest.capture(source, cancellation: cancellation)
-    // Recently written or future-dated packages are not eligible for transfer.
-    guard expected.items.allSatisfy({ $0.modified < Date().addingTimeInterval(-86400) }) else {
-      throw CleanerError.message("Archive changed within the last 24 hours; try later")
+    // Protect files still settling after a build, without a day-long retention gate.
+    guard expected.items.allSatisfy({ $0.modified < Date().addingTimeInterval(-600) }) else {
+      throw CleanerError.message("Archive changed within the last 10 minutes; try later")
     }
-    guard try ArchiveSymbols.inspect(source, cancellation: cancellation).complete else {
-      throw CleanerError.message("UUID verification is incomplete; keep this archive")
-    }
-    let copy = try DirectoryManifest.capture(backup, cancellation: cancellation)
-    guard sameContents(expected, copy) else {
-      throw CleanerError.message("Backup contents differ from the archive")
+    var copy: DirectoryManifest?
+    if let backup {
+      copy = try DirectoryManifest.capture(backup, cancellation: cancellation)
+      guard let copy, sameContents(expected, copy) else {
+        throw CleanerError.message("Backup contents differ from the archive")
+      }
     }
     guard try XcodeArchives.read(source, cancellation: cancellation) == expectedArchive,
       try DirectoryManifest.capture(source, cancellation: cancellation) == expected
@@ -82,7 +86,8 @@ public enum ArchiveTransfer {
       source: source, backup: backup, manifest: expected, backupManifest: copy)
   }
   static func validate(_ plan: ArchiveTransferPlan, cancellation: Cancellation) throws {
-    let copy = try DirectoryManifest.capture(plan.backup, cancellation: cancellation)
+    guard let backup = plan.backup else { return }
+    let copy = try DirectoryManifest.capture(backup, cancellation: cancellation)
     guard copy == plan.backupManifest, sameContents(plan.manifest, copy) else {
       throw CleanerError.message("Backup changed after preview")
     }

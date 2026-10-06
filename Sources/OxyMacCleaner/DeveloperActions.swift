@@ -105,18 +105,28 @@ extension AppModel {
       status = t("Проверка DerivedData завершена", "DerivedData inspection complete")
     }
   }
-  func quarantineDerivedData() {
+  func quarantineDerivedData() { cleanDerivedData(permanently: false) }
+  func deleteDerivedData() { cleanDerivedData(permanently: true) }
+  private func cleanDerivedData(permanently: Bool) {
     guard !busy else { return }
     let caches = derivedCaches.filter { selectedDerived.contains($0.id) }
     guard !caches.isEmpty else { return }
     guard
       confirm(
-        t("Перенести выбранные кэши в карантин?", "Quarantine selected caches?"),
+        permanently
+          ? t("Удалить выбранные кэши?", "Delete selected caches?")
+          : t("Перенести выбранные кэши в карантин?", "Quarantine selected caches?"),
         caches.map { $0.project + " · " + $0.category }.joined(separator: "\n") + "\n\n"
           + t(
-            "Закройте Xcode и остановите сборки. Следующая сборка и индексирование займут больше времени. Исходники, SourcePackages и готовые продукты не затрагиваются. Карантин продолжает занимать место.",
-            "Close Xcode and stop builds. The next build/indexing will take longer. Sources, SourcePackages and built products are excluded. Quarantine still occupies disk space."
-          ))
+            "Закройте Xcode и сборки. Индекс и промежуточные файлы будут созданы заново. Следующая сборка займёт больше времени. Старые логи восстановить нельзя. Исходники, SourcePackages и готовые продукты не затрагиваются.",
+            "Close Xcode and builds. Indexes and intermediates will be rebuilt. The next build will take longer. Old logs cannot be recovered. Sources, SourcePackages and built products are excluded."
+          )
+          + "\n"
+          + (permanently
+            ? t("Удаление без Корзины и карантина.", "Deletion without Trash or quarantine.")
+            : t("Карантин продолжает занимать место.", "Quarantine still occupies space.")),
+        destructive: permanently,
+        action: permanently ? t("Удалить кэши", "Delete caches") : t("В карантин", "Quarantine"))
     else { return }
     busy = true
     cancellation = Cancellation()
@@ -128,16 +138,21 @@ extension AppModel {
       for cache in caches {
         if token.cancelled { break }
         status =
-          t("Проверяем и переносим: ", "Checking and moving: ") + cache.project + " · "
+          t("Обрабатываем кэши: ", "Processing caches: ") + cache.project + " · "
           + cache.category
         do {
           _ = try await Task.detached {
             let plan = try DerivedData.prepare(cache, cancellation: token)
-            return try store.moveDerivedData(plan, protectedPaths: excluded, cancellation: token)
+            if permanently {
+              try DerivedData.delete(plan, protectedPaths: excluded, cancellation: token)
+            } else {
+              _ = try store.moveDerivedData(plan, protectedPaths: excluded, cancellation: token)
+            }
           }.value
           derivedCaches.removeAll { $0.id == cache.id }
           messages.append(
-            cache.project + " / " + cache.category + ": " + t("в карантине", "quarantined"))
+            cache.project + " / " + cache.category + ": "
+              + (permanently ? t("удалён", "deleted") : t("в карантине", "quarantined")))
         } catch { messages.append(cache.project + ": " + error.localizedDescription) }
       }
       developerResult = messages.joined(separator: "\n")
@@ -148,30 +163,34 @@ extension AppModel {
       status = t(
         "Обработка DerivedData завершена. См. отчёт.",
         "DerivedData processing complete. See report.")
-      scheduleReminder()
+      if !permanently { scheduleReminder() }
     }
   }
   func quarantineExcessArchives() { processExcessArchives(deleteImmediately: false) }
   func deleteExcessArchives() { processExcessArchives(deleteImmediately: true) }
   private func processExcessArchives(deleteImmediately: Bool) {
     guard !busy else { return }
-    let panel = NSOpenPanel()
-    panel.canChooseDirectories = true
-    panel.canChooseFiles = false
-    panel.message = t(
-      "Папка для полных резервных копий — желательно на другом диске. В ней будут созданы подпапки по датам архивов.",
-      "Choose a full-backup folder, preferably on another disk. Archive date subfolders will be preserved."
-    )
-    guard panel.runModal() == .OK, let backupRoot = panel.url else { return }
     let root = archiveRoot
-    guard !Scanner.inside(backupRoot.path, root.path), !Scanner.inside(root.path, backupRoot.path),
-      !Scanner.inside(backupRoot.path, quarantine.root.path)
-    else {
-      error = t(
-        "Выберите папку вне архива Xcode и карантина.",
-        "Choose a folder outside Xcode archives and quarantine.")
-      return
+    var chosenBackup: URL?
+    if deleteImmediately && archiveBackupBeforeDelete {
+      let panel = NSOpenPanel()
+      panel.canChooseDirectories = true
+      panel.canChooseFiles = false
+      panel.message = t(
+        "Куда сохранить копии? Лучше выбрать другой диск.",
+        "Where should backups be saved? Prefer another disk.")
+      guard panel.runModal() == .OK, let folder = panel.url else { return }
+      guard !Scanner.inside(folder.path, root.path), !Scanner.inside(root.path, folder.path),
+        !Scanner.inside(folder.path, quarantine.root.path)
+      else {
+        error = t(
+          "Выберите папку вне архивов Xcode и карантина.",
+          "Choose a folder outside Xcode archives and quarantine.")
+        return
+      }
+      chosenBackup = folder
     }
+    let backupRoot = chosenBackup
     busy = true
     cancellation = Cancellation()
     let token = cancellation
@@ -180,7 +199,6 @@ extension AppModel {
     task = Task {
       var messages: [String] = []
       do {
-        if deleteImmediately { try DeveloperActivity.assertIdle() }
         let fresh = await Task.detached { XcodeArchives.scan(root: root, cancellation: token) }
           .value
         guard fresh.complete, fresh.issues.isEmpty else {
@@ -191,127 +209,129 @@ extension AppModel {
           fresh.archives, keep: archiveKeep, pinned: pinnedArchives)
         let candidates = fresh.archives.filter { decisions[$0.path] == .review }
         guard !candidates.isEmpty else {
-          throw CleanerError.message("No eligible archives beyond retention limit")
-        }
-        guard
-          confirm(
-            t("Подготовить копии архивов сверх лимита?", "Prepare backups beyond retention limit?"),
-            "\(candidates.count) · "
-              + ByteCountFormatter.string(
-                fromByteCount: candidates.reduce(0) { $0 + $1.bytes }, countStyle: .file) + "\n"
-              + backupRoot.path + "\n"
-              + t(
-                "Сначала создадим или проверим полные копии. Потом покажем число архивов, прошедших проверки, и отдельно запросим выбранное действие. Архивы с ошибками будут пропущены. Копии на этом же диске тоже занимают место.",
-                "First create or verify full backups. Then show the passing count and confirm the chosen action separately. Archives failing checks are skipped. Backups on this disk also occupy space."
-              ))
-        else {
-          busy = false
-          return
+          throw CleanerError.message("No archives beyond retention limit")
         }
         var plans: [ArchiveTransferPlan] = []
         for (index, archive) in candidates.enumerated() {
           try token.check()
           status =
-            t("Копии и проверки: ", "Backups and checks: ") + "\(index + 1)/\(candidates.count) · "
-            + archive.name
+            t("Проверяем архивы: ", "Checking archives: ") + "\(index + 1)/\(candidates.count)"
           do {
-            let plan = try await Task.detached {
-              let source = URL(fileURLWithPath: archive.path)
-              guard Scanner.inside(source.path, root.path) else {
-                throw CleanerError.message("Archive is outside selected root")
-              }
-              let relative = String(source.path.dropFirst(root.path.count + 1))
-              let backup = backupRoot.appendingPathComponent(relative)
-              try FileManager.default.createDirectory(
-                at: backup.deletingLastPathComponent(), withIntermediateDirectories: true)
-              if !FileManager.default.fileExists(atPath: backup.path) {
-                try ArchiveTransfer.createBackup(
-                  source: source, destination: backup, cancellation: token)
-              }
-              return try ArchiveTransfer.prepare(
-                archive: archive, backup: backup, cancellation: token)
-            }.value
-            plans.append(plan)
-          } catch {
-            messages.append(
-              archive.name + " (" + (archive.build ?? "?") + "): " + error.localizedDescription)
-          }
+            plans.append(
+              try await Task.detached {
+                try ArchiveTransfer.prepare(archive: archive, cancellation: token)
+              }.value)
+          } catch { messages.append(archive.path + ": " + error.localizedDescription) }
         }
         try token.check()
         guard !plans.isEmpty else {
           throw CleanerError.message("No archives passed checks; originals retained")
         }
+        let copyNote =
+          backupRoot.map {
+            t("Сначала сохраним и проверим копии: ", "First save and verify backups: ") + $0.path
+          }
+          ?? t(
+            "Без резервной копии. Восстановление из приложения невозможно.",
+            "No backup. These files cannot be restored by this app.")
+        let explanation =
+          deleteImmediately
+          ? t(
+            "Оригиналы будут удалены без Корзины и карантина. Архивы и dSYM выпущенных сборок могут понадобиться для разбора сбоев. ",
+            "Originals will be deleted without Trash or quarantine. Released archives and dSYMs may be needed to diagnose crashes. "
+          ) + copyNote
+          : t(
+            "Архивы будут перенесены в карантин: можно восстановить, но место пока не освободится. Отдельная копия не нужна.",
+            "Archives will move to quarantine: they can be restored but still occupy space. No separate backup is needed."
+          )
+        let names = plans.prefix(8).map { $0.source.lastPathComponent }.joined(separator: "\n")
+        let extra =
+          plans.count > 8
+          ? t("\n… и ещё \(plans.count - 8)", "\n… and \(plans.count - 8) more") : ""
         guard
           confirm(
             deleteImmediately
-              ? t("Удалить проверенные архивы навсегда?", "Permanently delete verified archives?")
-              : t("Переместить проверенные архивы?", "Transfer verified archives?"),
+              ? t("Удалить архивы сверх лимита?", "Delete archives beyond the limit?")
+              : t("Перенести архивы в карантин?", "Quarantine archives?"),
             "\(plans.count) · "
               + ByteCountFormatter.string(
-                fromByteCount: plans.reduce(0) { $0 + $1.manifest.bytes }, countStyle: .file) + "\n"
-              + backupRoot.path + "\n"
-              + (deleteImmediately
-                ? t(
-                  "Копии проверены. Закройте Xcode и сборки. Оригиналы будут удалены сразу, БЕЗ карантина и Корзины. Архивы исчезнут из Organizer. Восстановить их можно только вручную из указанных резервных копий. Копии сохраняются. Объём выше — логический, реальное освобождение места может отличаться.",
-                  "Backups verified. Close Xcode and builds. Originals will be deleted immediately, WITHOUT quarantine or Trash. They disappear from Organizer. Recovery requires manually restoring the retained backups. The size above is logical; actual reclaimed space may differ."
-                )
-                : t(
-                  "Копии проверены. Закройте Xcode и сборки. После переноса архивы исчезнут из Organizer, но их можно восстановить из карантина. Место освободится только после отдельного окончательного удаления.",
-                  "Backups verified. Close Xcode and builds. Archives disappear from Organizer but can be restored from quarantine. Space is freed only after permanent deletion."
-                )),
-            destructive: deleteImmediately)
-
+                fromByteCount: plans.reduce(0) { $0 + $1.manifest.bytes }, countStyle: .file)
+              + "\n" + names + extra + "\n\n" + explanation + "\n\n"
+              + t(
+                "Операция включает все архивы сверх лимита, независимо от фильтра. Защищённые архивы пропускаются. Закройте Xcode и сборки. Объём логический: реальная экономия может отличаться.",
+                "Includes all archives beyond the limit regardless of filters. Protected archives are skipped. Close Xcode and builds. Logical size may differ from reclaimed space."
+              ),
+            destructive: deleteImmediately,
+            action: deleteImmediately ? t("Удалить", "Delete") : t("В карантин", "Quarantine"))
         else {
           busy = false
           developerResult = messages.joined(separator: "\n")
+          status = t("Отменено. Файлы не изменены.", "Cancelled. Files unchanged.")
           return
         }
         let pins = pinnedArchives
         let keep = archiveKeep
         let excluded = exclusions
-        for (index, plan) in plans.enumerated() {
+        for (index, preview) in plans.enumerated() {
           try token.check()
-          status =
-            (deleteImmediately
-              ? t("Удаление архивов: ", "Deleting archives: ")
-              : t("Перенос архивов: ", "Transferring archives: ")) + "\(index + 1)/\(plans.count)"
+          status = t("Обработка архивов: ", "Processing archives: ") + "\(index + 1)/\(plans.count)"
           do {
-            _ = try await Task.detached {
+            let backupPath = try await Task.detached {
+              try DeveloperActivity.assertIdle()
               let current = XcodeArchives.scan(root: root, cancellation: token)
               guard current.complete, current.issues.isEmpty else {
                 throw CleanerError.message("Inventory changed or incomplete")
               }
               let rules = ArchiveRetention.decisions(current.archives, keep: keep, pinned: pins)
-              guard rules[plan.source.path] == .review else {
-                throw CleanerError.message("Archive is retained")
+              guard rules[preview.source.path] == .review,
+                let archive = current.archives.first(where: { $0.path == preview.source.path }),
+                try DirectoryManifest.capture(preview.source, cancellation: token)
+                  == preview.manifest
+              else { throw CleanerError.message("Archive changed or is retained") }
+              var plan = preview
+              if let backupRoot {
+                guard Scanner.inside(preview.source.path, root.path) else {
+                  throw CleanerError.message("Archive is outside selected root")
+                }
+                let relative = String(preview.source.path.dropFirst(root.path.count + 1))
+                let backup = backupRoot.appendingPathComponent(relative)
+                try FileManager.default.createDirectory(
+                  at: backup.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if !FileManager.default.fileExists(atPath: backup.path) {
+                  try ArchiveTransfer.createBackup(
+                    source: preview.source, destination: backup, cancellation: token)
+                }
+                plan = try ArchiveTransfer.prepare(
+                  archive: archive, backup: backup, cancellation: token)
+                guard plan.manifest == preview.manifest else {
+                  throw CleanerError.message("Archive changed while preparing backup")
+                }
               }
               let retained = Set(rules.filter { $0.value != .review }.map(\.key))
               if deleteImmediately {
                 try store.deleteArchive(
-                  plan, pinned: pins, retained: retained,
-                  protectedPaths: excluded, cancellation: token)
+                  plan, pinned: pins, retained: retained, protectedPaths: excluded,
+                  cancellation: token)
               } else {
                 _ = try store.moveArchive(
-                  plan, pinned: pins, retained: retained,
-                  protectedPaths: excluded, cancellation: token)
+                  plan, pinned: pins, retained: retained, protectedPaths: excluded,
+                  cancellation: token)
               }
+              return plan.backup?.path
             }.value
-            archiveInventory.archives.removeAll { $0.path == plan.source.path }
-            archiveSymbols.removeValue(forKey: plan.source.path)
+            archiveInventory.archives.removeAll { $0.path == preview.source.path }
+            archiveSymbols.removeValue(forKey: preview.source.path)
             messages.append(
-              plan.source.path + ": "
-                + (deleteImmediately
-                  ? t("удалён; копия: ", "deleted; backup: ") + plan.backup.path
-                  : t("в карантине", "quarantined")))
-          } catch {
-            messages.append(plan.source.lastPathComponent + ": " + error.localizedDescription)
-          }
+              preview.source.path + ": "
+                + (deleteImmediately ? t("удалён", "deleted") : t("в карантине", "quarantined"))
+                + (backupPath.map { t("; копия: ", "; backup: ") + $0 } ?? ""))
+          } catch { messages.append(preview.source.path + ": " + error.localizedDescription) }
         }
       } catch { messages.append(error.localizedDescription) }
-      let updated = await Task.detached {
+      status = t("Обновляем список архивов…", "Refreshing archives…")
+      archiveInventory = await Task.detached {
         XcodeArchives.scan(root: root, cancellation: Cancellation())
       }.value
-      archiveInventory = updated
       archiveScanDate = Date()
       developerResult = messages.joined(separator: "\n")
       log(developerResult)
@@ -324,7 +344,7 @@ extension AppModel {
   }
   func eraseQuarantinedArchives() {
     guard !busy else { return }
-    let archives = entries.filter { $0.state == "quarantined" && $0.archiveBackup != nil }
+    let archives = entries.filter { $0.state == "quarantined" && $0.isArchive }
     guard !archives.isEmpty,
       confirm(
         t("Удалить архивы из карантина навсегда?", "Permanently delete quarantined archives?"),
@@ -332,8 +352,8 @@ extension AppModel {
           + ByteCountFormatter.string(
             fromByteCount: archives.reduce(0) { $0 + $1.bytes }, countStyle: .file) + "\n"
           + t(
-            "Восстановление из карантина станет невозможно. Перед каждым удалением проверим полную резервную копию; при ошибке архив останется в карантине. Резервные копии не удаляются.",
-            "Quarantine restoration will no longer be possible. Each full backup is rechecked; failures leave the archive in quarantine. Backups are retained."
+            "Восстановление из карантина станет невозможно. Если при переносе была указана резервная копия, проверим её перед удалением. При ошибке архив останется в карантине.",
+            "Quarantine restoration will no longer be possible. If a backup was specified during transfer, it is rechecked before deletion. Failed checks leave the archive in quarantine."
           ), destructive: true)
     else { return }
     busy = true

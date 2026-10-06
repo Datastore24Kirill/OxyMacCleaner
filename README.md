@@ -6,7 +6,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.13 Preview — implemented
+## 0.1.14 Preview — implemented
 
 - Russian and English action tooltips, VoiceOver hints and a contextual “How to use” guide on every screen. Archive symbol checks and full backups now have explicit names and explanations.
 
@@ -14,10 +14,10 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 - Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
 - Exact duplicate detection using size, SHA-256 and byte comparison; hard links and symlinks are handled conservatively.
 - Individual-file quarantine, integrity-checked restoration, destination conflict protection and separately confirmed permanent deletion.
-- Project-associated DerivedData intermediates/index/log caches can be quarantined after conservative Xcode/build-process and ten-minute write checks. SourcePackages and built products are excluded.
-- Batch archive cleanup beyond retention: verified full backups followed by separately confirmed direct deletion, or optional quarantine. Protected archives, active builds, changed data and failed backup checks block direct deletion. Direct deletion bypasses Trash; restore manually from the retained backup.
+- Project-associated DerivedData intermediates/index/log caches can be deleted directly or optionally quarantined after conservative Xcode/build-process and ten-minute write checks. SourcePackages and built products are excluded.
+- Batch archive cleanup beyond retention: one confirmation for direct deletion, optional verified backup (off by default), or optional quarantine. Protected archives, active builds and changed data block direct deletion. If backup is requested and fails, the archive is skipped. Without a backup, direct deletion has no in-app recovery.
 - Five-day quarantine reminder support (notifications require user permission).
-- Xcode archive inventory: application, version/build, team, creation date, size and dSYM package count. Keep-last-N recommendations per app/team, persistent pins and search. On-demand Mach-O/dSYM UUID matching, verified full backup creation and individually confirmed same-volume archive quarantine. Transfers require a matching backup, an archive beyond the retention limit, and no changes for 24 hours. Pinned or incomplete archives remain protected. Selectable simulator devices and runtimes, explicit deletion via simctl with fresh state checks; booted/busy devices and protected runtimes are blocked.
+- Xcode archive inventory: application, version/build, team, creation date, size and dSYM package count. Keep-last-N recommendations per app/team, persistent pins and search. On-demand Mach-O/dSYM UUID matching, verified full backup creation and individually confirmed same-volume archive quarantine. Cleanup requires an archive beyond the retention limit and no changes for ten minutes. Backups and symbol checks are optional. Pinned or incomplete archives remain protected. Selectable simulator devices and runtimes, explicit deletion via simctl with fresh state checks; booted/busy devices and protected runtimes are blocked.
 - Catalog of 11 agent discovery hints. Import **one inactive session** as UTF-8 TXT/MD/JSON/JSONL; no mutation of agent databases.
 - Verified history backup and local Ollama handoff generation in chunks, with an editable result, copy and Markdown export.
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
@@ -27,7 +27,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.13-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.14-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -36,7 +36,7 @@ The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may bl
 1. Choose a disk (the startup disk is selected by default) or use the optional folder picker for a small test. Nothing is moved automatically.
 2. Review files and duplicates; keep at least one copy per duplicate group.
 3. Moving a file into quarantine **does not free its disk space**. Restore first to verify the workflow on a disposable file.
-4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after backup verification), agent storage, credentials and system paths are excluded from cleanup in this preview. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Cross-volume quarantine is unavailable.
+4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after integrity and retention checks), agent storage, credentials and system paths are excluded from cleanup in this preview. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Cross-volume quarantine is unavailable.
 5. To prepare an agent handoff, import an exported inactive session, configure a local model, review the result and paste it into a new chat. Existing chats are not rewritten.
 
 APFS clones/snapshots mean logical file sizes are not a guarantee of reclaimable storage. Large scans currently retain file metadata in memory. Only the first 2,000 filtered files are rendered; narrow the search to access more results.

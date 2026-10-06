@@ -22,7 +22,7 @@ struct XcodeArchiveView: View {
       Label(vm.t("Архивы приложений", "Application archives"), systemImage: "archivebox").font(
         .title2.bold())
       HStack {
-        Button(vm.t("Прочитать архивы Xcode", "Read Xcode archives")) { vm.scanArchives() }.oxyHelp(
+        Button(vm.t("Обновить список", "Refresh list")) { vm.scanArchives() }.oxyHelp(
           .archiveRead
         )
         .disabled(vm.busy)
@@ -43,14 +43,26 @@ struct XcodeArchiveView: View {
         Button(vm.t("Удалить сверх лимита…", "Delete beyond limit…"), role: .destructive) {
           vm.deleteExcessArchives()
         }.oxyHelp(.archiveDelete).disabled(vm.busy || beyond.isEmpty)
-        Button(vm.t("В карантин…", "Quarantine…")) {
-          vm.quarantineExcessArchives()
-        }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
+        Menu(vm.t("Ещё", "More")) {
+          Button(vm.t("В карантин…", "Quarantine…")) {
+            vm.quarantineExcessArchives()
+          }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
+        }.help(
+          vm.t(
+            "Перенести сверх лимита в карантин вместо удаления.",
+            "Quarantine archives beyond the limit instead of deleting.")
+        )
+        .fixedSize()
       }
+      Toggle(
+        vm.t("Сделать резервную копию перед удалением", "Back up before deleting"),
+        isOn: $vm.archiveBackupBeforeDelete
+      )
+      .oxyHelp(.backupOption).disabled(vm.busy)
       Text(
         vm.t(
-          "Оба действия сначала создают или проверяют полные резервные копии. «Удалить сверх лимита» удаляет оригиналы без карантина после отдельного подтверждения. Карантин — вариант с восстановлением из приложения. Копии на этом диске тоже занимают место.",
-          "Both actions first create or verify full backups. Delete beyond limit removes originals without quarantine after separate confirmation. Quarantine offers in-app restoration. Backups on this disk also take space."
+          "Удаление — без Корзины, после одного подтверждения. Копия необязательна. В меню «Ещё» можно выбрать карантин с восстановлением. Архивы выпущенных версий защитите отметкой «Не удалять».",
+          "Delete without Trash after one confirmation. Backup is optional. More offers quarantine with restoration. Protect released archives using Keep protected."
         )
       ).font(.caption).foregroundStyle(.secondary)
       DisclosureGroup(
@@ -61,8 +73,8 @@ struct XcodeArchiveView: View {
           Text(vm.t(HelpTopic.backup.text.ru, HelpTopic.backup.text.en))
           Text(
             vm.t(
-              "Выберите: проверенная копия → прямое удаление или копия → карантин → удаление позже. После прямого удаления восстановление возможно только вручную из копии. Сохраните её для разбора будущих сбоев.",
-              "Choose: verified backup → direct deletion, or backup → quarantine → delete later. Direct deletion requires manual recovery from backup. Keep it for future crash diagnosis."
+              "Проверка символов — отдельная диагностика, для очистки она не обязательна. Копирование и карантин тоже необязательны. Без сохранённой копии удалённый архив восстановить из приложения нельзя.",
+              "Symbol checking is optional diagnostics, not a cleanup prerequisite. Backup and quarantine are optional too. Without a saved copy, a deleted archive cannot be restored by this app."
             ))
         }.font(.callout).foregroundStyle(.secondary).padding(.top, 6)
       }.oxyHelp(.disclosure)
@@ -158,12 +170,12 @@ struct XcodeArchiveView: View {
             }
             Text(
               vm.t(
-                "Проверены UUID и архитектуры. Полнота отладочной информации не проверялась. Перед переносом UUID проверяются заново.",
-                "UUIDs and architectures checked. Debug information completeness has not been verified. UUIDs are rechecked before transfer."
+                "Проверены UUID и архитектуры. Полнота отладочной информации не проверялась. Эта диагностика не требуется для очистки.",
+                "UUIDs and architectures checked. Debug information completeness has not been verified. This diagnostic is not required for cleanup."
               )
             ).font(.caption).foregroundStyle(.secondary)
           }
-          HStack {
+          Menu(vm.t("Действия с архивом", "Archive actions")) {
             Button(vm.t("Проверить символы отладки", "Check debug symbols")) {
               vm.checkArchiveSymbols(archive)
             }.oxyHelp(.symbols)
@@ -173,7 +185,7 @@ struct XcodeArchiveView: View {
               Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineArchive(archive) }.oxyHelp(
                 .archiveQuarantine)
             }
-          }.disabled(vm.busy)
+          }.fixedSize().disabled(vm.busy)
           if !archive.issues.isEmpty {
             Text(
               vm.t("Размер/состав неполный: ", "Size/contents incomplete: ")
@@ -195,11 +207,12 @@ struct XcodeArchiveView: View {
       }
       Text(
         vm.t(
-          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Карантин доступен только сверх лимита, с полной проверенной копией и без изменений за 24 часа. На странице показано 10 архивов.",
-          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Quarantine requires an archive beyond the retention limit, a verified full backup and no changes for 24 hours. 10 archives per page."
+          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Свежие изменения за последние 10 минут защищены. Копия и проверка символов необязательны. На странице показано 10 архивов.",
+          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Changes within the last 10 minutes are protected. Backup and symbol checks are optional. 10 archives per page."
         )
       ).font(.caption).foregroundStyle(.secondary)
     }
+    .modifier(InventoryLoading(isLoaded: vm.archiveScanDate != nil, load: vm.scanArchives))
     .onChange(of: query) { _, _ in archivePage = 0 }
     .onChange(of: onlyReview) { _, _ in archivePage = 0 }
     .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0 }
@@ -213,8 +226,8 @@ struct XcodeArchiveView: View {
         "Keep: among the latest \(vm.archiveKeep)")
     case .review:
       return vm.t(
-        "Сверх лимита: проверьте нужность и резервную копию символов",
-        "Beyond limit: review need and symbol backup")
+        "Сверх лимита: можно выбрать для очистки",
+        "Beyond limit: review for cleanup")
     default:
       return vm.t(
         "Ручная проверка: недостаточно достоверных данных",

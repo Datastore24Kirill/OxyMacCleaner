@@ -194,7 +194,8 @@ final class ArchiveSafetyTests: XCTestCase {
     try store.deleteArchive(plan, pinned: [], retained: [], idle: {})
     XCTAssertFalse(FileManager.default.fileExists(atPath: plan.source.path))
     XCTAssertTrue(
-      ArchiveTransfer.sameContents(plan.manifest, try DirectoryManifest.capture(plan.backup)))
+      ArchiveTransfer.sameContents(
+        plan.manifest, try DirectoryManifest.capture(XCTUnwrap(plan.backup))))
     XCTAssertTrue(store.entries().isEmpty)
     XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: store.root.path).isEmpty)
   }
@@ -235,9 +236,9 @@ final class ArchiveSafetyTests: XCTestCase {
   }
   func testDirectDeletionRejectsChangedOrMissingBackup() throws {
     let (plan, store) = try directPlan()
-    try Data("changed".utf8).write(to: plan.backup.appendingPathComponent("Info.plist"))
+    try Data("changed".utf8).write(to: XCTUnwrap(plan.backup).appendingPathComponent("Info.plist"))
     XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
-    try FileManager.default.removeItem(at: plan.backup)
+    try FileManager.default.removeItem(at: XCTUnwrap(plan.backup))
     XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
     XCTAssertEqual(try DirectoryManifest.capture(plan.source), plan.manifest)
   }
@@ -269,7 +270,56 @@ final class ArchiveSafetyTests: XCTestCase {
     XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
     XCTAssertTrue(
       FileManager.default.fileExists(atPath: preserved.appendingPathComponent("Info.plist").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: plan.backup.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(plan.backup).path))
+  }
+
+  func testCleanupWithoutBackupOrSymbols() throws {
+    let source = try fixture()
+    try FileManager.default.removeItem(at: source.appendingPathComponent("dSYMs"))
+    try age(source)
+    let plan = try ArchiveTransfer.prepare(archive: XcodeArchives.read(source))
+    XCTAssertNil(plan.backup)
+    let store = try QuarantineStore(root: root.appendingPathComponent("quarantine"))
+    try store.deleteArchive(plan, pinned: [], retained: [], idle: {})
+    XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+    XCTAssertTrue(store.entries().isEmpty)
+  }
+  func testQuarantineWithoutBackupCanRestoreAndErase() throws {
+    let source = try fixture()
+    let store = try QuarantineStore(root: root.appendingPathComponent("quarantine"))
+    let plan = try ArchiveTransfer.prepare(archive: XcodeArchives.read(source))
+    let entry = try store.moveArchive(plan, pinned: [], retained: [])
+    XCTAssertNil(entry.archiveBackup)
+    XCTAssertTrue(entry.isArchive)
+    XCTAssertTrue(try XCTUnwrap(store.entries().first).isArchive)
+    try store.restore(entry)
+    XCTAssertEqual(try DirectoryManifest.capture(source), plan.manifest)
+    let newPlan = try ArchiveTransfer.prepare(archive: XcodeArchives.read(source))
+    let second = try store.moveArchive(newPlan, pinned: [], retained: [])
+    try store.erase(second)
+    XCTAssertEqual(store.entries().first(where: { $0.id == second.id })?.state, "deleted")
+  }
+  func testLegacyArchiveEntryStillClassified() throws {
+    let entry = QuarantineEntry(
+      id: UUID(), original: "/archive", bytes: 1, date: Date(), hash: "hash",
+      archiveBackup: "/backup", state: "quarantined")
+    let decoded = try JSONDecoder().decode(QuarantineEntry.self, from: JSONEncoder().encode(entry))
+    XCTAssertNil(decoded.archive)
+    XCTAssertTrue(decoded.isArchive)
+  }
+  func testArchiveFromOneHourAgoEligibleButRecentWritesProtected() throws {
+    let source = try fixture()
+    let paths =
+      [source]
+      + (FileManager.default.enumerator(at: source, includingPropertiesForKeys: nil)?.allObjects
+        as? [URL] ?? [])
+    for path in paths {
+      try FileManager.default.setAttributes(
+        [.modificationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: path.path)
+    }
+    XCTAssertNoThrow(try ArchiveTransfer.prepare(archive: XcodeArchives.read(source)))
+    try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: source.path)
+    XCTAssertThrowsError(try ArchiveTransfer.prepare(archive: XcodeArchives.read(source)))
   }
 
 }

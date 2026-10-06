@@ -10,6 +10,8 @@ public struct QuarantineEntry: Codable, Identifiable, Sendable {
   public var kind: String? = nil
   public var restoreDestination: String? = nil
   public var archiveBackup: String? = nil
+  public var archive: Bool? = nil
+  public var isArchive: Bool { archive == true || archiveBackup != nil }
   public var state: String
 }
 public final class QuarantineStore: @unchecked Sendable {
@@ -121,16 +123,16 @@ public final class QuarantineStore: @unchecked Sendable {
     protectedPaths: [String] = [], cancellation: Cancellation = Cancellation()
   ) throws -> QuarantineEntry {
     guard !pinned.contains(plan.source.path), !retained.contains(plan.source.path),
-      !Scanner.inside(plan.backup.path, root.path)
+      !(plan.backup.map { Scanner.inside($0.path, root.path) } ?? false)
     else {
-      throw CleanerError.message("Pinned, retained or unbacked archive cannot be moved")
+      throw CleanerError.message("Protected or retained archive cannot be moved")
     }
     return try moveDirectoryChecked(
       plan.source, expected: plan.manifest, protectedPaths: protectedPaths,
       cancellation: cancellation, archivePlan: plan)
   }
-  /// Explicit permanent deletion after a separately confirmed, verified backup plan.
-  /// No quarantine payload is created; recovery requires the retained backup.
+  /// Explicit permanent deletion after a confirmed cleanup plan. Backup is optional.
+  /// No quarantine payload is created; without a backup this is irreversible.
   public func deleteArchive(
     _ plan: ArchiveTransferPlan, pinned: Set<String>, retained: Set<String>,
     protectedPaths: [String] = [], cancellation: Cancellation = Cancellation(),
@@ -151,9 +153,9 @@ public final class QuarantineStore: @unchecked Sendable {
       !Scanner.inside(path, library.path) || Scanner.inside(path, archives.path),
       source.resolvingSymlinksInPath() == source,
       !Scanner.inside(path, root.path), !Scanner.inside(root.path, path),
-      !Scanner.inside(plan.backup.path, root.path),
-      !Scanner.inside(plan.backup.path, path), !Scanner.inside(path, plan.backup.path)
-    else { throw CleanerError.message("Protected, retained or unbacked archive cannot be deleted") }
+      !(plan.backup.map { Scanner.inside($0.path, root.path) } ?? false),
+      !(plan.backup.map { Scanner.inside($0.path, path) || Scanner.inside(path, $0.path) } ?? false)
+    else { throw CleanerError.message("Protected or retained archive cannot be deleted") }
     var ancestor = source
     while ancestor.path != "/" {
       guard !fm.fileExists(atPath: ancestor.appendingPathComponent(".git").path) else {
@@ -179,7 +181,9 @@ public final class QuarantineStore: @unchecked Sendable {
       try fm.removeItem(at: source)
     } catch {
       throw CleanerError.message(
-        "Archive deletion failed and may be partial. Retained backup: " + plan.backup.path
+        "Archive deletion failed and may be partial. "
+          + (plan.backup.map { "Retained backup: " + $0.path }
+            ?? "No backup was requested; deleted files cannot be restored by this app")
           + ". " + error.localizedDescription)
     }
   }
@@ -268,7 +272,8 @@ public final class QuarantineStore: @unchecked Sendable {
     }
     var entry = QuarantineEntry(
       id: UUID(), original: path, bytes: expected.bytes, date: Date(), hash: try expected.digest,
-      kind: "directory", archiveBackup: archivePlan?.backup.path, state: "prepared")
+      kind: "directory", archiveBackup: archivePlan?.backup?.path, archive: archivePlan != nil,
+      state: "prepared")
     try fm.createDirectory(
       at: folder(entry.id), withIntermediateDirectories: false,
       attributes: [.posixPermissions: 0o700])

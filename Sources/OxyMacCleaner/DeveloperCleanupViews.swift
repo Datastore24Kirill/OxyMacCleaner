@@ -158,7 +158,11 @@ struct SimulatorCleanupView: View {
           "Unsupported operations or required system approval are reported as errors. System restrictions are not bypassed. Cancellation stops after the current command."
         )
       ).font(.caption).foregroundStyle(.secondary)
-    }.onChange(of: query) { _, _ in page = 0 }.onChange(of: vm.simulatorInventory.devices.count) {
+    }.modifier(
+      InventoryLoading(
+        isLoaded: !vm.simulatorInventory.devices.isEmpty || !vm.simulatorInventory.runtimes.isEmpty,
+        load: vm.readSimulators)
+    ).onChange(of: query) { _, _ in page = 0 }.onChange(of: vm.simulatorInventory.devices.count) {
       _, _ in page = 0
     }
   }
@@ -170,25 +174,39 @@ struct DerivedDataView: View {
       Text("DerivedData").font(.title2.bold())
       Text(
         vm.t(
-          "Кэши привязаны к проекту по info.plist Xcode. Переносим только промежуточные сборки, индекс и логи. Исходники, SourcePackages, готовые продукты и общие неизвестные кэши не выбираются.",
+          "Кэши привязаны к проекту по info.plist Xcode. Можно очистить промежуточные сборки, индекс и логи. Исходники, SourcePackages, готовые продукты и общие неизвестные кэши не выбираются.",
           "Caches are associated with projects through Xcode info.plist. Only build intermediates, index and logs are eligible. Sources, SourcePackages, built products and unknown shared caches are excluded."
         )
       ).foregroundStyle(.secondary)
       HStack {
-        Button(vm.t("Прочитать DerivedData", "Read DerivedData")) { vm.readDerivedData() }.oxyHelp(
+        Button(vm.t("Обновить список", "Refresh list")) { vm.readDerivedData() }.oxyHelp(
           .derivedRead)
         Spacer()
         Button(
           vm.t(
-            "В карантин выбранные (\(vm.selectedDerived.count))…",
-            "Quarantine selected (\(vm.selectedDerived.count))…")
-        ) { vm.quarantineDerivedData() }.oxyHelp(.derivedQuarantine).disabled(
-          vm.selectedDerived.isEmpty)
+            "Очистить выбранные (\(vm.selectedDerived.count))…",
+            "Clean selected (\(vm.selectedDerived.count))…"), role: .destructive
+        ) {
+          vm.deleteDerivedData()
+        }.oxyHelp(.derivedDelete).disabled(vm.selectedDerived.isEmpty)
+        Menu(vm.t("Ещё", "More")) {
+          Button(
+            vm.t(
+              "В карантин выбранные (\(vm.selectedDerived.count))…",
+              "Quarantine selected (\(vm.selectedDerived.count))…")
+          ) { vm.quarantineDerivedData() }.oxyHelp(.derivedQuarantine).disabled(
+            vm.selectedDerived.isEmpty)
+        }.help(
+          vm.t(
+            "Альтернатива: карантин с возможностью восстановления.",
+            "Alternative: quarantine with restoration.")
+        )
+        .fixedSize()
       }.disabled(vm.busy)
       Text(
         vm.t(
-          "Закройте Xcode и остановите сборки. Перед переносом проверяем процессы и неизменность файлов; кэши с изменениями за последние 10 минут защищены. Следующая сборка и индексирование будут дольше. Ссылки и неполностью прочитанные каталоги блокируют перенос.",
-          "Close Xcode and stop builds. Processes and file stability are checked before transfer; caches changed within 10 minutes are protected. The next build and indexing will take longer. Links and incompletely read folders block transfer."
+          "Закройте Xcode и остановите сборки. Перед очисткой проверяем процессы и неизменность файлов; кэши с изменениями за последние 10 минут защищены. Следующая сборка и индексирование будут дольше. Ссылки и неполностью прочитанные каталоги защищены.",
+          "Close Xcode and stop builds. Processes and file stability are checked before cleanup; caches changed within 10 minutes are protected. The next build and indexing will take longer. Links and incompletely read folders block transfer."
         )
       ).font(.caption).foregroundStyle(.secondary)
       DeveloperReportView()
@@ -235,10 +253,10 @@ struct DerivedDataView: View {
       } else if vm.derivedCaches.isEmpty {
         Text(
           vm.t(
-            "Нажмите «Прочитать DerivedData», чтобы найти кэши проектов.",
-            "Read DerivedData to find project caches.")
+            "Обновите список, чтобы найти кэши проектов.",
+            "Refresh the list to find project caches.")
         ).foregroundStyle(.secondary)
       }
-    }
+    }.modifier(InventoryLoading(isLoaded: vm.derivedReadAt != nil, load: vm.readDerivedData))
   }
 }

@@ -112,7 +112,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.13 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.14 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -467,7 +467,7 @@ struct RootView: View {
               HStack {
                 Text(url.path).font(.caption).lineLimit(2)
                 Spacer()
-                Button(vm.t("Размер", "Size")) {
+                Button(vm.t("Посмотреть файлы", "View files")) {
                   vm.scan([url])
                   vm.page = "files"
                 }.oxyHelp(.agentSize).disabled(vm.busy)
@@ -548,8 +548,10 @@ struct RootView: View {
               vm.installOllama()
             }.oxyHelp(.installEngine).disabled(vm.busy)
             Button(vm.t("Запустить", "Launch")) { vm.launchOllama() }.oxyHelp(.launchEngine)
-            Button(vm.t("Проверить", "Check")) { vm.refreshModels() }.oxyHelp(.checkEngine)
-              .disabled(vm.busy)
+            Button(vm.t("Обновить модели", "Refresh models")) { vm.refreshModels() }.oxyHelp(
+              .checkEngine
+            )
+            .disabled(vm.busy)
           }
         }
         card {
@@ -580,19 +582,30 @@ struct RootView: View {
         "Files here still occupy disk space. Deletion is permanent; restoration never overwrites existing files."
       )
       HStack {
-        Button(vm.t("Напоминать каждые 5 дней", "Remind every 5 days")) { vm.enableNotifications() }
+        Menu(vm.t("Ещё", "More")) {
+          Button(vm.t("Напоминать каждые 5 дней", "Remind every 5 days")) {
+            vm.enableNotifications()
+          }
           .oxyHelp(.notify)
-        Button(vm.t("Проверить незавершённые операции", "Check interrupted operations")) {
-          vm.recoverQuarantine()
-        }.oxyHelp(.recover).disabled(vm.busy)
-        Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }.oxyHelp(
-          .finder)
+          Button(vm.t("Проверить незавершённые операции", "Check interrupted operations")) {
+            vm.recoverQuarantine()
+          }.oxyHelp(.recover).disabled(vm.busy)
+          Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }
+            .oxyHelp(
+              .finder)
+        }.help(
+          vm.t(
+            "Напоминания, папка карантина и проверка прерванных операций.",
+            "Reminders, quarantine folder and interrupted-operation checks.")
+        )
+        .fixedSize()
+        Spacer()
         Button(
           vm.t("Удалить все архивы из карантина…", "Permanently delete quarantined archives…"),
           role: .destructive
         ) { vm.eraseQuarantinedArchives() }.oxyHelp(.eraseArchives)
           .disabled(
-            vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.archiveBackup != nil }
+            vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.isArchive }
           )
       }
       List(
@@ -664,8 +677,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.13 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.13 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.14 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.14 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

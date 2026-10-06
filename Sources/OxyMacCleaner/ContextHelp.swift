@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Action help shared by hover tooltips, VoiceOver and the section guide.
 enum HelpTopic {
-  case symbols, backup, archiveDelete, archiveBatch, archiveQuarantine, retention, pin, archiveRead,
+  case symbols, backupOption, derivedDelete, backup, archiveDelete, archiveBatch, archiveQuarantine,
+    retention, pin, archiveRead,
     archiveRoot,
     beyondFilter, search, previous, next, finder, stop, volume, refreshVolumes, scan, folder,
     access, category, size, age, quarantine, protect, duplicates, selectDuplicate, developerTab,
@@ -15,6 +16,16 @@ enum HelpTopic {
 
   var text: (ru: String, en: String) {
     switch self {
+    case .backupOption:
+      return (
+        "По желанию сохраняет полную проверенную копию перед удалением. Если копию создать не удастся, этот архив не удаляется. Для экономии места выберите другой диск.",
+        "Optionally saves a verified full backup before deletion. If backup fails, that archive is skipped. Choose another disk to reclaim space."
+      )
+    case .derivedDelete:
+      return (
+        "Удаляет выбранные кэши после одного подтверждения, без карантина и Корзины. Индекс и промежуточные файлы пересоздаются; старые логи теряются. Закройте Xcode и сборки.",
+        "Deletes selected caches after one confirmation, without quarantine or Trash. Indexes and intermediates are rebuilt; old logs are lost. Close Xcode and builds."
+      )
     case .symbols:
       return (
         "Сравнивает UUID — идентификаторы сборок — и архитектуры приложения и его dSYM. dSYM помогает расшифровать отчёт о сбое. Файлы не меняются; полноту отладочной информации эта проверка не доказывает.",
@@ -27,18 +38,18 @@ enum HelpTopic {
       )
     case .archiveDelete:
       return (
-        "Все архивы сверх лимита, включая скрытые фильтром: создаёт или проверяет полные копии, затем отдельно подтверждает удаление оригиналов без карантина и Корзины. Защищённые и не прошедшие проверки архивы пропускаются. Восстановление — вручную из копии. Закройте Xcode и сборки.",
-        "All archives beyond the limit, including those hidden by filters: creates or verifies full backups, then separately confirms deleting originals without quarantine or Trash. Protected archives and failed checks are skipped. Restore manually from backup. Close Xcode and builds."
+        "Удаляет все архивы сверх лимита после одного подтверждения, включая скрытые фильтром. Копия — по флажку; без копии восстановить из приложения нельзя. «Не удалять», активные сборки и изменения файлов защищены.",
+        "Deletes all archives beyond the limit after one confirmation, including filtered-out items. Backup is optional; without one, in-app recovery is impossible. Protected archives, active builds and changed files are blocked."
       )
     case .archiveBatch:
       return (
-        "Обрабатывает все архивы сверх лимита, включая скрытые фильтром. Сначала создаёт или проверяет резервные копии, затем запрашивает перенос в карантин. Закреплённые и не прошедшие проверки архивы пропускаются.",
-        "Processes all archives beyond the limit, including those hidden by filters. Creates or verifies backups, then asks to quarantine them. Protected archives and those failing validation are skipped."
+        "Переносит все архивы сверх лимита в карантин после подтверждения. Отдельная копия и проверка UUID не нужны. Можно восстановить, но место пока не освобождается.",
+        "Quarantines all archives beyond the limit after confirmation. No separate backup or UUID check is needed. Restorable, but space is not freed yet."
       )
     case .archiveQuarantine:
       return (
-        "Переносит архив в карантин после подтверждения. Нужны: превышение лимита, проверенная полная копия, совпадающие символы и отсутствие изменений за 24 часа. Место освободится только после окончательного удаления.",
-        "Moves the archive to quarantine after confirmation. Requires an archive beyond the limit, a verified full backup, matching symbols and no changes for 24 hours. Space is freed only after permanent deletion."
+        "Переносит этот архив сверх лимита в карантин после подтверждения. Отдельная копия не нужна. Можно восстановить из раздела «Карантин».",
+        "Quarantines this archive beyond the limit after confirmation. No separate backup is required. Restore it from Quarantine."
       )
     case .retention:
       return (
@@ -202,8 +213,8 @@ enum HelpTopic {
       )
     case .selectDerived:
       return (
-        "Отмечает кэш этого проекта. Исходники и готовые продукты не выбираются. Перенос начнётся только по отдельной кнопке и после проверок.",
-        "Selects this project cache, not sources or built products. Transfer requires the separate action and validation."
+        "Отмечает кэш для выбранного действия: очистки или карантина. Исходники и готовые продукты не выбираются.",
+        "Selects a cache for cleanup or quarantine. Sources and built products are excluded."
       )
     case .agent:
       return (
@@ -257,8 +268,8 @@ enum HelpTopic {
       )
     case .launchEngine:
       return (
-        "Запускает установленное приложение Ollama. После запуска нажмите «Проверить», чтобы обновить список локальных моделей.",
-        "Launches the installed Ollama app. Then use Check to refresh available local models."
+        "Запускает установленное приложение Ollama. После запуска нажмите «Обновить модели», чтобы обновить список локальных моделей.",
+        "Launches the installed Ollama app. Then use Refresh models to refresh available local models."
       )
     case .checkEngine:
       return (
@@ -287,8 +298,8 @@ enum HelpTopic {
       )
     case .eraseArchives:
       return (
-        "После подтверждения безвозвратно удаляет архивы из карантина. Для каждого заново проверяет сохранённую резервную копию; при ошибке пропускает архив. Копии остаются.",
-        "After confirmation, permanently deletes quarantined archives. Revalidates each retained backup and skips archives that fail. Backups remain."
+        "Безвозвратно удаляет архивы из карантина после подтверждения. Если при переносе была указана копия, проверяет её. Восстановление из карантина станет невозможно.",
+        "Permanently deletes quarantined archives after confirmation. Checks any backup specified during transfer. In-app restoration will no longer be available."
       )
     case .restore:
       return (
@@ -467,8 +478,8 @@ struct SectionHelpView: View {
           ("1. Прочитайте список кэшей", "1. Read project caches", .derivedRead),
           ("2. Выберите нужное", "2. Select caches", .selectDerived),
           (
-            "3. Закройте Xcode перед переносом", "3. Close Xcode before transfer",
-            .derivedQuarantine
+            "3. Очистите выбранные кэши", "3. Clean selected caches",
+            .derivedDelete
           ),
         ]
       case "simulators":
@@ -482,7 +493,7 @@ struct SectionHelpView: View {
         return [
           ("1. Задайте лимит и защиту", "1. Set retention and protection", .retention),
           ("Символы отладки: dSYM и UUID", "Debug symbols: dSYM and UUID", .symbols),
-          ("Резервная копия — зачем она", "Why keep a backup", .backup),
+          ("Копия — по желанию", "Backup is optional", .backupOption),
           ("2. Удалите сверх лимита", "2. Delete beyond the limit", .archiveDelete),
           ("Альтернатива: карантин", "Alternative: quarantine", .archiveBatch),
           ("Если выбрали карантин", "If you chose quarantine", .eraseArchives),

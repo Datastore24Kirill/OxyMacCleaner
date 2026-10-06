@@ -84,19 +84,11 @@ import UserNotifications
     let decisions = ArchiveRetention.decisions(
       archiveInventory.archives, keep: archiveKeep, pinned: pinnedArchives)
     guard decisions[archive.path] == .review else { return }
-    let panel = NSOpenPanel()
-    panel.canChooseDirectories = true
-    panel.canChooseFiles = true
-    panel.treatsFilePackagesAsDirectories = false
-    panel.message = t(
-      "Выберите отдельную полную резервную копию этого .xcarchive. Содержимое будет проверено заново.",
-      "Select a separate complete .xcarchive backup. Contents will be verified again.")
-    guard panel.runModal() == .OK, let backup = panel.url else { return }
     busy = true
     cancellation = Cancellation()
     let token = cancellation
     let store = quarantine
-    status = t("Проверяем архив, UUID и резервную копию…", "Verifying archive, UUIDs and backup…")
+    status = t("Проверяем архив…", "Checking archive…")
     task = Task {
       do {
         let root = archiveRoot
@@ -111,16 +103,16 @@ import UserNotifications
         }
         archiveInventory = fresh
         let plan = try await Task.detached {
-          try ArchiveTransfer.prepare(archive: archive, backup: backup, cancellation: token)
+          try ArchiveTransfer.prepare(archive: archive, cancellation: token)
         }.value
         try token.check()
         guard
           confirm(
             t("Переместить архив в карантин?", "Move archive to quarantine?"),
-            archive.path + "\n" + t("Проверенная копия: ", "Verified backup: ") + backup.path + "\n"
+            archive.path + "\n"
               + t(
-                "Закройте Xcode и сборки. Архив исчезнет из Organizer. Его можно восстановить из карантина. Карантин ещё занимает место; резервную копию необходимо сохранить для диагностики сбоев.",
-                "Close Xcode and builds. The archive will disappear from Organizer and can be restored from quarantine. Quarantine still takes space; retain the backup for crash diagnosis."
+                "Закройте Xcode и сборки. Архив исчезнет из Organizer. Его можно восстановить из карантина. Карантин ещё занимает место. Отдельная резервная копия для переноса не нужна.",
+                "Close Xcode and builds. The archive will disappear from Organizer and can be restored from quarantine. Quarantine still takes space. No separate backup is required for transfer."
               ))
         else {
           busy = false
@@ -138,7 +130,8 @@ import UserNotifications
         status = t(
           "Переносим архив и проверяем целостность…", "Moving archive and verifying integrity…")
         _ = try await Task.detached {
-          try store.moveArchive(
+          try DeveloperActivity.assertIdle()
+          return try store.moveArchive(
             plan, pinned: pins, retained: retained, protectedPaths: protected, cancellation: token)
         }.value
         archiveInventory.archives.removeAll { $0.path == archive.path }
@@ -146,7 +139,7 @@ import UserNotifications
         page = "quarantine"
         log("Quarantined Xcode archive: " + archive.path)
         status = t(
-          "Архив в карантине. Резервная копия сохранена.", "Archive quarantined. Backup retained.")
+          "Архив в карантине. Его можно восстановить.", "Archive quarantined. You can restore it.")
       } catch {
         self.error = error.localizedDescription
         status = t(
@@ -166,6 +159,7 @@ import UserNotifications
   @Published var pinnedArchives = Set(
     UserDefaults.standard.stringArray(forKey: "pinnedArchives") ?? [])
   @AppStorage("archiveKeep") var archiveKeep = 3
+  @Published var archiveBackupBeforeDelete = false
   func pinArchive(_ path: String, _ pin: Bool) {
     if pin { pinnedArchives.insert(path) } else { pinnedArchives.remove(path) }
     UserDefaults.standard.set(Array(pinnedArchives).sorted(), forKey: "pinnedArchives")
@@ -495,12 +489,15 @@ import UserNotifications
     selected.remove(path)
     refreshRecommendations()
   }
-  func confirm(_ title: String, _ text: String, destructive: Bool = false) -> Bool {
+  func confirm(_ title: String, _ text: String, destructive: Bool = false, action: String? = nil)
+    -> Bool
+  {
     let a = NSAlert()
     a.messageText = title
     a.informativeText = text
     a.alertStyle = destructive ? .critical : .warning
-    a.addButton(withTitle: t("Продолжить", "Continue"))
+    a.addButton(
+      withTitle: action ?? (destructive ? t("Удалить", "Delete") : t("Продолжить", "Continue")))
     a.addButton(withTitle: t("Отмена", "Cancel"))
     return a.runModal() == .alertFirstButtonReturn
   }

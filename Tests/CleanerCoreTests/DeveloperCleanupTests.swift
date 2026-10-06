@@ -162,4 +162,44 @@ final class DeveloperCleanupTests: XCTestCase {
     try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
     XCTAssertThrowsError(try DerivedData.prepare(value, idle: {}))
   }
+  func testDirectCacheDeletionGuardsAndPreservesProject() throws {
+    let project = DerivedData.root.appendingPathComponent("OxyTests-" + UUID().uuidString)
+    let cache = project.appendingPathComponent("Index.noindex")
+    try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: project) }
+    let metadata = project.appendingPathComponent("info.plist")
+    try Data("keep metadata".utf8).write(to: metadata)
+    let file = cache.appendingPathComponent("index")
+    try Data("fixture".utf8).write(to: file)
+    for path in [file, cache] {
+      try FileManager.default.setAttributes(
+        [.modificationDate: Date(timeIntervalSince1970: 100)], ofItemAtPath: path.path)
+    }
+    let plan = DerivedDataPlan(source: cache, manifest: try DirectoryManifest.capture(cache))
+    XCTAssertThrowsError(try DerivedData.delete(plan, protectedPaths: [file.path], idle: {}))
+    XCTAssertThrowsError(
+      try DerivedData.delete(plan, idle: { throw CleanerError.message("Build active") }))
+    let token = Cancellation()
+    token.cancel()
+    XCTAssertThrowsError(try DerivedData.delete(plan, cancellation: token, idle: {}))
+    let unknown = DerivedDataPlan(source: project, manifest: try DirectoryManifest.capture(project))
+    XCTAssertThrowsError(try DerivedData.delete(unknown, idle: {}))
+    try DerivedData.delete(plan, idle: {})
+    XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+    XCTAssertEqual(try Data(contentsOf: metadata), Data("keep metadata".utf8))
+  }
+  func testDirectCacheDeletionRejectsChangedContents() throws {
+    let project = DerivedData.root.appendingPathComponent("OxyTests-" + UUID().uuidString)
+    let cache = project.appendingPathComponent("Logs")
+    try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: project) }
+    try FileManager.default.setAttributes(
+      [.modificationDate: Date(timeIntervalSince1970: 100)], ofItemAtPath: cache.path)
+    let plan = DerivedDataPlan(source: cache, manifest: try DirectoryManifest.capture(cache))
+    try Data("new log".utf8).write(to: cache.appendingPathComponent("new.log"))
+    XCTAssertThrowsError(try DerivedData.delete(plan, idle: {}))
+    XCTAssertTrue(
+      FileManager.default.fileExists(atPath: cache.appendingPathComponent("new.log").path))
+  }
+
 }

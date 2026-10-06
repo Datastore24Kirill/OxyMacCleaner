@@ -95,4 +95,30 @@ public enum DerivedData {
     try idle()
     return DerivedDataPlan(source: URL(fileURLWithPath: cache.path), manifest: manifest)
   }
+  public static func delete(
+    _ plan: DerivedDataPlan, protectedPaths: [String] = [],
+    cancellation: Cancellation = Cancellation(),
+    idle: () throws -> Void = DeveloperActivity.assertIdle
+  ) throws {
+    try cancellation.check()
+    try idle()
+    guard allowed(plan.source) else { throw CleanerError.message("Unknown DerivedData path") }
+    let current = try DirectoryManifest.capture(plan.source, cancellation: cancellation) { path in
+      guard !protectedContent(path),
+        !protectedPaths.contains(where: {
+          Scanner.inside(path, $0) || Scanner.inside($0, path)
+        })
+      else { throw CleanerError.message("Cache contains protected or excluded data") }
+    }
+    guard current == plan.manifest,
+      current.items.allSatisfy({ $0.modified < Date().addingTimeInterval(-600) })
+    else { throw CleanerError.message("Cache changed; deletion blocked") }
+    try idle()
+    try cancellation.check()
+    do { try FileManager.default.removeItem(at: plan.source) } catch {
+      throw CleanerError.message(
+        "Cache deletion failed and may be partial: " + error.localizedDescription)
+    }
+  }
+
 }
