@@ -6,24 +6,26 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.10 Preview — implemented
+## 0.1.11 Preview — implemented
 
 - Native SwiftUI app for macOS 14+ on Apple Silicon, Russian/English UI, light/dark/system appearance.
 - Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
 - Exact duplicate detection using size, SHA-256 and byte comparison; hard links and symlinks are handled conservatively.
 - Individual-file quarantine, integrity-checked restoration, destination conflict protection and separately confirmed permanent deletion.
+- Project-associated DerivedData intermediates/index/log caches can be quarantined after conservative Xcode/build-process and ten-minute write checks. SourcePackages and built products are excluded.
+- Batch archive backup/quarantine beyond retention, with a separate batch permanent-delete action in Quarantine.
 - Five-day quarantine reminder support (notifications require user permission).
-- Xcode archive inventory: application, version/build, team, creation date, size and dSYM package count. Keep-last-N recommendations per app/team, persistent pins and search. On-demand Mach-O/dSYM UUID matching, verified full backup creation and individually confirmed same-volume archive quarantine. Transfers require a matching backup, an archive beyond the retention limit, and no changes for 24 hours. Pinned or incomplete archives remain protected. Read-only simulator inventory.
+- Xcode archive inventory: application, version/build, team, creation date, size and dSYM package count. Keep-last-N recommendations per app/team, persistent pins and search. On-demand Mach-O/dSYM UUID matching, verified full backup creation and individually confirmed same-volume archive quarantine. Transfers require a matching backup, an archive beyond the retention limit, and no changes for 24 hours. Pinned or incomplete archives remain protected. Selectable simulator devices and runtimes, explicit deletion via simctl with fresh state checks; booted/busy devices and protected runtimes are blocked.
 - Catalog of 11 agent discovery hints. Import **one inactive session** as UTF-8 TXT/MD/JSON/JSONL; no mutation of agent databases.
 - Verified history backup and local Ollama handoff generation in chunks, with an editable result, copy and Markdown export.
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
 - Local model download progress/cancellation; no automatic cloud fallback. Model metadata must identify a local GGUF model.
 
-This is an early implementation milestone, **not completion of the version-one specification**. Direct agent-history adapters, DerivedData/simulator cleanup policies and automatic updates/rollback remain planned. Context generation has protocol tests; its semantic quality has not yet been certified on real histories. Original histories are retained.
+This is an early implementation milestone, **not completion of the version-one specification**. Direct agent-history adapters, broader cache discovery and automatic updates/rollback remain planned. Context generation has protocol tests; its semantic quality has not yet been certified on real histories. Original histories are retained.
 
 ## Install
 
-Download `OxyMacCleaner-0.1.10-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.11-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -46,7 +48,7 @@ swift test
 scripts/package.sh
 ```
 
-The test suite creates its own UUID-scoped fixtures under the temporary directory, `~/Library/Caches/OxyMacCleanerTests`, and a dedicated test folder in Downloads. It never cleans user projects, downloads or agent histories. Installer and cleanup operations do not run automatically on application launch.
+The test suite creates its own UUID-scoped fixtures under the temporary directory, `~/Library/Caches/OxyMacCleanerTests`, dedicated test folders in Downloads, and a UUID-named fixture under Xcode DerivedData. Simulator mutation tests use injected command responses and never delete real devices or runtimes. It never cleans user projects, downloads or agent histories. Installer and cleanup operations do not run automatically on application launch.
 
 ## Architecture
 

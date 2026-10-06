@@ -301,7 +301,13 @@ import UserNotifications
   @Published var models: [String] = []
   @Published var model = ""
   @Published var style = "Бережный"
-  @Published var simulatorReport = ""
+  @Published var simulatorInventory = SimulatorInventory()
+  @Published var selectedDevices = Set<String>()
+  @Published var selectedRuntimes = Set<String>()
+  @Published var developerResult = ""
+  @Published var derivedCaches: [DerivedCache] = []
+  @Published var derivedReadAt: Date?
+  @Published var selectedDerived = Set<String>()
   @Published var exclusions: [String] =
     UserDefaults.standard.stringArray(forKey: "exclusions") ?? []
   @Published var logs: [String] = []
@@ -763,18 +769,6 @@ import UserNotifications
       do { try output.write(to: url, atomically: true, encoding: .utf8) } catch {
         self.error = error.localizedDescription
       }
-    }
-  }
-  func readSimulators() {
-    guard !busy else { return }
-    busy = true
-    task = Task {
-      do {
-        simulatorReport = try await Task.detached {
-          try runTool("/usr/bin/xcrun", ["simctl", "list"])
-        }.value
-      } catch { self.error = error.localizedDescription }
-      busy = false
     }
   }
   func enableNotifications() {

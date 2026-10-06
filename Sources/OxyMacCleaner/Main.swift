@@ -57,6 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
   }
 }
 struct RootView: View {
+  @State private var developerSection = "archives"
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
     ("overview", "Обзор", "Overview", "square.grid.2x2"),
@@ -109,7 +110,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.10 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.11 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -279,8 +280,8 @@ struct RootView: View {
           Label(vm.t("Первая тестовая версия", "First preview"), systemImage: "testtube.2").font(
             .headline)
           note(
-            "Карантин файлов и обычных папок на одном диске готов. Каталоги проектов, служебные данные и симуляторы пока анализируются без удаления. Истории агентов импортируются вручную; базы чатов не изменяются.",
-            "File and ordinary-folder quarantine on the same disk is available. Projects, service data and simulators are analysis-only. Agent histories are imported manually; chat databases are never modified."
+            "Карантин файлов и обычных папок на одном диске готов. DerivedData и архивы очищаются в разделе Xcode. Симуляторы удаляются штатным simctl после подтверждения. Истории агентов импортируются вручную; базы чатов не изменяются.",
+            "File and ordinary-folder quarantine on the same disk is available. DerivedData and archives are managed under Xcode. Simulator deletion uses simctl after confirmation. Agent histories are imported manually; chat databases are never modified."
           )
         }
       }
@@ -406,44 +407,19 @@ struct RootView: View {
     }
   }
   var developer: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        card {
-          Label("Xcode", systemImage: "hammer.fill").font(.title2.bold())
-          note(
-            "DerivedData восстанавливается при сборке. Архивы могут содержать необходимые dSYM. Архивы можно переносить в карантин по одному после проверки полной резервной копии.",
-            "DerivedData is rebuilt. Archives may contain essential dSYM files. Archives can be quarantined individually after full backup verification."
-          )
-          HStack {
-            Button("DerivedData") {
-              vm.scan([vm.home.appendingPathComponent("Library/Developer/Xcode/DerivedData")])
-              vm.page = "files"
-            }
-            Button(vm.t("Архивы Xcode", "Xcode archives")) {
-              vm.scanArchives()
-            }
-            Button(vm.t("Выбрать проект", "Choose project")) {
-              vm.chooseRoots()
-              vm.page = "files"
-            }
-          }.disabled(vm.busy)
-        }
-        card { XcodeArchiveView().environmentObject(vm) }
-        card {
-          Label(vm.t("Симуляторы", "Simulators"), systemImage: "iphone").font(.title2.bold())
-          HStack {
-            Button(vm.t("Прочитать список", "Read inventory")) { vm.readSimulators() }.disabled(
-              vm.busy)
-            Button(vm.t("Открыть Xcode", "Open Xcode")) {
-              NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Xcode.app"))
-            }
-          }
-          note(
-            "Удаляйте ненужные runtimes в Xcode → Settings → Components. Не удаляем системные каталоги напрямую.",
-            "Manage runtimes in Xcode → Settings → Components. System directories are never deleted directly."
-          )
-          Text(vm.simulatorReport).font(.system(.caption, design: .monospaced)).textSelection(
-            .enabled)
+    VStack(alignment: .leading, spacing: 12) {
+      Picker(vm.t("Раздел", "Section"), selection: $developerSection) {
+        Text(vm.t("Архивы Xcode", "Xcode archives")).tag("archives")
+        Text("DerivedData").tag("derived")
+        Text(vm.t("Симуляторы", "Simulators")).tag("simulators")
+      }.pickerStyle(.segmented)
+      ScrollView {
+        if developerSection == "archives" {
+          card { XcodeArchiveView().environmentObject(vm) }
+        } else if developerSection == "derived" {
+          card { DerivedDataView().environmentObject(vm) }
+        } else {
+          card { SimulatorCleanupView().environmentObject(vm) }
         }
       }
     }
@@ -585,6 +561,12 @@ struct RootView: View {
           vm.recoverQuarantine()
         }.disabled(vm.busy)
         Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }
+        Button(
+          vm.t("Удалить все архивы из карантина…", "Permanently delete quarantined archives…"),
+          role: .destructive
+        ) { vm.eraseQuarantinedArchives() }
+        .disabled(
+          vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.archiveBackup != nil })
       }
       List(
         vm.entries.filter {
@@ -654,8 +636,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.10 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.10 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.11 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.11 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

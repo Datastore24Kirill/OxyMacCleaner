@@ -129,9 +129,23 @@ public final class QuarantineStore: @unchecked Sendable {
       plan.source, expected: plan.manifest, protectedPaths: protectedPaths,
       cancellation: cancellation, archivePlan: plan)
   }
+  public func moveDerivedData(
+    _ plan: DerivedDataPlan, protectedPaths: [String] = [],
+    cancellation: Cancellation = Cancellation(),
+    idle: () throws -> Void = DeveloperActivity.assertIdle
+  ) throws -> QuarantineEntry {
+    try idle()
+    guard DerivedData.allowed(plan.source) else {
+      throw CleanerError.message("Unknown DerivedData path")
+    }
+    return try moveDirectoryChecked(
+      plan.source, expected: plan.manifest, protectedPaths: protectedPaths,
+      cancellation: cancellation, archivePlan: nil, derived: true, derivedIdle: idle)
+  }
   private func moveDirectoryChecked(
     _ source: URL, expected: DirectoryManifest, protectedPaths: [String],
-    cancellation: Cancellation, archivePlan: ArchiveTransferPlan?
+    cancellation: Cancellation, archivePlan: ArchiveTransferPlan?, derived: Bool = false,
+    derivedIdle: () throws -> Void = DeveloperActivity.assertIdle
   ) throws -> QuarantineEntry {
     lock.lock()
     defer { lock.unlock() }
@@ -153,15 +167,16 @@ public final class QuarantineStore: @unchecked Sendable {
     } else {
       archiveAllowed = false
     }
+    let generatedAllowed = derived && DerivedData.allowed(source)
     guard
-      archiveAllowed
+      archiveAllowed || generatedAllowed
         || !Scanner.inside(
           path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path),
       !["Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music"].contains(where: {
         source == fm.homeDirectoryForCurrentUser.appendingPathComponent($0)
       }),
       source.resolvingSymlinksInPath().path == path,
-      archiveAllowed || !Self.protected(path), !Scanner.inside(path, root.path),
+      archiveAllowed || generatedAllowed || !Self.protected(path), !Scanner.inside(path, root.path),
       !Scanner.inside(root.path, path),
       path != fm.homeDirectoryForCurrentUser.path,
       ![
@@ -183,7 +198,10 @@ public final class QuarantineStore: @unchecked Sendable {
         "Cross-volume folder quarantine is not supported; source is intact")
     }
     let actual = try DirectoryManifest.capture(source, cancellation: cancellation) { candidate in
-      guard archiveAllowed || !Self.protected(candidate),
+      if derived && DerivedData.protectedContent(candidate) {
+        throw CleanerError.message("Cache contains protected data")
+      }
+      guard archiveAllowed || generatedAllowed || !Self.protected(candidate),
         !protectedPaths.contains(where: {
           Scanner.inside(candidate, $0) || Scanner.inside($0, candidate)
         })
@@ -203,6 +221,7 @@ public final class QuarantineStore: @unchecked Sendable {
     try save(entry)
     try cancellation.check()
     let payload = folder(entry.id).appendingPathComponent("payload")
+    if derived { try derivedIdle() }
     guard renameatx_np(AT_FDCWD, path, AT_FDCWD, payload.path, UInt32(RENAME_EXCL)) == 0 else {
       throw CleanerError.message("Could not move directory; source retained")
     }

@@ -74,7 +74,13 @@ public struct DirectoryManifest: Codable, Equatable, Sendable {
         digest = try Scanner.hash(url, cancellation: cancellation)
         try file.validate()
       }
-      let relative = url == root ? "" : String(url.path.dropFirst(root.path.count + 1))
+      // Foundation can enumerate /var roots using the equivalent /private/var spelling.
+      let basePath = root.standardizedFileURL.path
+      let itemPath = url.standardizedFileURL.path
+      guard Scanner.inside(itemPath, basePath) else {
+        throw CleanerError.message("Entry outside manifest root")
+      }
+      let relative = itemPath == basePath ? "" : String(itemPath.dropFirst(basePath.count + 1))
       items.append(
         Item(
           relative: relative, directory: directory,

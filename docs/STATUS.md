@@ -101,3 +101,17 @@ Next: DerivedData association and active-build exclusion, followed by supported 
 References: [Apple build UUID guidance](https://developer.apple.com/documentation/technotes/tn3178-checking-for-and-resolving-build-uuid-problems), [symbol file lookup](https://developer.apple.com/documentation/xcode/locating-a-missing-debug-symbol-file).
 
 Installed 0.1.10 after backing up the app and saved scan. UI restored the 237450-file partial scan, user's retention limit and pins; inventory read 98 archives. On-demand verification of a real archive matched 4/4 binaries. No real archive copied, moved or deleted. Protected-directory probes still return denied after the ad-hoc update; this release does not fix permission continuity.
+
+## 0.1.11 update
+
+Three Xcode tabs. Archive pin renamed Keep protected with explanatory copy, beyond-limit totals and batch workflow: fresh inventory, full backups, verified plans, separate transfer confirmation, revalidated retention and per-item results. Batch archive erasure remains a separately confirmed quarantine operation with verified backups. No same-disk-space-saving claim for backups/quarantine.
+
+Simulator device/runtime inventory parsed from simctl JSON. Manual selection, unavailable-device and unused-90-day-runtime selection helpers. Exact UUID deletion with injected/testable command runner, re-read state, booted/transitional device guards, associated-runtime use guards, Xcode/build-process check and post-command verification. Unsupported/privilege/timeout errors reported; no elevation or system-directory removal. Asynchronous runtime deletion is reported as pending rather than successful. Native simulator device deletion is irreversible and explicitly described in confirmation.
+
+DerivedData project association from info.plist; allowlisted Intermediates.noindex, Index.noindex and Logs only. Conservative process checks before preview and immediately before rename, 10-minute modification guard, protected-content/exclusion checks, manifest revalidation and existing quarantine recovery/restore. SourcePackages/products/shared unknown caches excluded. Does not provide an atomic lock against new builds; user must keep Xcode/build tools stopped. Symlinks/hard links/cloud objects remain unsupported for directory transfer. Manifest relative paths now normalize Foundation's /var and /private/var variants.
+
+70 local tests pass, including injected simctl deletion commands, booted/unknown/alias guards, runtime pending/unsupported/protected states, active-build guard, DerivedData allowlist/project mapping and synthetic quarantine/restore. Destructive operations tested only on UUID-scoped fixtures; real simulator commands used only for help and inventory.
+
+Next: broader developer cache rules and process association, agent-specific session adapters, intelligent cleanup coverage and automatic updates. Developer ID remains deferred.
+
+Installed 0.1.11 with app and scan backup. Live read-only UI verification found 29 devices and 6 runtime images; booted devices and their runtimes were disabled. Default DerivedData contains no eligible project cache directories on this Mac (only project metadata and shared SDK caches); the completed empty state reports this explicitly. Existing retention preference and protected archives are retained. No real cleanup was performed. Full-disk access probes still reported denied after the initial ad-hoc replacement.

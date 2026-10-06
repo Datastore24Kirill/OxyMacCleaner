@@ -29,17 +29,35 @@ struct XcodeArchiveView: View {
         Spacer()
         if vm.archivesLoading { ProgressView().controlSize(.small) }
       }
+      let beyond = vm.archiveInventory.archives.filter { decisions[$0.path] == .review }
+      HStack {
+        Text(
+          vm.t("Сверх лимита: ", "Beyond limit: ") + "\(beyond.count) · "
+            + ByteCountFormatter.string(
+              fromByteCount: beyond.reduce(0) { $0 + $1.bytes }, countStyle: .file))
+        Spacer()
+        Button(vm.t("Все сверх лимита → карантин…", "Quarantine all beyond limit…")) {
+          vm.quarantineExcessArchives()
+        }.disabled(vm.busy || beyond.isEmpty)
+      }
+      Text(
+        vm.t(
+          "Общая кнопка сначала создаст или проверит копии в выбранной папке, затем предложит перенос. Для освобождения места откройте «Карантин» и подтвердите окончательное удаление. На этом диске копии тоже занимают место.",
+          "The batch action first creates or verifies backups in a chosen folder, then offers transfer. To free space, open Quarantine and confirm permanent deletion. Backups on this disk also take space."
+        )
+      ).font(.caption).foregroundStyle(.secondary)
+      DeveloperReportView()
       Text(vm.archiveRoot.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
       Stepper(value: $vm.archiveKeep, in: 1...20) {
         Text(
           vm.t(
             "Сохранять последние \(vm.archiveKeep) для каждого приложения",
             "Keep the latest \(vm.archiveKeep) per application"))
-      }
+      }.disabled(vm.busy)
       Text(
         vm.t(
-          "Закреплённые архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
-          "Pinned archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
+          "«Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
+          "Keep protected excludes the archive from cleanup regardless of the limit. These archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
         )
       )
       .font(.caption).foregroundStyle(.secondary)
@@ -137,7 +155,7 @@ struct XcodeArchiveView: View {
           }
           HStack {
             Toggle(
-              vm.t("Закрепить", "Pin"),
+              vm.t("Не удалять", "Keep protected"),
               isOn: Binding(
                 get: { vm.pinnedArchives.contains(archive.path) },
                 set: { vm.pinArchive(archive.path, $0) })
