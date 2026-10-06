@@ -5,6 +5,7 @@ struct XcodeArchiveView: View {
   @EnvironmentObject var vm: AppModel
   @State private var query = ""
   @State private var onlyReview = false
+  @State private var archivePage = 0
   private var decisions: [String: ArchiveRetention.Decision] {
     ArchiveRetention.decisions(
       vm.archiveInventory.archives, keep: vm.archiveKeep, pinned: vm.pinnedArchives)
@@ -66,7 +67,16 @@ struct XcodeArchiveView: View {
             "No archives loaded or matching the filter.")
         ).foregroundStyle(.secondary).padding(.vertical)
       }
-      ForEach(archives.prefix(200)) { archive in
+      if !archives.isEmpty {
+        HStack {
+          Button(vm.t("Назад", "Previous")) { archivePage -= 1 }.disabled(archivePage == 0)
+          Text(
+            vm.t("Страница ", "Page ") + "\(archivePage + 1)/\(max(1, (archives.count + 9) / 10))")
+          Button(vm.t("Далее", "Next")) { archivePage += 1 }.disabled(
+            (archivePage + 1) * 10 >= archives.count)
+        }
+      }
+      ForEach(archives.dropFirst(archivePage * 10).prefix(10)) { archive in
         VStack(alignment: .leading, spacing: 7) {
           HStack {
             Text(archive.name).font(.headline)
@@ -86,9 +96,39 @@ struct XcodeArchiveView: View {
             decisions[archive.path] == .review ? Color.orange : Color.teal)
           Text(
             vm.t(
-              "Пакетов dSYM: \(archive.dsymCount). Соответствие UUID не проверено.",
-              "dSYM packages: \(archive.dsymCount). UUID matching has not been verified.")
+              "Пакетов dSYM: \(archive.dsymCount). Проверка UUID запускается отдельно.",
+              "dSYM packages: \(archive.dsymCount). UUID verification is run separately.")
           ).font(.caption)
+          if let report = vm.archiveSymbols[archive.path] {
+            Text(
+              vm.t("UUID совпали: ", "UUID matches: ") + "\(report.matched)/\(report.binaries)"
+                + vm.t(" бинарников", " binaries")
+            )
+            .foregroundStyle(report.complete ? Color.teal : Color.orange)
+            if !report.missing.isEmpty {
+              Text(
+                vm.t("Нет полного совпадения: ", "No complete match: ")
+                  + report.missing.prefix(5).joined(separator: "; ")
+              ).font(.caption).textSelection(.enabled)
+            }
+            if !report.issues.isEmpty {
+              Text(report.issues.prefix(3).joined(separator: "\n")).font(.caption).foregroundStyle(
+                .orange)
+            }
+            Text(
+              vm.t(
+                "Проверены UUID и архитектуры. Полнота отладочной информации не проверялась. Перед переносом UUID проверяются заново.",
+                "UUIDs and architectures checked. Debug information completeness has not been verified. UUIDs are rechecked before transfer."
+              )
+            ).font(.caption).foregroundStyle(.secondary)
+          }
+          HStack {
+            Button(vm.t("Проверить UUID", "Verify UUIDs")) { vm.checkArchiveSymbols(archive) }
+            Button(vm.t("Создать копию…", "Create backup…")) { vm.backupArchive(archive) }
+            if decisions[archive.path] == .review {
+              Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineArchive(archive) }
+            }
+          }.disabled(vm.busy)
           if !archive.issues.isEmpty {
             Text(
               vm.t("Размер/состав неполный: ", "Size/contents incomplete: ")
@@ -101,7 +141,7 @@ struct XcodeArchiveView: View {
               isOn: Binding(
                 get: { vm.pinnedArchives.contains(archive.path) },
                 set: { vm.pinArchive(archive.path, $0) })
-            ).toggleStyle(.checkbox)
+            ).toggleStyle(.checkbox).disabled(vm.busy)
             Spacer()
             Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(archive.path) }
           }
@@ -109,11 +149,14 @@ struct XcodeArchiveView: View {
       }
       Text(
         vm.t(
-          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Удаление здесь не выполняется. Показано до 200 архивов.",
-          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. This screen does not delete archives. Up to 200 archives shown."
+          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Карантин доступен только сверх лимита, с полной проверенной копией и без изменений за 24 часа. На странице показано 10 архивов.",
+          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Quarantine requires an archive beyond the retention limit, a verified full backup and no changes for 24 hours. 10 archives per page."
         )
       ).font(.caption).foregroundStyle(.secondary)
     }
+    .onChange(of: query) { _, _ in archivePage = 0 }
+    .onChange(of: onlyReview) { _, _ in archivePage = 0 }
+    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0 }
   }
   private func decision(_ archive: XcodeArchive) -> String {
     switch decisions[archive.path] {

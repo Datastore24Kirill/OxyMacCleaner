@@ -109,7 +109,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.9 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.10 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -411,8 +411,8 @@ struct RootView: View {
         card {
           Label("Xcode", systemImage: "hammer.fill").font(.title2.bold())
           note(
-            "DerivedData восстанавливается при сборке. Архивы могут содержать необходимые dSYM. В этой версии — анализ и открытие в Finder; массовое удаление каталогов выключено.",
-            "DerivedData is rebuilt. Archives may contain essential dSYM files. This preview offers analysis and Finder access; bulk directory deletion is disabled."
+            "DerivedData восстанавливается при сборке. Архивы могут содержать необходимые dSYM. Архивы можно переносить в карантин по одному после проверки полной резервной копии.",
+            "DerivedData is rebuilt. Archives may contain essential dSYM files. Archives can be quarantined individually after full backup verification."
           )
           HStack {
             Button("DerivedData") {
@@ -654,8 +654,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.9 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.9 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.10 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.10 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

@@ -9,6 +9,7 @@ public struct QuarantineEntry: Codable, Identifiable, Sendable {
   public let hash: String
   public var kind: String? = nil
   public var restoreDestination: String? = nil
+  public var archiveBackup: String? = nil
   public var state: String
 }
 public final class QuarantineStore: @unchecked Sendable {
@@ -111,17 +112,57 @@ public final class QuarantineStore: @unchecked Sendable {
     _ source: URL, expected: DirectoryManifest, protectedPaths: [String] = [],
     cancellation: Cancellation = Cancellation()
   ) throws -> QuarantineEntry {
+    try moveDirectoryChecked(
+      source, expected: expected, protectedPaths: protectedPaths, cancellation: cancellation,
+      archivePlan: nil)
+  }
+  public func moveArchive(
+    _ plan: ArchiveTransferPlan, pinned: Set<String>, retained: Set<String>,
+    protectedPaths: [String] = [], cancellation: Cancellation = Cancellation()
+  ) throws -> QuarantineEntry {
+    guard !pinned.contains(plan.source.path), !retained.contains(plan.source.path),
+      !Scanner.inside(plan.backup.path, root.path)
+    else {
+      throw CleanerError.message("Pinned, retained or unbacked archive cannot be moved")
+    }
+    return try moveDirectoryChecked(
+      plan.source, expected: plan.manifest, protectedPaths: protectedPaths,
+      cancellation: cancellation, archivePlan: plan)
+  }
+  private func moveDirectoryChecked(
+    _ source: URL, expected: DirectoryManifest, protectedPaths: [String],
+    cancellation: Cancellation, archivePlan: ArchiveTransferPlan?
+  ) throws -> QuarantineEntry {
     lock.lock()
     defer { lock.unlock() }
     let fm = FileManager.default
     let path = source.standardizedFileURL.path
+    let archiveAllowed: Bool
+    if let plan = archivePlan {
+      let archiveRoot = fm.homeDirectoryForCurrentUser.appendingPathComponent(
+        "Library/Developer/Xcode/Archives"
+      ).path
+      let parent = source.deletingLastPathComponent().path
+      archiveAllowed =
+        source.pathExtension == "xcarchive" && !Self.protected(parent)
+        && (!Scanner.inside(
+          path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path)
+          || Scanner.inside(path, archiveRoot))
+      guard archiveAllowed else { throw CleanerError.message("Archive location is protected") }
+      try ArchiveTransfer.validate(plan, cancellation: cancellation)
+    } else {
+      archiveAllowed = false
+    }
     guard
-      !Scanner.inside(path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path),
+      archiveAllowed
+        || !Scanner.inside(
+          path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path),
       !["Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music"].contains(where: {
         source == fm.homeDirectoryForCurrentUser.appendingPathComponent($0)
       }),
       source.resolvingSymlinksInPath().path == path,
-      !Self.protected(path), !Scanner.inside(path, root.path), !Scanner.inside(root.path, path),
+      archiveAllowed || !Self.protected(path), !Scanner.inside(path, root.path),
+      !Scanner.inside(root.path, path),
       path != fm.homeDirectoryForCurrentUser.path,
       ![
         "/", "/Users", "/Applications",
@@ -142,7 +183,7 @@ public final class QuarantineStore: @unchecked Sendable {
         "Cross-volume folder quarantine is not supported; source is intact")
     }
     let actual = try DirectoryManifest.capture(source, cancellation: cancellation) { candidate in
-      guard !Self.protected(candidate),
+      guard archiveAllowed || !Self.protected(candidate),
         !protectedPaths.contains(where: {
           Scanner.inside(candidate, $0) || Scanner.inside($0, candidate)
         })
@@ -155,7 +196,7 @@ public final class QuarantineStore: @unchecked Sendable {
     }
     var entry = QuarantineEntry(
       id: UUID(), original: path, bytes: expected.bytes, date: Date(), hash: try expected.digest,
-      kind: "directory", state: "prepared")
+      kind: "directory", archiveBackup: archivePlan?.backup.path, state: "prepared")
     try fm.createDirectory(
       at: folder(entry.id), withIntermediateDirectories: false,
       attributes: [.posixPermissions: 0o700])
@@ -254,6 +295,15 @@ public final class QuarantineStore: @unchecked Sendable {
     }
     guard FileManager.default.fileExists(atPath: payload.path) else {
       throw CleanerError.message("No quarantined payload")
+    }
+    if let backup = entry.archiveBackup {
+      guard
+        try ArchiveTransfer.sameContents(
+          DirectoryManifest.capture(payload),
+          DirectoryManifest.capture(URL(fileURLWithPath: backup)))
+      else {
+        throw CleanerError.message("Archive backup differs; permanent deletion blocked")
+      }
     }
     try FileManager.default.removeItem(at: payload)
     var saved = entry

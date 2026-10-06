@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XcodeArchive: Identifiable, Sendable {
+public struct XcodeArchive: Identifiable, Sendable, Equatable {
   public var id: String { path }
   public let path: String
   public let name: String

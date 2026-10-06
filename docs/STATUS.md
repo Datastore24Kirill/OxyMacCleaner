@@ -89,3 +89,15 @@ Read-only Xcode archive inventory parses bounded Info.plist metadata and enumera
 Next: verify dSYM UUID associations and backup requirements before enabling archive quarantine; then DerivedData and simulator lifecycle policies. Agent-specific session adapters and automatic app updates remain planned.
 
 Apple reference: [Locating a missing debug symbol file](https://developer.apple.com/documentation/xcode/locating-a-missing-debug-symbol-file). Released archives and matching symbols should be retained for crash diagnosis.
+
+## 0.1.10 update
+
+Bounded native Mach-O header/load-command reader supports thin and universal 32/64-bit headers with both byte orders; binary UUID/CPU pairs are compared against MH_DSYM slices. Main executable path is checked; malformed/missing metadata, traversal failures and missing matches block transfer. UUID matching does not validate DWARF completeness. Full archive backups compare SHA-256 manifests and source stability; existing destinations are never replaced. Archive quarantine is a separate narrow API requiring a verified backup plan, stale-source revalidation and source age >24h, with pins/retention/exclusion protection and same-volume verified rename. Generic package protections remain in place. Existing directory journal restoration/recovery is reused. Archive backup path is journaled and its content revalidated before permanent deletion; missing backups do not prevent restoration. Active builds are not automatically detected; UI asks users to close Xcode/builds. Cross-volume backups are allowed, cross-volume quarantine is not. System copy cancellation may be delayed. Paged archive UI shows 10 items.
+
+61 local tests pass, including native parser malformed bounds/endian/fat headers, mismatched or fake dSYMs, escaping application metadata, backup overwrite/cancellation, source freshness, backup mutation, exclusions/pins/retention and quarantine/restore round-trip. Only synthetic test archives were copied or moved.
+
+Next: DerivedData association and active-build exclusion, followed by supported simulator lifecycle operations. Agent adapters, richer cleanup rules and automatic updates remain open.
+
+References: [Apple build UUID guidance](https://developer.apple.com/documentation/technotes/tn3178-checking-for-and-resolving-build-uuid-problems), [symbol file lookup](https://developer.apple.com/documentation/xcode/locating-a-missing-debug-symbol-file).
+
+Installed 0.1.10 after backing up the app and saved scan. UI restored the 237450-file partial scan, user's retention limit and pins; inventory read 98 archives. On-demand verification of a real archive matched 4/4 binaries. No real archive copied, moved or deleted. Protected-directory probes still return denied after the ad-hoc update; this release does not fix permission continuity.

@@ -29,6 +29,135 @@ import UserNotifications
     NSWorkspace.shared.open(
       URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
   }
+  @Published var archiveSymbols: [String: ArchiveSymbolReport] = [:]
+  func checkArchiveSymbols(_ archive: XcodeArchive) {
+    guard !busy else { return }
+    busy = true
+    cancellation = Cancellation()
+    let token = cancellation
+    status = t("Сравниваем UUID приложения и dSYM…", "Comparing binary and dSYM UUIDs…")
+    task = Task {
+      do {
+        let result = try await Task.detached {
+          try ArchiveSymbols.inspect(URL(fileURLWithPath: archive.path), cancellation: token)
+        }.value
+        archiveSymbols[archive.path] = result
+        status = t("Проверка UUID завершена", "UUID verification complete")
+      } catch { self.error = error.localizedDescription }
+      busy = false
+    }
+  }
+  func backupArchive(_ archive: XcodeArchive) {
+    guard !busy else { return }
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.message = t(
+      "Выберите папку резервных копий, желательно на другом диске. Будет создана полная копия архива.",
+      "Choose a backup folder, preferably on another disk. A full archive copy will be created.")
+    guard panel.runModal() == .OK, let folder = panel.url else { return }
+    let destination = folder.appendingPathComponent(
+      URL(fileURLWithPath: archive.path).lastPathComponent)
+    busy = true
+    cancellation = Cancellation()
+    let token = cancellation
+    status = t(
+      "Копируем архив и проверяем SHA-256. Копирование нельзя прервать мгновенно…",
+      "Copying archive and verifying SHA-256. Copy cancellation may be delayed…")
+    task = Task {
+      do {
+        try await Task.detached {
+          try ArchiveTransfer.createBackup(
+            source: URL(fileURLWithPath: archive.path), destination: destination,
+            cancellation: token)
+        }.value
+        status = t("Резервная копия проверена: ", "Backup verified: ") + destination.path
+      } catch {
+        self.error = error.localizedDescription
+        status = t("Копия не создана", "Backup not created")
+      }
+      busy = false
+    }
+  }
+  func quarantineArchive(_ archive: XcodeArchive) {
+    guard !busy else { return }
+    let decisions = ArchiveRetention.decisions(
+      archiveInventory.archives, keep: archiveKeep, pinned: pinnedArchives)
+    guard decisions[archive.path] == .review else { return }
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = true
+    panel.treatsFilePackagesAsDirectories = false
+    panel.message = t(
+      "Выберите отдельную полную резервную копию этого .xcarchive. Содержимое будет проверено заново.",
+      "Select a separate complete .xcarchive backup. Contents will be verified again.")
+    guard panel.runModal() == .OK, let backup = panel.url else { return }
+    busy = true
+    cancellation = Cancellation()
+    let token = cancellation
+    let store = quarantine
+    status = t("Проверяем архив, UUID и резервную копию…", "Verifying archive, UUIDs and backup…")
+    task = Task {
+      do {
+        let root = archiveRoot
+        let fresh = await Task.detached { XcodeArchives.scan(root: root, cancellation: token) }
+          .value
+        guard fresh.complete, fresh.issues.isEmpty,
+          ArchiveRetention.decisions(fresh.archives, keep: archiveKeep, pinned: pinnedArchives)[
+            archive.path] == .review
+        else {
+          throw CleanerError.message(
+            "Archive inventory changed or is incomplete; refresh before moving")
+        }
+        archiveInventory = fresh
+        let plan = try await Task.detached {
+          try ArchiveTransfer.prepare(archive: archive, backup: backup, cancellation: token)
+        }.value
+        try token.check()
+        guard
+          confirm(
+            t("Переместить архив в карантин?", "Move archive to quarantine?"),
+            archive.path + "\n" + t("Проверенная копия: ", "Verified backup: ") + backup.path + "\n"
+              + t(
+                "Закройте Xcode и сборки. Архив исчезнет из Organizer. Его можно восстановить из карантина. Карантин ещё занимает место; резервную копию необходимо сохранить для диагностики сбоев.",
+                "Close Xcode and builds. The archive will disappear from Organizer and can be restored from quarantine. Quarantine still takes space; retain the backup for crash diagnosis."
+              ))
+        else {
+          busy = false
+          status = t("Отменено", "Cancelled")
+          return
+        }
+        let current = ArchiveRetention.decisions(
+          archiveInventory.archives, keep: archiveKeep, pinned: pinnedArchives)
+        guard current[archive.path] == .review else {
+          throw CleanerError.message("Archive is now retained")
+        }
+        let pins = pinnedArchives
+        let retained = Set(current.filter { $0.value != .review }.map(\.key))
+        let protected = exclusions
+        status = t(
+          "Переносим архив и проверяем целостность…", "Moving archive and verifying integrity…")
+        _ = try await Task.detached {
+          try store.moveArchive(
+            plan, pinned: pins, retained: retained, protectedPaths: protected, cancellation: token)
+        }.value
+        archiveInventory.archives.removeAll { $0.path == archive.path }
+        archiveSymbols.removeValue(forKey: archive.path)
+        page = "quarantine"
+        log("Quarantined Xcode archive: " + archive.path)
+        status = t(
+          "Архив в карантине. Резервная копия сохранена.", "Archive quarantined. Backup retained.")
+      } catch {
+        self.error = error.localizedDescription
+        status = t(
+          "Операция остановлена. Проверьте журнал карантина.",
+          "Operation stopped. Check quarantine journal.")
+      }
+      entries = store.entries()
+      busy = false
+      scheduleReminder()
+    }
+  }
   @Published var archiveInventory = ArchiveInventory()
   @Published var archiveRoot = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Developer/Xcode/Archives")
@@ -56,6 +185,7 @@ import UserNotifications
     busy = true
     archivesLoading = true
     archiveInventory = ArchiveInventory()
+    archiveSymbols = [:]
     archiveScanDate = nil
     cancellation = Cancellation()
     let token = cancellation
