@@ -1,0 +1,404 @@
+import CleanerCore
+import SwiftUI
+import UserNotifications
+
+@MainActor final class AppModel: ObservableObject {
+  @Published var page = "overview"
+  @Published var roots: [URL] = []
+  @Published var report = ScanReport()
+  @Published var selected = Set<String>()
+  @Published var duplicates: [[FileRecord]] = []
+  @Published var entries: [QuarantineEntry] = []
+  @Published var busy = false
+  @Published var status = ""
+  @Published var error: String?
+  @Published var search = ""
+  @Published var agent = "codex"
+  @Published var transcript: Transcript?
+  @Published var output = ""
+  @Published var models: [String] = []
+  @Published var model = ""
+  @Published var style = "Бережный"
+  @Published var simulatorReport = ""
+  @Published var exclusions: [String] =
+    UserDefaults.standard.stringArray(forKey: "exclusions") ?? []
+  @Published var logs: [String] = []
+  @AppStorage("language") var language = "ru"
+  @AppStorage("theme") var theme = "system"
+  let home = FileManager.default.homeDirectoryForCurrentUser
+  let support: URL
+  let quarantine: QuarantineStore
+  let engine = LocalModel()
+  var cancellation = Cancellation()
+  var task: Task<Void, Never>?
+  var reminderTimer: Timer?
+  init() {
+    support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("OxyMacCleaner")
+    do {
+      quarantine = try QuarantineStore(root: support.appendingPathComponent("Quarantine"))
+    } catch { fatalError("Unable to create local application storage: \(error)") }
+    entries = quarantine.entries()
+    logs =
+      (try? String(contentsOf: support.appendingPathComponent("operations.log"), encoding: .utf8)
+        .components(separatedBy: "\n")) ?? []
+    reminderTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+      Task { @MainActor in self?.remind() }
+    }
+  }
+  func t(_ ru: String, _ en: String) -> String { language == "en" ? en : ru }
+  func log(_ text: String) {
+    logs.append("\(Date().formatted()) · \(text)")
+    if logs.count > 1000 { logs.removeFirst(logs.count - 1000) }
+    try? logs.joined(separator: "\n").write(
+      to: support.appendingPathComponent("operations.log"), atomically: true, encoding: .utf8)
+  }
+  func chooseRoots() {
+    let p = NSOpenPanel()
+    p.canChooseDirectories = true
+    p.canChooseFiles = false
+    p.allowsMultipleSelection = true
+    if p.runModal() == .OK {
+      roots = p.urls
+      selected = []
+    }
+  }
+  func reveal(_ path: String) {
+    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+  }
+  func scan(_ explicit: [URL]? = nil) {
+    guard !busy else { return }
+    let chosen = explicit ?? roots
+    guard !chosen.isEmpty else {
+      chooseRoots()
+      return
+    }
+    roots = chosen
+    busy = true
+    selected = []
+    duplicates = []
+    report = ScanReport()
+    cancellation = Cancellation()
+    let token = cancellation
+    let excluded = exclusions + [support.path]
+    status = t("Сканирование…", "Scanning…")
+    task = Task {
+      let result = await Task.detached {
+        Scanner.scan(roots: chosen, excluded: excluded, cancellation: token) { n in
+          Task { @MainActor in self.status = self.t("Проверено файлов: \(n)", "Files scanned: \(n)")
+          }
+        }
+      }.value
+      report = result
+      busy = false
+      status =
+        result.complete
+        ? t("Сканирование завершено", "Scan complete")
+        : t("Остановлено. Результат неполный", "Stopped. Partial results")
+      log(
+        "Scan: \(result.files.count) files, \(result.issues.count) issues, complete=\(result.complete)"
+      )
+    }
+  }
+  func findDuplicates() {
+    guard !busy else { return }
+    busy = true
+    cancellation = Cancellation()
+    let token = cancellation
+    let files = report.files
+    task = Task {
+      do {
+        let groups = try await Task.detached {
+          try Scanner.duplicates(files, cancellation: token) { n in
+            Task { @MainActor in
+              self.status = self.t("Сравнено файлов: \(n)", "Files compared: \(n)")
+            }
+          }
+        }.value
+        duplicates = groups
+        status = t("Групп дубликатов: \(groups.count)", "Duplicate groups: \(groups.count)")
+      } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
+      busy = false
+    }
+  }
+  func cancel() {
+    cancellation.cancel()
+    task?.cancel()
+    status = t("Останавливаю…", "Stopping…")
+  }
+  func protect(_ path: String) {
+    exclusions.append(path)
+    UserDefaults.standard.set(exclusions, forKey: "exclusions")
+    selected.remove(path)
+  }
+  func confirm(_ title: String, _ text: String, destructive: Bool = false) -> Bool {
+    let a = NSAlert()
+    a.messageText = title
+    a.informativeText = text
+    a.alertStyle = destructive ? .critical : .warning
+    a.addButton(withTitle: t("Продолжить", "Continue"))
+    a.addButton(withTitle: t("Отмена", "Cancel"))
+    return a.runModal() == .alertFirstButtonReturn
+  }
+  func quarantineSelected() {
+    let files = report.files.filter { selected.contains($0.path) }
+    guard !files.isEmpty && !busy else { return }
+    for group in duplicates where group.allSatisfy({ selected.contains($0.path) }) {
+      error = t(
+        "Оставьте хотя бы одну копию: \(group[0].name)", "Keep at least one copy: \(group[0].name)")
+      return
+    }
+    guard
+      confirm(
+        t("Переместить в карантин?", "Move to quarantine?"),
+        "\(files.count) · \(ByteCountFormatter.string(fromByteCount:files.reduce(0){$0+$1.bytes},countStyle:.file))\n"
+          + t(
+            "Место не освободится до окончательного удаления.\n",
+            "Space remains occupied until permanent deletion.\n")
+          + files.prefix(8).map(\.path).joined(separator: "\n"))
+    else { return }
+    busy = true
+    let store = quarantine
+    let protected = exclusions
+    cancellation = Cancellation()
+    let token = cancellation
+    let duplicateGroups = duplicates
+    task = Task {
+      let results = await Task.detached {
+        files.map { f -> (String, String?) in
+          do {
+            try token.check()
+            if let group = duplicateGroups.first(where: {
+              $0.contains(where: { $0.path == f.path })
+            }) {
+              guard
+                let keeper = group.first(where: { candidate in
+                  !files.contains(where: { $0.path == candidate.path })
+                })
+              else { throw CleanerError.message("Keep at least one duplicate") }
+              try keeper.validate()
+              guard FileManager.default.contentsEqual(atPath: keeper.path, andPath: f.path) else {
+                throw CleanerError.message("Retained copy changed; scan again")
+              }
+            }
+            _ = try store.move(f, protectedPaths: protected)
+            return (f.path, nil)
+          } catch { return (f.path, error.localizedDescription) }
+        }
+      }.value
+      for (path, failure) in results {
+        log(
+          (failure == nil ? "Quarantined: " : "Skipped: ") + path
+            + (failure.map { " · " + $0 } ?? ""))
+        if failure == nil { report.files.removeAll { $0.path == path } }
+      }
+      selected = []
+      entries = store.entries()
+      busy = false
+      duplicates = []
+      report.folders = [:]
+      if results.contains(where: { $0.1 != nil }) {
+        error = results.compactMap { $0.1 }.joined(separator: "\n")
+      }
+      scheduleReminder()
+    }
+  }
+  func restore(_ e: QuarantineEntry, alternate: Bool = false) {
+    var dest: URL?
+    if alternate {
+      let p = NSSavePanel()
+      p.nameFieldStringValue = URL(fileURLWithPath: e.original).lastPathComponent
+      if p.runModal() != .OK { return }
+      dest = p.url
+    }
+    guard !busy else { return }
+    busy = true
+    let store = quarantine
+    let destination = dest
+    task = Task {
+      do {
+        try await Task.detached { try store.restore(e, destination: destination) }.value
+        log("Restored: \(e.original)")
+      } catch { self.error = error.localizedDescription }
+      entries = store.entries()
+      busy = false
+      scheduleReminder()
+    }
+  }
+  func erase(_ e: QuarantineEntry) {
+    guard !busy,
+      confirm(
+        t("Удалить безвозвратно?", "Delete permanently?"),
+        e.original + "\n"
+          + t(
+            "Восстановление средствами приложения станет невозможно.",
+            "The app will no longer be able to restore this file."), destructive: true)
+    else { return }
+    busy = true
+    let store = quarantine
+    task = Task {
+      do {
+        try await Task.detached { try store.erase(e) }.value
+        log("Permanently deleted: \(e.original)")
+      } catch { self.error = error.localizedDescription }
+      entries = store.entries()
+      busy = false
+      scheduleReminder()
+    }
+  }
+  func importTranscript() {
+    let p = NSOpenPanel()
+    p.canChooseDirectories = false
+    p.allowsMultipleSelection = false
+    p.message = t(
+      "Экспорт одной завершённой сессии: TXT, MD, JSON или JSONL. Исходник не изменяется.",
+      "Export of one inactive session: TXT, MD, JSON or JSONL. Original remains intact.")
+    if p.runModal() == .OK, let url = p.url {
+      do {
+        transcript = try Transcript.load(url, agent: agent)
+        output = ""
+      } catch { self.error = error.localizedDescription }
+    }
+  }
+  func refreshModels() {
+    guard !busy else { return }
+    busy = true
+    task = Task {
+      do {
+        models = try await engine.models()
+        if !models.contains(model) { model = models.first ?? "" }
+        status = t("Локальный движок доступен", "Local engine ready")
+      } catch {
+        self.error = t("Запустите Ollama. ", "Start Ollama. ") + error.localizedDescription
+      }
+      busy = false
+    }
+  }
+  func pull(_ name: String) {
+    guard !busy else { return }
+    guard
+      confirm(
+        t("Скачать локальную модель?", "Download local model?"),
+        name + "\n"
+          + t(
+            "3B: около 2 ГБ; 7B: около 5 ГБ. Нужен интернет для загрузки. Тексты чатов не отправляются.",
+            "3B: about 2 GB; 7B: about 5 GB. Internet required for download. No chat content is uploaded."
+          ))
+    else { return }
+    busy = true
+    task = Task {
+      do {
+        try await engine.pull(name) { s in Task { @MainActor in self.status = s } }
+        models = try await engine.models()
+        model = name
+        log("Local model downloaded: \(name)")
+      } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
+      busy = false
+    }
+  }
+  func summarize() {
+    guard let transcript, !model.isEmpty, !busy else { return }
+    guard
+      confirm(
+        t("Подготовить продолжение?", "Prepare handoff?"),
+        t(
+          "Подтвердите, что сессия завершена. Создадим резервную копию и локальный пересказ для новой сессии. Исходную историю не удаляем.",
+          "Confirm the session is inactive. A backup and local handoff will be created. Original history is not deleted."
+        ))
+    else { return }
+    busy = true
+    output = ""
+    let selectedModel = model
+    let compression = style
+    let backupRoot = support.appendingPathComponent("HistoryBackups")
+    task = Task {
+      do {
+        let saved = try await Task.detached { try transcript.backup(in: backupRoot) }.value
+        log("Verified history backup: \(saved.lastPathComponent)")
+        output = try await engine.summarize(transcript, model: selectedModel, style: compression) {
+          s in
+          Task { @MainActor in self.status = self.t("Обработка частей: ", "Processing chunks: ") + s
+          }
+        }
+        status = t("Проверьте результат перед продолжением", "Review before starting a new session")
+      } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
+      busy = false
+    }
+  }
+  func exportContext() {
+    let p = NSSavePanel()
+    p.nameFieldStringValue = "\(agent)-handoff.md"
+    if p.runModal() == .OK, let url = p.url {
+      do { try output.write(to: url, atomically: true, encoding: .utf8) } catch {
+        self.error = error.localizedDescription
+      }
+    }
+  }
+  func readSimulators() {
+    guard !busy else { return }
+    busy = true
+    task = Task {
+      do {
+        simulatorReport = try await Task.detached {
+          try runTool("/usr/bin/xcrun", ["simctl", "list"])
+        }.value
+      } catch { self.error = error.localizedDescription }
+      busy = false
+    }
+  }
+  func enableNotifications() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) {
+      granted, _ in
+      Task { @MainActor in
+        UserDefaults.standard.set(granted, forKey: "reminders")
+        self.scheduleReminder()
+      }
+    }
+  }
+  func scheduleReminder() {
+    let center = UNUserNotificationCenter.current()
+    let active = entries.filter { $0.state == "quarantined" }
+    guard UserDefaults.standard.bool(forKey: "reminders"), !active.isEmpty else {
+      center.removePendingNotificationRequests(withIdentifiers: ["quarantine"])
+      return
+    }
+    let body = t(
+      "В карантине \(active.count) объектов: \(ByteCountFormatter.string(fromByteCount:active.reduce(0){$0+$1.bytes},countStyle:.file)). Откройте приложение для проверки.",
+      "Quarantine: \(active.count) items. Open the app to review.")
+    center.getPendingNotificationRequests { requests in
+      guard !requests.contains(where: { $0.identifier == "quarantine" }) else { return }
+      let c = UNMutableNotificationContent()
+      c.title = "OxyMac Cleaner"
+      c.body = body
+      c.categoryIdentifier = "quarantine"
+      UNUserNotificationCenter.current().add(
+        UNNotificationRequest(
+          identifier: "quarantine", content: c,
+          trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5 * 24 * 3600, repeats: true)))
+    }
+  }
+
+  func remind() {
+    if QuarantineStore.reminderDue(
+      entries: entries, last: UserDefaults.standard.object(forKey: "lastReminder") as? Date)
+    {
+      status = t(
+        "Проверьте карантин: файлы продолжают занимать место",
+        "Review quarantine: files still occupy disk space")
+    }
+  }
+}
+func runTool(_ executable: String, _ args: [String]) throws -> String {
+  let p = Process()
+  p.executableURL = URL(fileURLWithPath: executable)
+  p.arguments = args
+  let pipe = Pipe()
+  p.standardOutput = pipe
+  p.standardError = pipe
+  try p.run()
+  let data = pipe.fileHandleForReading.readDataToEndOfFile()
+  p.waitUntilExit()
+  let text = String(data: data, encoding: .utf8) ?? ""
+  guard p.terminationStatus == 0 else { throw CleanerError.message(text) }
+  return text
+}

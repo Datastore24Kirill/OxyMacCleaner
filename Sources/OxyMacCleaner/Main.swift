@@ -1,0 +1,549 @@
+import CleanerCore
+import SwiftUI
+import UserNotifications
+
+@main struct CleanerApp: App {
+  @StateObject private var vm = AppModel()
+  @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+  var body: some Scene {
+    WindowGroup("OxyMac Cleaner") {
+      RootView().environmentObject(vm)
+        .preferredColorScheme(vm.theme == "light" ? .light : vm.theme == "dark" ? .dark : nil)
+        .frame(minWidth: 1000, minHeight: 700)
+        .onAppear {
+          delegate.model = vm
+          vm.scheduleReminder()
+        }
+    }.windowStyle(.hiddenTitleBar).defaultSize(width: 1180, height: 800)
+      .commands { CommandGroup(replacing: .newItem) {} }
+  }
+}
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+  weak var model: AppModel?
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    let center = UNUserNotificationCenter.current()
+    center.delegate = self
+    center.setNotificationCategories([
+      UNNotificationCategory(
+        identifier: "quarantine",
+        actions: [
+          UNNotificationAction(identifier: "open", title: "Открыть карантин", options: .foreground),
+          UNNotificationAction(identifier: "later", title: "Напомнить через 5 дней", options: []),
+        ], intentIdentifiers: [])
+    ])
+  }
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    Task { @MainActor in
+      UserDefaults.standard.set(Date(), forKey: "lastReminder")
+      if response.actionIdentifier != "later" { model?.page = "quarantine" }
+      model?.scheduleReminder()
+      completionHandler()
+    }
+  }
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    Task { @MainActor in
+      UserDefaults.standard.set(Date(), forKey: "lastReminder")
+      model?.scheduleReminder()
+      completionHandler([.banner, .sound])
+    }
+  }
+}
+struct RootView: View {
+  @EnvironmentObject var vm: AppModel
+  let pages: [(String, String, String, String)] = [
+    ("overview", "Обзор", "Overview", "square.grid.2x2"),
+    ("files", "Файлы и папки", "Files & folders", "externaldrive"),
+    ("duplicates", "Дубликаты", "Duplicates", "square.on.square"),
+    ("archives", "Архивы и загрузки", "Archives", "shippingbox"),
+    ("developer", "Xcode и проекты", "Xcode & projects", "hammer"),
+    ("agents", "Агенты и контекст", "Agents & context", "text.bubble"),
+    ("engine", "Локальный движок", "Local engine", "cpu"),
+    ("quarantine", "Карантин", "Quarantine", "archivebox"),
+    ("history", "История операций", "Activity", "clock"),
+    ("settings", "Настройки", "Settings", "gearshape"),
+  ]
+  var body: some View {
+    HStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Image(systemName: "sparkles.rectangle.stack.fill").font(.largeTitle).foregroundStyle(
+            .mint)
+          VStack(alignment: .leading) {
+            Text("OxyMac").font(.title2.bold())
+            Text("CLEANER").font(.caption.monospaced()).tracking(3)
+          }
+        }.padding(.vertical, 24)
+        ForEach(pages, id: \.0) { p in
+          Button {
+            vm.page = p.0
+            vm.search = ""
+          } label: {
+            Label(vm.t(p.1, p.2), systemImage: p.3).frame(maxWidth: .infinity, alignment: .leading)
+              .padding(11).background(
+                vm.page == p.0 ? Color.mint.opacity(0.18) : .clear,
+                in: RoundedRectangle(cornerRadius: 10))
+          }.buttonStyle(.plain)
+        }
+        Spacer()
+        Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
+          .system(size: 9, weight: .semibold)
+        ).foregroundStyle(.secondary)
+        Text("0.1.0 · Preview").font(.caption).foregroundStyle(.secondary)
+      }.padding(18).frame(width: 240).background(.thinMaterial)
+      VStack(alignment: .leading, spacing: 16) {
+        HStack {
+          Text(pages.first { $0.0 == vm.page }.map { vm.t($0.1, $0.2) } ?? "").font(
+            .largeTitle.bold())
+          Spacer()
+          if vm.busy {
+            ProgressView().controlSize(.small)
+            Button(vm.t("Стоп", "Stop")) { vm.cancel() }
+          }
+        }.padding(.top, 22)
+        Group {
+          switch vm.page {
+          case "overview": overview
+          case "files", "archives": files
+          case "duplicates": duplicates
+          case "developer": developer
+          case "agents": agents
+          case "engine": engine
+          case "quarantine": quarantine
+          case "history":
+            ScrollView {
+              Text(vm.logs.reversed().joined(separator: "\n\n")).font(
+                .system(.caption, design: .monospaced)
+              ).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            }
+          case "settings": settings
+          default: overview
+          }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        HStack {
+          Circle().fill(vm.busy ? Color.orange : Color.mint).frame(width: 6, height: 6)
+          Text(
+            vm.status.isEmpty
+              ? vm.t("Готово. Выберите папку для проверки.", "Ready. Choose a folder to inspect.")
+              : vm.status
+          ).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+          Spacer()
+        }.padding(.bottom, 16)
+      }.padding(.horizontal, 28)
+    }.alert(
+      vm.t("Обратите внимание", "Attention"),
+      isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })
+    ) {
+      Button("OK") { vm.error = nil }
+    } message: {
+      Text(vm.error ?? "")
+    }
+  }
+  func note(_ ru: String, _ en: String) -> some View {
+    Text(vm.t(ru, en)).font(.callout).foregroundStyle(.secondary).fixedSize(
+      horizontal: false, vertical: true)
+  }
+  func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    VStack(alignment: .leading, spacing: 14, content: content).padding(20).frame(
+      maxWidth: .infinity, alignment: .leading
+    ).background(.background, in: RoundedRectangle(cornerRadius: 16)).overlay(
+      RoundedRectangle(cornerRadius: 16).stroke(.quaternary))
+  }
+  func size(_ bytes: Int64) -> String {
+    ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+  }
+  var scanButtons: some View {
+    HStack {
+      Button(vm.t("Выбрать папки", "Choose folders")) { vm.chooseRoots() }
+      Button(vm.t("Сканировать", "Scan")) { vm.scan() }.buttonStyle(.borderedProminent).tint(.teal)
+        .disabled(vm.roots.isEmpty || vm.busy)
+    }
+  }
+  var overview: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 18) {
+        card {
+          Text(vm.t("Больше места. Меньше догадок.", "More space. Less guesswork.")).font(
+            .title.bold())
+          note(
+            "Найдите тяжёлые файлы, сравните копии и сохраните важное. Сканирование ничего не удаляет.",
+            "Find large files, compare copies and keep what matters. Scanning never deletes files.")
+          scanButtons
+          ForEach(vm.roots, id: \.path) { Text($0.path).font(.caption).textSelection(.enabled) }
+        }
+        HStack {
+          metric(vm.t("Найдено файлов", "Files found"), "\(vm.report.files.count)")
+          metric(vm.t("Логический объём", "Logical size"), size(vm.report.total))
+          metric(
+            vm.t("В карантине", "In quarantine"),
+            size(vm.entries.filter { $0.state == "quarantined" }.reduce(0) { $0 + $1.bytes }))
+        }
+        note(
+          "Размер файлов не равен гарантированно освобождаемому месту: APFS может совместно хранить данные. Карантин пока занимает диск.",
+          "File sizes are not guaranteed recoverable space: APFS may share blocks. Quarantine still occupies disk."
+        )
+        if !vm.report.issues.isEmpty {
+          DisclosureGroup(
+            vm.t(
+              "Пропуски и ошибки: \(vm.report.issues.count)",
+              "Skipped / errors: \(vm.report.issues.count)")
+          ) {
+            Text(vm.report.issues.prefix(100).joined(separator: "\n")).font(.caption).textSelection(
+              .enabled)
+          }
+        }
+        card {
+          Label(vm.t("Первая тестовая версия", "First preview"), systemImage: "testtube.2").font(
+            .headline)
+          note(
+            "Очистка отдельных файлов через карантин готова. Каталоги проектов и симуляторы пока анализируются без удаления. Истории агентов импортируются вручную; базы чатов не изменяются.",
+            "Individual-file quarantine is available. Project folders and simulators are analysis-only. Agent histories are imported manually; chat databases are never modified."
+          )
+        }
+      }
+    }
+  }
+  func metric(_ title: String, _ value: String) -> some View {
+    card {
+      Text(title).font(.caption).foregroundStyle(.secondary)
+      Text(value).font(.title2.bold()).monospacedDigit()
+    }
+  }
+  var visibleFiles: [FileRecord] {
+    vm.report.files.filter {
+      (vm.page != "archives" || $0.category == "Archive")
+        && (vm.search.isEmpty || $0.path.localizedCaseInsensitiveContains(vm.search))
+    }
+  }
+  var files: some View {
+    VStack(alignment: .leading) {
+      scanButtons
+      TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search)
+        .textFieldStyle(.roundedBorder)
+      HStack {
+        Text(vm.t("Файлы отсортированы по размеру", "Files sorted by size")).font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+        Text("\(vm.selected.count)")
+        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.disabled(
+          vm.selected.isEmpty || vm.busy)
+      }
+      List(visibleFiles.prefix(2000), selection: $vm.selected) { f in
+        HStack {
+          Image(systemName: f.category == "Archive" ? "shippingbox" : "doc").foregroundStyle(.teal)
+          VStack(alignment: .leading) {
+            Text(f.name).lineLimit(1)
+            Text(f.path).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+          }
+          Spacer()
+          Text(size(f.bytes)).monospacedDigit()
+          Button {
+            vm.reveal(f.path)
+          } label: {
+            Image(systemName: "folder")
+          }.buttonStyle(.borderless)
+        }.tag(f.path).contextMenu {
+          Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(f.path) }
+          Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(f.path) }
+        }
+      }
+      DisclosureGroup(
+        vm.t("Крупные папки · сумма размеров файлов", "Large folders · summed logical file sizes")
+      ) {
+        ScrollView {
+          ForEach(vm.report.folders.sorted { $0.value > $1.value }.prefix(30), id: \.key) { p in
+            HStack {
+              Text(p.key).lineLimit(1)
+              Spacer()
+              Text(size(p.value))
+              Button {
+                vm.reveal(p.key)
+              } label: {
+                Image(systemName: "folder")
+              }
+            }.font(.caption)
+          }
+        }.frame(maxHeight: 180)
+      }
+      note(
+        "Показаны первые 2000 совпадений. Защищённые файлы и внутренние файлы пакетов не перемещаются.",
+        "First 2,000 matches shown. Protected files and package internals cannot be moved.")
+    }
+  }
+  var duplicates: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      note(
+        "Сначала выполните сканирование. Проверяем содержимое; ссылки не считаем отдельными копиями. Выберите лишние файлы, сохранив минимум одну копию.",
+        "Scan first. Contents are verified; hard links are not separate copies. Select extras while retaining at least one copy."
+      )
+      HStack {
+        Button(vm.t("Найти точные копии", "Find exact duplicates")) { vm.findDuplicates() }
+          .disabled(vm.busy || vm.report.files.isEmpty)
+        Spacer()
+        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.disabled(
+          vm.selected.isEmpty || vm.busy)
+      }
+      List {
+        ForEach(Array(vm.duplicates.enumerated()), id: \.offset) { _, group in
+          Section("\(group.count) × \(size(group[0].bytes))") {
+            ForEach(group) { f in
+              Toggle(
+                isOn: Binding(
+                  get: { vm.selected.contains(f.path) },
+                  set: { if $0 { vm.selected.insert(f.path) } else { vm.selected.remove(f.path) } })
+              ) { Text(f.path).font(.caption).textSelection(.enabled) }
+            }
+          }
+        }
+      }
+    }
+  }
+  var developer: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 18) {
+        card {
+          Label("Xcode", systemImage: "hammer.fill").font(.title2.bold())
+          note(
+            "DerivedData восстанавливается при сборке. Архивы могут содержать необходимые dSYM. В этой версии — анализ и открытие в Finder; массовое удаление каталогов выключено.",
+            "DerivedData is rebuilt. Archives may contain essential dSYM files. This preview offers analysis and Finder access; bulk directory deletion is disabled."
+          )
+          HStack {
+            Button("DerivedData") {
+              vm.scan([vm.home.appendingPathComponent("Library/Developer/Xcode/DerivedData")])
+              vm.page = "files"
+            }
+            Button(vm.t("Архивы Xcode", "Xcode archives")) {
+              vm.scan([vm.home.appendingPathComponent("Library/Developer/Xcode/Archives")])
+              vm.page = "files"
+            }
+            Button(vm.t("Выбрать проект", "Choose project")) {
+              vm.chooseRoots()
+              vm.page = "files"
+            }
+          }.disabled(vm.busy)
+        }
+        card {
+          Label(vm.t("Симуляторы", "Simulators"), systemImage: "iphone").font(.title2.bold())
+          HStack {
+            Button(vm.t("Прочитать список", "Read inventory")) { vm.readSimulators() }.disabled(
+              vm.busy)
+            Button(vm.t("Открыть Xcode", "Open Xcode")) {
+              NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Xcode.app"))
+            }
+          }
+          note(
+            "Удаляйте ненужные runtimes в Xcode → Settings → Components. Не удаляем системные каталоги напрямую.",
+            "Manage runtimes in Xcode → Settings → Components. System directories are never deleted directly."
+          )
+          Text(vm.simulatorReport).font(.system(.caption, design: .monospaced)).textSelection(
+            .enabled)
+        }
+      }
+    }
+  }
+  var agents: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        card {
+          Picker(vm.t("Агент", "Agent"), selection: $vm.agent) {
+            ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
+          }.onChange(of: vm.agent) { _, _ in
+            vm.transcript = nil
+            vm.output = ""
+          }
+          if let definition = Agents.catalog.first(where: { $0.id == vm.agent }) {
+            let paths = definition.locations(home: vm.home)
+            note(
+              paths.isEmpty
+                ? "Стандартное расположение не найдено. Можно импортировать экспорт сессии."
+                : "Обнаружено расположение данных. Это не означает поддержку внутреннего формата истории.",
+              paths.isEmpty
+                ? "Default location not found. You can import a session export."
+                : "Data location found. This does not imply support for its internal history format."
+            )
+            ForEach(paths, id: \.path) { url in
+              HStack {
+                Text(url.path).font(.caption).lineLimit(2)
+                Spacer()
+                Button(vm.t("Размер", "Size")) {
+                  vm.scan([url])
+                  vm.page = "files"
+                }.disabled(vm.busy)
+              }
+            }
+          }
+          Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
+            .disabled(vm.busy)
+          note(
+            "TXT / MD / JSON / JSONL. Прямое чтение баз и запуск новой сессии пока не реализованы. Результат можно скопировать в новый чат нужного агента.",
+            "TXT / MD / JSON / JSONL. Direct database access and new-session launch are not implemented yet. Copy the handoff into a new chat of the selected agent."
+          )
+        }
+        if let input = vm.transcript {
+          card {
+            Text(input.source.lastPathComponent).font(.headline)
+            Text(
+              vm.t(
+                "Исходник: \(input.text.count) символов", "Original: \(input.text.count) characters"
+              )
+            ).font(.caption)
+            HStack {
+              Picker(vm.t("Режим", "Mode"), selection: $vm.style) {
+                Text(vm.t("Бережный", "Careful")).tag("Бережный")
+                Text(vm.t("Сбалансированный", "Balanced")).tag("Сбалансированный")
+                Text(vm.t("Краткий", "Concise")).tag("Краткий")
+              }
+              Button(vm.t("Подготовить контекст", "Prepare handoff")) { vm.summarize() }
+                .buttonStyle(.borderedProminent).disabled(vm.busy || vm.model.isEmpty)
+            }
+            if vm.model.isEmpty {
+              Button(vm.t("Настроить локальную модель", "Set up local model")) {
+                vm.page = "engine"
+              }
+            }
+          }
+        }
+        if !vm.output.isEmpty {
+          card {
+            HStack {
+              Text(
+                vm.t(
+                  "Результат: \(vm.output.count) символов", "Result: \(vm.output.count) characters")
+              )
+              Spacer()
+              Button(vm.t("Копировать", "Copy")) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(vm.output, forType: .string)
+              }
+              Button(vm.t("Экспорт MD", "Export MD")) { vm.exportContext() }
+            }
+            TextEditor(text: $vm.output).font(.system(.body, design: .monospaced)).frame(
+              minHeight: 320)
+            note(
+              "Пересказ может потерять детали и не всегда короче оригинала. Проверьте решения и следующие шаги. Резервная копия сохранена.",
+              "A summary can lose details and may not be shorter. Review decisions and next steps. A verified backup is retained."
+            )
+          }
+        }
+      }
+    }
+  }
+  var engine: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 18) {
+        card {
+          Text(vm.t("Локально на вашем Mac", "Local on your Mac")).font(.title2.bold())
+          note(
+            "Ollama выполняет обработку на 127.0.0.1. Облачные модели исключены. Нужен интернет только для установки компонентов.",
+            "Ollama processes text at 127.0.0.1. Cloud models are excluded. Internet is needed only to install components."
+          )
+          HStack {
+            Button(vm.t("Скачать и установить Ollama", "Download and install Ollama")) {
+              vm.installOllama()
+            }.disabled(vm.busy)
+            Button(vm.t("Запустить", "Launch")) { vm.launchOllama() }
+            Button(vm.t("Проверить", "Check")) { vm.refreshModels() }.disabled(vm.busy)
+          }
+        }
+        card {
+          Text(vm.t("Модель для контекста", "Context model")).font(.headline)
+          Text(
+            vm.t("Память Mac: ", "Mac memory: ")
+              + size(Int64(ProcessInfo.processInfo.physicalMemory)))
+          HStack {
+            Button("Qwen 2.5 · 3B (~2 GB)") { vm.pull("qwen2.5:3b") }
+            Button("Qwen 2.5 · 7B (~5 GB)") { vm.pull("qwen2.5:7b") }
+          }.disabled(vm.busy)
+          Picker(vm.t("Установленная модель", "Installed model"), selection: $vm.model) {
+            Text(vm.t("Выберите модель", "Select model")).tag("")
+            ForEach(vm.models, id: \.self) { Text($0).tag($0) }
+          }
+          note(
+            "Начните с 3B. Качество пересказа зависит от модели; длинная история обрабатывается частями, без молчаливого обрезания. Другие задачи Ollama не останавливаются.",
+            "Start with 3B. Quality depends on the model. Long histories are processed in chunks without silent truncation. Other Ollama tasks are not stopped."
+          )
+        }
+      }
+    }
+  }
+  var quarantine: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      note(
+        "Файлы здесь продолжают занимать диск. Удаление безвозвратно; восстановление не перезаписывает существующие файлы.",
+        "Files here still occupy disk space. Deletion is permanent; restoration never overwrites existing files."
+      )
+      HStack {
+        Button(vm.t("Напоминать каждые 5 дней", "Remind every 5 days")) { vm.enableNotifications() }
+        Button(vm.t("Открыть папку", "Open folder")) { vm.reveal(vm.quarantine.root.path) }
+      }
+      List(vm.entries.filter { $0.state == "quarantined" || $0.state == "prepared" }) { e in
+        VStack(alignment: .leading, spacing: 8) {
+          Text(URL(fileURLWithPath: e.original).lastPathComponent).font(.headline)
+          Text(e.original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+          HStack {
+            Text(size(e.bytes))
+            Text(e.date.formatted())
+            Spacer()
+            Button(vm.t("Вернуть", "Restore")) { vm.restore(e) }
+            Button(vm.t("Вернуть в…", "Restore to…")) { vm.restore(e, alternate: true) }
+            Button(role: .destructive) {
+              vm.erase(e)
+            } label: {
+              Image(systemName: "trash")
+            }
+          }.font(.caption)
+        }.padding(.vertical, 6)
+      }.disabled(vm.busy)
+    }
+  }
+  var settings: some View {
+    Form {
+      Picker(vm.t("Оформление", "Appearance"), selection: $vm.theme) {
+        Text(vm.t("Системное", "System")).tag("system")
+        Text(vm.t("Светлое", "Light")).tag("light")
+        Text(vm.t("Тёмное", "Dark")).tag("dark")
+      }
+      Picker("Language / Язык", selection: $vm.language) {
+        Text("Русский").tag("ru")
+        Text("English").tag("en")
+      }
+      Section(vm.t("Исключения", "Exclusions")) {
+        ForEach(vm.exclusions, id: \.self) { p in
+          HStack {
+            Text(p).font(.caption)
+            Spacer()
+            Button(vm.t("Убрать", "Remove")) {
+              vm.exclusions.removeAll { $0 == p }
+              UserDefaults.standard.set(vm.exclusions, forKey: "exclusions")
+            }
+          }
+        }
+      }
+      Section(vm.t("Доступ и данные", "Access & data")) {
+        Text(
+          vm.t(
+            "Выбирайте папки для сканирования. Недоступные объекты будут перечислены в отчёте. Доступ к записи экрана не нужен.",
+            "Choose folders to scan. Inaccessible items appear in the report. Screen recording is not required."
+          ))
+        Button(vm.t("Папка данных приложения", "Application data folder")) {
+          vm.reveal(vm.support.path)
+        }
+      }
+      Section(vm.t("Обновления", "Updates")) {
+        Text(
+          vm.t(
+            "0.1.0 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.0 Preview. Automatic update installation and rollback are not implemented yet."))
+        Button("GitHub Releases") {
+          NSWorkspace.shared.open(
+            URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)
+        }
+      }
+    }.formStyle(.grouped)
+  }
+}

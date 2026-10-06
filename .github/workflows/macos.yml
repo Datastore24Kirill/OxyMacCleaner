@@ -1,0 +1,23 @@
+name: macOS build and tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test core
+        run: swift test
+      - name: Package app
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OxyMacCleaner-arm64
+          path: |
+            dist/OxyMacCleaner-0.1.0-macOS-arm64.zip
+            dist/SHA256SUMS.txt
