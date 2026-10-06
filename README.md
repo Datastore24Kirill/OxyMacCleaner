@@ -6,7 +6,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.5 Preview — implemented
+## 0.1.6 Preview — implemented
 
 - Native SwiftUI app for macOS 14+ on Apple Silicon, Russian/English UI, light/dark/system appearance.
 - Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
@@ -23,7 +23,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.5-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.6-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -70,3 +70,5 @@ A guided access check appears on first launch and after each release update, and
 Preview releases are ad-hoc signed: macOS may require granting access again after replacement. Reuse one Developer ID identity for production builds via `OXYMAC_SIGNING_IDENTITY`; signing alone is not notarization. Never replace the designated requirement with an identifier-only rule. Until signed releases are available, follow the in-app recovery instructions for the exact installed copy.
 
 File classification includes 15 categories. Embedded media in app bundles and recognized game libraries stays with its container. The scan legend shows the five largest categories and a remainder; the complete breakdown and per-category file filter are available in the UI. Classification is informational, not a cleanup recommendation.
+
+Completed and cancelled scan results are saved locally and restored on launch. The disk map supports folder navigation; file filters include size and modification age. Snapshots are dated and do not bypass file revalidation before cleanup. See [intelligent cleanup roadmap](docs/SMART-CLEANUP-PLAN-RU.md) for planned recommendation rules and competitor references.

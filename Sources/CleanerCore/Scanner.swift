@@ -62,7 +62,7 @@ public struct FileRecord: Identifiable, Codable, Hashable, Sendable {
     else { throw CleanerError.message("File changed since scanning: \(name). Scan again.") }
   }
 }
-public struct ScanReport: Sendable {
+public struct ScanReport: Codable, Sendable {
   public var files: [FileRecord] = []
   public var issues: [String] = []
   public var folders: [String: Int64] = [:]
@@ -70,8 +70,8 @@ public struct ScanReport: Sendable {
   public init() {}
   public var total: Int64 { files.reduce(0) { $0 + $1.bytes } }
 }
-public struct ScanProgress: Sendable {
-  public enum Phase: Sendable { case enumerating, sorting, finished, cancelled }
+public struct ScanProgress: Codable, Sendable {
+  public enum Phase: String, Codable, Sendable { case enumerating, sorting, finished, cancelled }
   public var phase: Phase = .enumerating
   public var files = 0
   public var directories = 0
@@ -154,14 +154,14 @@ public enum Scanner {
             snapshot.directories += 1
             continue
           }
-          let f = try FileRecord.read(url)
+          let f = try FileRecord.read(url.resolvingSymlinksInPath())
           let identity = "\(f.device):\(f.inode)"
           guard seen.insert(identity).inserted else { continue }
           result.files.append(f)
           snapshot.files += 1
           snapshot.bytes += f.bytes
           snapshot.categories[f.category, default: 0] += f.bytes
-          var parent = url.deletingLastPathComponent()
+          var parent = URL(fileURLWithPath: f.path).deletingLastPathComponent()
           while inside(parent.path, root.path) {
             result.folders[parent.path, default: 0] += f.bytes
             if parent.path == root.path { break }

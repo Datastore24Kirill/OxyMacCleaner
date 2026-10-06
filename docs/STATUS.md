@@ -1,11 +1,11 @@
-# Implementation status — 0.1.0 Preview
+# Implementation status — 0.1.6 Preview
 
 This milestone starts implementation of SPEC-RU.md. It does not claim full version-one acceptance.
 
 | Specification area | Current state | Remaining |
 |---|---|---|
 | Native UI / RU+EN / themes | Implemented | Full VoiceOver audit; error localization; empty-state refinement |
-| Scan / files / folder sizes | Implemented; manual roots, cancellation, exclusions, issue report | Treemap, date/type filters, incremental result streaming, large-volume benchmarks |
+| Scan / files / folder sizes | Implemented; disk/folder roots, cancellation, exclusions, issue report, saved snapshots, navigable treemap, category/size/modified-age filters | Incremental file-list streaming, crash checkpoints during scan, large-volume benchmarks |
 | Exact duplicates | Implemented; hash plus byte comparison; hard-link deduplication; keeper validation | APFS allocated-block accounting; large-run performance |
 | Archives | Extension-based filtering | Versions, grouping, configurable retention |
 | Xcode | DerivedData and archive inspection, read-only simctl inventory | Archive metadata/dSYM retention, active-build detection and supported runtime deletion |
@@ -69,3 +69,7 @@ Added a disk-access guide on first launch and each new version, read-only in-pro
 ## 0.1.5 update
 
 Successful disk-access checks now show a compact confirmation without recovery controls. Startup and scan skip the guide when access probes succeed. Restricted and unknown states retain recovery instructions. 28 local tests passed. Installed 0.1.5; macOS denied protected-directory access after replacing the ad-hoc signed app, so success UI is not claimed as manually validated with renewed permission.
+
+## 0.1.6 update
+
+Atomic local binary-plist snapshots preserve completed and cancelled scan reports, roots, progress and timestamp. Snapshot permissions are 0600 under a 0700 directory. Restored files retain original identities for pre-action revalidation. Disk index and persistence execute outside the main actor. Added proportional treemap and immediate-child navigation without nested double counting, plus size and modification-age filters. 32 tests pass, including snapshot round-trip/corruption/privacy, stale-file validation and map area/boundary checks. Installed UI verified with synthetic fixture, folder navigation and relaunch restoring the same result. Intelligent cleanup remains a documented roadmap in SMART-CLEANUP-PLAN-RU.md; directory quarantine remains next.

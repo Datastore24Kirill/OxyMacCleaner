@@ -14,6 +14,7 @@ import UserNotifications
           delegate.model = vm
           vm.scheduleReminder()
           vm.prepareDiskAccess()
+          vm.restoreScan()
         }
     }.windowStyle(.hiddenTitleBar).defaultSize(width: 1180, height: 800)
       .commands { CommandGroup(replacing: .newItem) {} }
@@ -59,6 +60,7 @@ struct RootView: View {
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
     ("overview", "Обзор", "Overview", "square.grid.2x2"),
+    ("map", "Карта диска", "Disk map", "square.grid.3x3.fill"),
     ("files", "Файлы и папки", "Files & folders", "externaldrive"),
     ("duplicates", "Дубликаты", "Duplicates", "square.on.square"),
     ("archives", "Архивы и загрузки", "Archives", "shippingbox"),
@@ -100,7 +102,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.5 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.6 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -115,9 +117,18 @@ struct RootView: View {
         if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
           ScanProgressView(progress: progress, active: vm.isScanning)
         }
+        if let date = vm.snapshotDate {
+          Text(
+            vm.t("Снимок от ", "Snapshot from ") + date.formatted()
+              + (vm.report.complete ? "" : vm.t(" · неполный обход", " · partial scan"))
+              + vm.t(". Данные могли измениться.", ". Files may have changed.")
+          )
+          .font(.caption).foregroundStyle(.secondary)
+        }
         Group {
           switch vm.page {
           case "overview": overview
+          case "map": DiskMapView().environmentObject(vm)
           case "files", "archives": files
           case "duplicates": duplicates
           case "developer": developer
@@ -277,6 +288,9 @@ struct RootView: View {
     vm.report.files.filter {
       (vm.page != "archives" || $0.category == "Archive")
         && (vm.categoryFilter == "all" || $0.category == vm.categoryFilter)
+        && $0.bytes >= Int64(vm.minimumMB) * 1_000_000
+        && (vm.olderThanDays == 0
+          || $0.modified < Date().addingTimeInterval(-Double(vm.olderThanDays) * 86400))
         && (vm.search.isEmpty || $0.path.localizedCaseInsensitiveContains(vm.search))
     }
   }
@@ -287,6 +301,20 @@ struct RootView: View {
         Text(vm.t("Все категории", "All categories")).tag("all")
         ForEach(FileCategory.allCases, id: \.rawValue) { kind in
           Text(vm.t(kind.russian, kind.english)).tag(kind.rawValue)
+        }
+      }
+      HStack {
+        Picker(vm.t("Размер", "Size"), selection: $vm.minimumMB) {
+          Text(vm.t("Любой", "Any")).tag(0)
+          Text("≥ 100 MB").tag(100)
+          Text("≥ 1 GB").tag(1000)
+          Text("≥ 10 GB").tag(10000)
+        }
+        Picker(vm.t("Не изменялись", "Unmodified for"), selection: $vm.olderThanDays) {
+          Text(vm.t("Любая дата", "Any date")).tag(0)
+          Text(vm.t("30 дней", "30 days")).tag(30)
+          Text(vm.t("90 дней", "90 days")).tag(90)
+          Text(vm.t("Год", "One year")).tag(365)
         }
       }
       TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search)
@@ -607,8 +635,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.5 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.5 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.6 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.6 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

@@ -34,6 +34,45 @@ import UserNotifications
   @Published var volumes: [ScanVolume] = Volumes.discover()
   @Published var volumeID = "/"
   @Published var report = ScanReport()
+  @Published var diskIndex = DiskIndex(report: ScanReport())
+  @Published var mapPath = "/"
+  @Published var snapshotDate: Date?
+  @Published var restoredSnapshot = false
+  @Published var minimumMB = 0
+  @Published var olderThanDays = 0
+  var scanStore: ScanStore { ScanStore(url: support.appendingPathComponent("Scans/latest.plist")) }
+  func restoreScan() {
+    guard !busy, snapshotDate == nil else { return }
+    busy = true
+    status = t("Загружаем прошлый результат…", "Loading previous scan…")
+    let store = scanStore
+    task = Task {
+      do {
+        let saved = try await Task.detached { try store.load() }.value
+        if let saved {
+          let index = await Task.detached { DiskIndex(report: saved.report) }.value
+          report = saved.report
+          scanProgress = saved.progress
+          roots = saved.roots
+          volumeID = saved.volumeID
+          mapPath = saved.roots.first?.path ?? "/"
+          diskIndex = index
+          snapshotDate = saved.date
+          restoredSnapshot = true
+          status = t(
+            "Загружен прошлый результат. Перед очисткой файлы проверяются заново.",
+            "Previous results loaded. Files are checked again before cleanup.")
+        } else {
+          status = ""
+        }
+      } catch {
+        self.error =
+          t("Не удалось открыть сохранённый результат: ", "Could not load saved scan: ")
+          + error.localizedDescription
+      }
+      busy = false
+    }
+  }
   @Published var scanProgress: ScanProgress?
   @Published var isScanning = false
   @Published var selected = Set<String>()
@@ -125,7 +164,7 @@ import UserNotifications
       }
     }
     if explicit != nil { volumeID = "custom" }
-    let chosen = explicit ?? roots
+    let chosen = (explicit ?? roots).map { $0.standardizedFileURL.resolvingSymlinksInPath() }
     guard !chosen.isEmpty else {
       chooseRoots()
       return
@@ -137,6 +176,10 @@ import UserNotifications
     selected = []
     duplicates = []
     report = ScanReport()
+    diskIndex = DiskIndex(report: ScanReport())
+    snapshotDate = nil
+    restoredSnapshot = false
+    mapPath = chosen.first?.path ?? "/"
     cancellation = Cancellation()
     let token = cancellation
     let mounted =
@@ -166,6 +209,24 @@ import UserNotifications
       final.issues = result.issues.count
       final.phase = result.complete ? .finished : .cancelled
       scanProgress = final
+      status = t("Сохраняем результат и строим карту…", "Saving results and building map…")
+      let saved = SavedScan(roots: chosen, volumeID: volumeID, report: result, progress: final)
+      let store = scanStore
+      let prepared = await Task.detached {
+        let index = DiskIndex(report: result)
+        do {
+          try store.save(saved)
+          return (index, Optional<String>.none)
+        } catch { return (index, Optional(error.localizedDescription)) }
+      }.value
+      diskIndex = prepared.0
+      snapshotDate = saved.date
+      if let failure = prepared.1 {
+        self.error =
+          t(
+            "Результат доступен в окне, но не сохранён: ",
+            "Results are available but could not be saved: ") + failure
+      }
       busy = false
       status =
         result.complete
