@@ -33,10 +33,10 @@ public enum DerivedData {
   }
   public static func protectedContent(_ path: String) -> Bool {
     let url = URL(fileURLWithPath: path)
-    let blocked: Set<String> = [".git", ".ssh", ".gnupg", "SourcePackages", "Keychains"]
-    return !blocked.isDisjoint(with: url.pathComponents) || url.lastPathComponent == ".env"
-      || url.lastPathComponent.hasPrefix(".env.")
-      || ["p8", "p12", "pem", "key", "mobileprovision"].contains(url.pathExtension.lowercased())
+    let blocked: Set<String> = [".git", ".hg", ".svn", ".ssh", ".gnupg", ".aws", ".azure", "sourcepackages", "keychains"]
+    return !blocked.isDisjoint(with: url.pathComponents.map { $0.lowercased() }) || url.lastPathComponent.lowercased() == ".env"
+      || url.lastPathComponent.lowercased().hasPrefix(".env.")
+      || ["p8", "p12", "pfx", "pem", "key", "keychain", "keychain-db", "mobileprovision", "provisionprofile"].contains(url.pathExtension.lowercased())
   }
   public static func inventory(
     base: URL = root, cancellation: Cancellation = Cancellation(), projectName: String? = nil

@@ -42,30 +42,62 @@ public final class QuarantineStore: @unchecked Sendable {
       }.sorted { $0.date > $1.date }
   }
   public static func protected(_ path: String) -> Bool {
-    let components = URL(fileURLWithPath: path).pathComponents
+    protected(path, archiveStorage: false)
+  }
+  // Only the dedicated archive operation may enter the standard Xcode Archives tree.
+  private static func protected(_ path: String, archiveStorage: Bool) -> Bool {
+    let url = URL(fileURLWithPath: path).standardizedFileURL
+    let components = url.pathComponents.map { $0.lowercased() }
+    let archives = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Developer/Xcode/Archives").path
+    if components.contains("library") && !(archiveStorage && Scanner.inside(url.path, archives)) {
+      return true
+    }
     let blocked: Set<String> = [
-      ".git", ".ssh", ".gnupg", ".aws", ".azure", "Keychains", "MobileDevice", "CoreSimulator",
-      ".codex", ".claude", ".gemini", ".continue", ".aider", ".ollama", ".config",
-      "Application Support", "workspaceStorage", "globalStorage",
+      ".git", ".svn", ".hg", ".ssh", ".gnupg", ".aws", ".azure", "keychains",
+      "mobiledevice", "coresimulator", ".codex", ".claude", ".gemini", ".continue",
+      ".aider", ".ollama", ".config", ".cursor", ".windsurf", ".vscode", ".kilo",
+      ".opencode", ".local", "application support", "workspacestorage", "globalstorage",
+      "backups.backupdb", ".timemachine", ".documentrevisions-v100",
     ]
-    if components.contains(where: {
-      $0.hasSuffix(".app") || $0.hasSuffix(".xcarchive") || $0.hasSuffix(".framework")
-        || $0.hasSuffix(".bundle")
-    }) {
+    let packages: Set<String> = [
+      "app", "xcarchive", "framework", "bundle", "xcodeproj", "xcworkspace", "playground",
+      "xcassets", "dsym", "photoslibrary", "photolibrary", "aplibrary", "musiclibrary",
+      "sparsebundle", "backupbundle", "vmwarevm", "pvm",
+    ]
+    if !blocked.isDisjoint(with: components)
+      || components.contains(where: { packages.contains(URL(fileURLWithPath: $0).pathExtension) }) {
       return true
     }
-    if !blocked.isDisjoint(with: components) { return true }
-    let name = URL(fileURLWithPath: path).lastPathComponent.lowercased()
+    let name = url.lastPathComponent.lowercased()
     if name == ".env" || name.hasPrefix(".env.")
-      || [
-        "key", "pem", "p12", "p8", "mobileprovision", "cer", "swift", "m", "h", "py", "js", "ts",
-        "rs", "go",
-      ].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
-    {
+      || ["package.swift", "package.resolved", "podfile", "podfile.lock", "cartfile",
+          "cartfile.resolved", ".netrc", ".npmrc", ".pypirc"].contains(name)
+      || ["key", "pem", "p12", "pfx", "p8", "mobileprovision", "provisionprofile", "cer",
+          "keychain", "keychain-db", "swift", "m", "mm", "h", "c", "cc", "cpp", "hpp",
+          "py", "js", "jsx", "ts", "tsx", "rs", "go", "kt", "java", "dart", "cs",
+          "pbxproj", "xcconfig", "entitlements", "storyboard", "xib", "sparseimage"
+      ].contains(url.pathExtension.lowercased()) {
       return true
     }
-    return ["/System", "/Library", "/usr", "/bin", "/sbin", "/private"].contains {
-      Scanner.inside(path, $0)
+    // Apply system-root rules to mounted disks as well as the startup disk.
+    let systemPath = components.count >= 3 && components[1] == "volumes"
+      ? "/" + components.dropFirst(3).joined(separator: "/") : url.path.lowercased()
+    return ["/system", "/library", "/usr", "/bin", "/sbin", "/private", "/dev",
+            "/etc", "/var", "/applications", "/opt"].contains {
+      Scanner.inside(systemPath, $0)
+    }
+  }
+  private static func projectDirectory(_ directory: URL) -> Bool {
+    let fm = FileManager.default
+    let markers = [".git", ".hg", ".svn", "Package.swift", "package.json", "Cargo.toml",
+                   "pyproject.toml", "go.mod", "pubspec.yaml", "build.gradle", "CMakeLists.txt"]
+    if markers.contains(where: { fm.fileExists(atPath: directory.appendingPathComponent($0).path) }) {
+      return true
+    }
+    // Protect assets/configuration alongside an Xcode project, even without a Git repository.
+    return ((try? fm.contentsOfDirectory(atPath: directory.path)) ?? []).contains {
+      ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: $0).pathExtension.lowercased())
     }
   }
   public func move(_ file: FileRecord, protectedPaths: [String] = []) throws -> QuarantineEntry {
@@ -80,7 +112,7 @@ public final class QuarantineStore: @unchecked Sendable {
     else { throw CleanerError.message("Protected file; no changes made") }
     var parent = source.deletingLastPathComponent()
     while parent.path != "/" {
-      if FileManager.default.fileExists(atPath: parent.appendingPathComponent(".git").path) {
+      if Self.projectDirectory(parent) {
         throw CleanerError.message("Project files are analysis-only in this preview")
       }
       parent.deleteLastPathComponent()
@@ -149,7 +181,7 @@ public final class QuarantineStore: @unchecked Sendable {
     let archives = library.appendingPathComponent("Developer/Xcode/Archives")
     guard source.pathExtension == "xcarchive",
       !pinned.contains(path), !retained.contains(path),
-      !Self.protected(source.deletingLastPathComponent().path),
+      !Self.protected(source.deletingLastPathComponent().path, archiveStorage: true),
       !Scanner.inside(path, library.path) || Scanner.inside(path, archives.path),
       source.resolvingSymlinksInPath() == source,
       !Scanner.inside(path, root.path), !Scanner.inside(root.path, path),
@@ -158,7 +190,7 @@ public final class QuarantineStore: @unchecked Sendable {
     else { throw CleanerError.message("Protected or retained archive cannot be deleted") }
     var ancestor = source
     while ancestor.path != "/" {
-      guard !fm.fileExists(atPath: ancestor.appendingPathComponent(".git").path) else {
+      guard !Self.projectDirectory(ancestor) else {
         throw CleanerError.message("Project directories are analysis-only")
       }
       ancestor.deleteLastPathComponent()
@@ -216,7 +248,7 @@ public final class QuarantineStore: @unchecked Sendable {
       ).path
       let parent = source.deletingLastPathComponent().path
       archiveAllowed =
-        source.pathExtension == "xcarchive" && !Self.protected(parent)
+        source.pathExtension == "xcarchive" && !Self.protected(parent, archiveStorage: true)
         && (!Scanner.inside(
           path, fm.homeDirectoryForCurrentUser.appendingPathComponent("Library").path)
           || Scanner.inside(path, archiveRoot))
@@ -244,7 +276,7 @@ public final class QuarantineStore: @unchecked Sendable {
     else { throw CleanerError.message("Protected directory") }
     var ancestor = source
     while ancestor.path != "/" {
-      guard !fm.fileExists(atPath: ancestor.appendingPathComponent(".git").path) else {
+      guard !Self.projectDirectory(ancestor) else {
         throw CleanerError.message("Project directories are analysis-only")
       }
       ancestor.deleteLastPathComponent()

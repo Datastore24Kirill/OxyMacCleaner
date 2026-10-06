@@ -139,3 +139,8 @@ Added direct cleanup for selected allowlisted DerivedData indexes/intermediates/
 83 tests pass, including no-backup/no-dSYM archive deletion, no-backup quarantine restore/erase, legacy metadata decoding, ten-minute boundary behavior and direct cache deletion protection. Destructive tests use unique synthetic fixtures only.
 
 Live UI verification with two synthetic archives lacking dSYM confirmed that backup-off reaches a single named Delete/Cancel confirmation without a folder chooser; backup-on opens the optional destination chooser. Both were cancelled and both synthetic archives remained intact. The fixture was removed after closing the app. DerivedData inventory loaded automatically and its direct cleanup/More actions rendered correctly. Menus were constrained to compact width. Inventory auto-loading waits for an existing operation such as saved-snapshot restoration and attempts once per presentation to prevent error retry loops. Installed 0.1.14 build 15 with backups of previous app/scan; the saved user scan and retention preferences are retained. No real user data was cleaned; existing full-disk access denial after ad-hoc replacement remains unresolved.
+
+
+## 0.1.15 — аудит безопасности, 2026-10-06
+
+Проверены публичные правила MacPaw и рекомендации Apple по архивам. Закрыта общая очистка файлов пользовательской Library; добавлена защита фототек, dSYM, пакетов проектов, ключей и ресурсов проектов без Git. Правила регистра унифицированы. Специальные операции архивов и DerivedData сохранены без обязательной копии. 87 тестов прошли. Подробности и границы: [SAFETY-POLICY-RU.md](SAFETY-POLICY-RU.md).

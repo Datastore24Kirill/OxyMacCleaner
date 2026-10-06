@@ -112,7 +112,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.14 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.15 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -677,8 +677,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.14 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.14 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.15 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.15 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

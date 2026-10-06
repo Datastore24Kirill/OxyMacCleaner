@@ -6,7 +6,7 @@ final class CoreTests: XCTestCase {
   var temp: URL!
   override func setUpWithError() throws {
     temp = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-      "Library/Caches/OxyMacCleanerTests"
+      "Downloads/Caches/OxyMacCleanerTests"
     ).appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
   }
