@@ -4,7 +4,9 @@ import UserNotifications
 
 @MainActor final class AppModel: ObservableObject {
   @Published var page = "overview"
-  @Published var roots: [URL] = []
+  @Published var roots: [URL] = [URL(fileURLWithPath: "/")]
+  @Published var volumes: [ScanVolume] = Volumes.discover()
+  @Published var volumeID = "/"
   @Published var report = ScanReport()
   @Published var selected = Set<String>()
   @Published var duplicates: [[FileRecord]] = []
@@ -53,6 +55,15 @@ import UserNotifications
     try? logs.joined(separator: "\n").write(
       to: support.appendingPathComponent("operations.log"), atomically: true, encoding: .utf8)
   }
+  func refreshVolumes() { volumes = Volumes.discover() }
+  func selectVolume(_ id: String) {
+    guard !busy else { return }
+    volumeID = id
+    if let volume = volumes.first(where: { $0.id == id }) {
+      roots = [volume.url]
+      selected = []
+    }
+  }
   func chooseRoots() {
     let p = NSOpenPanel()
     p.canChooseDirectories = true
@@ -60,6 +71,7 @@ import UserNotifications
     p.allowsMultipleSelection = true
     if p.runModal() == .OK {
       roots = p.urls
+      volumeID = "custom"
       selected = []
     }
   }
@@ -68,6 +80,16 @@ import UserNotifications
   }
   func scan(_ explicit: [URL]? = nil) {
     guard !busy else { return }
+    if explicit == nil && volumeID != "custom" {
+      refreshVolumes()
+      guard volumes.contains(where: { $0.id == volumeID }) else {
+        error = t(
+          "Диск отключён. Подключите его или выберите другой.",
+          "The disk is disconnected. Reconnect it or choose another.")
+        return
+      }
+    }
+    if explicit != nil { volumeID = "custom" }
     let chosen = explicit ?? roots
     guard !chosen.isEmpty else {
       chooseRoots()
@@ -80,7 +102,10 @@ import UserNotifications
     report = ScanReport()
     cancellation = Cancellation()
     let token = cancellation
-    let excluded = exclusions + [support.path]
+    let mounted =
+      FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? []
+    let excluded =
+      exclusions + [support.path] + chosen.flatMap { Volumes.exclusions(for: $0, mounted: mounted) }
     status = t("Сканирование…", "Scanning…")
     task = Task {
       let result = await Task.detached {
@@ -93,7 +118,11 @@ import UserNotifications
       busy = false
       status =
         result.complete
-        ? t("Сканирование завершено", "Scan complete")
+        ? (result.issues.isEmpty
+          ? t("Сканирование завершено", "Scan complete")
+          : t(
+            "Сканирование завершено с пропусками. См. отчёт.",
+            "Scan finished with skipped items. See report."))
         : t("Остановлено. Результат неполный", "Stopped. Partial results")
       log(
         "Scan: \(result.files.count) files, \(result.issues.count) issues, complete=\(result.complete)"

@@ -1,13 +1,15 @@
+<p align="center"><img src="docs/branding/oxymac-cleaner-neon-v1.png" width="180" alt="OxyMac Cleaner logo"></p>
+
 # OxyMac Cleaner
 
 Native, local-first Mac cleanup and developer workspace inspection. **Free and open source.**
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.0 Preview — implemented
+## 0.1.1 Preview — implemented
 
 - Native SwiftUI app for macOS 14+ on Apple Silicon, Russian/English UI, light/dark/system appearance.
-- Explicit folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
+- Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
 - Exact duplicate detection using size, SHA-256 and byte comparison; hard links and symlinks are handled conservatively.
 - Individual-file quarantine, integrity-checked restoration, destination conflict protection and separately confirmed permanent deletion.
 - Five-day quarantine reminder support (notifications require user permission).
@@ -21,13 +23,13 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.1-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
 ## Safe first use
 
-1. Select a small test folder and scan it. Nothing is moved automatically.
+1. Choose a disk (the startup disk is selected by default) or use the optional folder picker for a small test. Nothing is moved automatically.
 2. Review files and duplicates; keep at least one copy per duplicate group.
 3. Moving a file into quarantine **does not free its disk space**. Restore first to verify the workflow on a disposable file.
 4. Project files inside Git repositories, package internals, agent storage, credentials and system paths are excluded from cleanup in this preview. Folder cleanup and cross-volume quarantine are unavailable.
@@ -54,3 +56,5 @@ The test suite creates its own UUID-scoped files under `~/Library/Caches/OxyMacC
 - `docs/STATUS.md`: shipped behavior versus planned scope.
 
 MIT license. Ollama and downloaded models are separate software with their own licenses; no model weights are included in the app.
+
+Disk selection follows the volume-first pattern described in [CleanMyMac Space Lens](https://macpaw.com/support/cleanmymac/knowledgebase/space-lens). Startup scanning excludes other mounted volumes and the duplicate `/System/Volumes` namespace. Protected/unreadable items are reported; the app never claims full coverage without access. APFS capacity may be shared with other volumes.

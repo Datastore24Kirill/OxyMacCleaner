@@ -49,3 +49,7 @@ All 11 agents currently use the same **explicit text-export import**, not automa
 2. Versioned read-only session adapters, starting with Codex and Claude Code; real local-model fixtures.
 3. Complete UI/accessibility and large-scan performance verification.
 4. Automatic update installation with rollback; signed distribution when a certificate is available.
+
+## 0.1.1 update
+
+Approved neon logo is now used by the packaged app, sidebar and README. Startup-disk selection is the default, with local mounted-volume discovery, usage bar and optional folder selection. The startup namespace skips `/System/Volumes`, `/Volumes`, `/dev` and other nested mounts to avoid duplicate traversal. Volume capacity is reported by macOS and may be shared in an APFS container. No whole-disk user-data scan was run during implementation; selection and boundary policy were tested without cleaning data.

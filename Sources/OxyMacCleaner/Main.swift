@@ -72,8 +72,12 @@ struct RootView: View {
     HStack(spacing: 0) {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Image(systemName: "sparkles.rectangle.stack.fill").font(.largeTitle).foregroundStyle(
-            .mint)
+          Image(
+            nsImage: NSImage(
+              contentsOf: Bundle.main.url(forResource: "BrandIcon", withExtension: "png")
+                ?? URL(fileURLWithPath: "/nonexistent")) ?? NSImage()
+          ).resizable().scaledToFit().frame(width: 58, height: 58).accessibilityLabel(
+            "OxyMac Cleaner")
           VStack(alignment: .leading) {
             Text("OxyMac").font(.title2.bold())
             Text("CLEANER").font(.caption.monospaced()).tracking(3)
@@ -94,7 +98,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.0 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.1 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -129,7 +133,9 @@ struct RootView: View {
           Circle().fill(vm.busy ? Color.orange : Color.mint).frame(width: 6, height: 6)
           Text(
             vm.status.isEmpty
-              ? vm.t("Готово. Выберите папку для проверки.", "Ready. Choose a folder to inspect.")
+              ? vm.t(
+                "Готово. Выберите диск и запустите сканирование.",
+                "Ready. Select a disk and start scanning.")
               : vm.status
           ).font(.caption).foregroundStyle(.secondary).lineLimit(2)
           Spacer()
@@ -158,10 +164,54 @@ struct RootView: View {
     ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
   }
   var scanButtons: some View {
-    HStack {
-      Button(vm.t("Выбрать папки", "Choose folders")) { vm.chooseRoots() }
-      Button(vm.t("Сканировать", "Scan")) { vm.scan() }.buttonStyle(.borderedProminent).tint(.teal)
-        .disabled(vm.roots.isEmpty || vm.busy)
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Image(
+          systemName: vm.volumes.first(where: { $0.id == vm.volumeID })?.internalDisk == false
+            ? "externaldrive.fill" : "internaldrive.fill"
+        ).font(.title).foregroundStyle(.teal)
+        Picker(
+          vm.t("Диск", "Disk"),
+          selection: Binding(get: { vm.volumeID }, set: { vm.selectVolume($0) })
+        ) {
+          ForEach(vm.volumes) { volume in Text(volume.name).tag(volume.id) }
+          if vm.volumeID == "custom" {
+            Text(vm.t("Выбранная папка", "Selected folder")).tag("custom")
+          }
+        }.labelsHidden().frame(maxWidth: 340)
+        Button {
+          vm.refreshVolumes()
+        } label: {
+          Image(systemName: "arrow.clockwise")
+        }.help(vm.t("Обновить список дисков", "Refresh disks"))
+        Spacer()
+        Button(
+          vm.t(
+            vm.volumeID == "custom" ? "Сканировать папку" : "Сканировать диск",
+            vm.volumeID == "custom" ? "Scan folder" : "Scan disk")
+        ) { vm.scan() }.buttonStyle(.borderedProminent).tint(.teal)
+      }.disabled(vm.busy)
+      if let disk = vm.volumes.first(where: { $0.id == vm.volumeID }) {
+        ProgressView(value: Double(disk.used), total: Double(max(1, disk.total))).tint(.teal)
+        Text(
+          vm.t("Занято: ", "Used: ") + size(disk.used) + vm.t(" · Свободно: ", " · Available: ")
+            + size(disk.available) + vm.t(" · Всего: ", " · Total: ") + size(disk.total)
+        ).font(.caption).foregroundStyle(.secondary)
+      }
+      HStack {
+        Button(vm.t("Выбрать отдельную папку…", "Choose a specific folder…")) { vm.chooseRoots() }
+          .buttonStyle(.link).disabled(vm.busy)
+        Spacer()
+        Button(vm.t("Доступ к диску", "Disk access")) {
+          NSWorkspace.shared.open(
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+          )
+        }.buttonStyle(.link)
+      }
+      note(
+        "Проверяем доступные данные выбранного диска. Защищённые macOS объекты будут отмечены в отчёте; для расширенного сканирования может понадобиться полный доступ к диску.",
+        "Scans accessible data on the selected disk. macOS-protected items appear in the report; broader coverage may require Full Disk Access."
+      )
     }
   }
   var overview: some View {
@@ -527,8 +577,8 @@ struct RootView: View {
       Section(vm.t("Доступ и данные", "Access & data")) {
         Text(
           vm.t(
-            "Выбирайте папки для сканирования. Недоступные объекты будут перечислены в отчёте. Доступ к записи экрана не нужен.",
-            "Choose folders to scan. Inaccessible items appear in the report. Screen recording is not required."
+            "Выбирайте диск или отдельную папку для сканирования. Недоступные объекты будут перечислены в отчёте. Доступ к записи экрана не нужен.",
+            "Choose a disk or specific folder to scan. Inaccessible items appear in the report. Screen recording is not required."
           ))
         Button(vm.t("Папка данных приложения", "Application data folder")) {
           vm.reveal(vm.support.path)
@@ -537,8 +587,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.0 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.0 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.1 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.1 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)
