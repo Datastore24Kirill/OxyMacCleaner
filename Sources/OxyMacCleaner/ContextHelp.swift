@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Action help shared by hover tooltips, VoiceOver and the section guide.
 enum HelpTopic {
-  case symbols, backup, archiveBatch, archiveQuarantine, retention, pin, archiveRead, archiveRoot,
+  case symbols, backup, archiveDelete, archiveBatch, archiveQuarantine, retention, pin, archiveRead,
+    archiveRoot,
     beyondFilter, search, previous, next, finder, stop, volume, refreshVolumes, scan, folder,
     access, category, size, age, quarantine, protect, duplicates, selectDuplicate, developerTab,
     simRead, simDelete, simUnavailable, clearSelection, simOld, selectDevice, selectRuntime,
@@ -23,6 +24,11 @@ enum HelpTopic {
       return (
         "Сохраняет весь архив .xcarchive в выбранную папку и проверяет копию по SHA-256. Оригинал остаётся на месте. Копия занимает дополнительное место; для экономии на этом диске выберите другой диск.",
         "Copies the entire .xcarchive to a folder you choose and verifies it using SHA-256. The original stays in place. The copy needs extra space; choose another disk to save space on this one."
+      )
+    case .archiveDelete:
+      return (
+        "Все архивы сверх лимита, включая скрытые фильтром: создаёт или проверяет полные копии, затем отдельно подтверждает удаление оригиналов без карантина и Корзины. Защищённые и не прошедшие проверки архивы пропускаются. Восстановление — вручную из копии. Закройте Xcode и сборки.",
+        "All archives beyond the limit, including those hidden by filters: creates or verifies full backups, then separately confirms deleting originals without quarantine or Trash. Protected archives and failed checks are skipped. Restore manually from backup. Close Xcode and builds."
       )
     case .archiveBatch:
       return (
@@ -477,10 +483,9 @@ struct SectionHelpView: View {
           ("1. Задайте лимит и защиту", "1. Set retention and protection", .retention),
           ("Символы отладки: dSYM и UUID", "Debug symbols: dSYM and UUID", .symbols),
           ("Резервная копия — зачем она", "Why keep a backup", .backup),
-          (
-            "2. Перенесите архивы сверх лимита", "2. Quarantine archives beyond the limit",
-            .archiveBatch
-          ), ("3. Освободите место в карантине", "3. Free space in Quarantine", .eraseArchives),
+          ("2. Удалите сверх лимита", "2. Delete beyond the limit", .archiveDelete),
+          ("Альтернатива: карантин", "Alternative: quarantine", .archiveBatch),
+          ("Если выбрали карантин", "If you chose quarantine", .eraseArchives),
         ]
       }
     case "agents":

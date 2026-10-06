@@ -151,7 +151,9 @@ extension AppModel {
       scheduleReminder()
     }
   }
-  func quarantineExcessArchives() {
+  func quarantineExcessArchives() { processExcessArchives(deleteImmediately: false) }
+  func deleteExcessArchives() { processExcessArchives(deleteImmediately: true) }
+  private func processExcessArchives(deleteImmediately: Bool) {
     guard !busy else { return }
     let panel = NSOpenPanel()
     panel.canChooseDirectories = true
@@ -178,6 +180,7 @@ extension AppModel {
     task = Task {
       var messages: [String] = []
       do {
+        if deleteImmediately { try DeveloperActivity.assertIdle() }
         let fresh = await Task.detached { XcodeArchives.scan(root: root, cancellation: token) }
           .value
         guard fresh.complete, fresh.issues.isEmpty else {
@@ -198,8 +201,8 @@ extension AppModel {
                 fromByteCount: candidates.reduce(0) { $0 + $1.bytes }, countStyle: .file) + "\n"
               + backupRoot.path + "\n"
               + t(
-                "Сначала создадим или проверим полные копии. Потом покажем число архивов, прошедших проверки, и запросим перенос. Архивы с ошибками будут пропущены.",
-                "First create or verify full backups. Then show the passing count and ask to transfer. Archives failing checks will be skipped."
+                "Сначала создадим или проверим полные копии. Потом покажем число архивов, прошедших проверки, и отдельно запросим выбранное действие. Архивы с ошибками будут пропущены. Копии на этом же диске тоже занимают место.",
+                "First create or verify full backups. Then show the passing count and confirm the chosen action separately. Archives failing checks are skipped. Backups on this disk also occupy space."
               ))
         else {
           busy = false
@@ -240,14 +243,24 @@ extension AppModel {
         }
         guard
           confirm(
-            t("Переместить проверенные архивы?", "Transfer verified archives?"),
+            deleteImmediately
+              ? t("Удалить проверенные архивы навсегда?", "Permanently delete verified archives?")
+              : t("Переместить проверенные архивы?", "Transfer verified archives?"),
             "\(plans.count) · "
               + ByteCountFormatter.string(
                 fromByteCount: plans.reduce(0) { $0 + $1.manifest.bytes }, countStyle: .file) + "\n"
-              + t(
-                "Копии проверены. Закройте Xcode и сборки. После переноса архивы исчезнут из Organizer, но их можно восстановить из карантина. Место освободится только после отдельного окончательного удаления.",
-                "Backups verified. Close Xcode and builds. Archives will disappear from Organizer but can be restored from quarantine. Space is freed only after separate permanent deletion."
-              ))
+              + backupRoot.path + "\n"
+              + (deleteImmediately
+                ? t(
+                  "Копии проверены. Закройте Xcode и сборки. Оригиналы будут удалены сразу, БЕЗ карантина и Корзины. Архивы исчезнут из Organizer. Восстановить их можно только вручную из указанных резервных копий. Копии сохраняются. Объём выше — логический, реальное освобождение места может отличаться.",
+                  "Backups verified. Close Xcode and builds. Originals will be deleted immediately, WITHOUT quarantine or Trash. They disappear from Organizer. Recovery requires manually restoring the retained backups. The size above is logical; actual reclaimed space may differ."
+                )
+                : t(
+                  "Копии проверены. Закройте Xcode и сборки. После переноса архивы исчезнут из Organizer, но их можно восстановить из карантина. Место освободится только после отдельного окончательного удаления.",
+                  "Backups verified. Close Xcode and builds. Archives disappear from Organizer but can be restored from quarantine. Space is freed only after permanent deletion."
+                )),
+            destructive: deleteImmediately)
+
         else {
           busy = false
           developerResult = messages.joined(separator: "\n")
@@ -258,7 +271,10 @@ extension AppModel {
         let excluded = exclusions
         for (index, plan) in plans.enumerated() {
           try token.check()
-          status = t("Перенос архивов: ", "Transferring archives: ") + "\(index + 1)/\(plans.count)"
+          status =
+            (deleteImmediately
+              ? t("Удаление архивов: ", "Deleting archives: ")
+              : t("Перенос архивов: ", "Transferring archives: ")) + "\(index + 1)/\(plans.count)"
           do {
             _ = try await Task.detached {
               let current = XcodeArchives.scan(root: root, cancellation: token)
@@ -269,22 +285,39 @@ extension AppModel {
               guard rules[plan.source.path] == .review else {
                 throw CleanerError.message("Archive is retained")
               }
-              return try store.moveArchive(
-                plan, pinned: pins, retained: Set(rules.filter { $0.value != .review }.map(\.key)),
-                protectedPaths: excluded, cancellation: token)
+              let retained = Set(rules.filter { $0.value != .review }.map(\.key))
+              if deleteImmediately {
+                try store.deleteArchive(
+                  plan, pinned: pins, retained: retained,
+                  protectedPaths: excluded, cancellation: token)
+              } else {
+                _ = try store.moveArchive(
+                  plan, pinned: pins, retained: retained,
+                  protectedPaths: excluded, cancellation: token)
+              }
             }.value
             archiveInventory.archives.removeAll { $0.path == plan.source.path }
-            messages.append(plan.source.lastPathComponent + ": " + t("в карантине", "quarantined"))
+            archiveSymbols.removeValue(forKey: plan.source.path)
+            messages.append(
+              plan.source.path + ": "
+                + (deleteImmediately
+                  ? t("удалён; копия: ", "deleted; backup: ") + plan.backup.path
+                  : t("в карантине", "quarantined")))
           } catch {
             messages.append(plan.source.lastPathComponent + ": " + error.localizedDescription)
           }
         }
       } catch { messages.append(error.localizedDescription) }
+      let updated = await Task.detached {
+        XcodeArchives.scan(root: root, cancellation: Cancellation())
+      }.value
+      archiveInventory = updated
+      archiveScanDate = Date()
       developerResult = messages.joined(separator: "\n")
       log(developerResult)
       entries = store.entries()
       busy = false
-      scheduleReminder()
+      if !deleteImmediately { scheduleReminder() }
       status = t(
         "Обработка архивов завершена. См. отчёт.", "Archive processing complete. See report.")
     }

@@ -129,6 +129,60 @@ public final class QuarantineStore: @unchecked Sendable {
       plan.source, expected: plan.manifest, protectedPaths: protectedPaths,
       cancellation: cancellation, archivePlan: plan)
   }
+  /// Explicit permanent deletion after a separately confirmed, verified backup plan.
+  /// No quarantine payload is created; recovery requires the retained backup.
+  public func deleteArchive(
+    _ plan: ArchiveTransferPlan, pinned: Set<String>, retained: Set<String>,
+    protectedPaths: [String] = [], cancellation: Cancellation = Cancellation(),
+    idle: () throws -> Void = DeveloperActivity.assertIdle
+  ) throws {
+    lock.lock()
+    defer { lock.unlock() }
+    try cancellation.check()
+    try idle()
+    let fm = FileManager.default
+    let source = plan.source.standardizedFileURL
+    let path = source.path
+    let library = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library")
+    let archives = library.appendingPathComponent("Developer/Xcode/Archives")
+    guard source.pathExtension == "xcarchive",
+      !pinned.contains(path), !retained.contains(path),
+      !Self.protected(source.deletingLastPathComponent().path),
+      !Scanner.inside(path, library.path) || Scanner.inside(path, archives.path),
+      source.resolvingSymlinksInPath() == source,
+      !Scanner.inside(path, root.path), !Scanner.inside(root.path, path),
+      !Scanner.inside(plan.backup.path, root.path),
+      !Scanner.inside(plan.backup.path, path), !Scanner.inside(path, plan.backup.path)
+    else { throw CleanerError.message("Protected, retained or unbacked archive cannot be deleted") }
+    var ancestor = source
+    while ancestor.path != "/" {
+      guard !fm.fileExists(atPath: ancestor.appendingPathComponent(".git").path) else {
+        throw CleanerError.message("Project directories are analysis-only")
+      }
+      ancestor.deleteLastPathComponent()
+    }
+    try ArchiveTransfer.validate(plan, cancellation: cancellation)
+    let actual = try DirectoryManifest.capture(source, cancellation: cancellation) { candidate in
+      guard
+        !protectedPaths.contains(where: {
+          Scanner.inside(candidate, $0) || Scanner.inside($0, candidate)
+        })
+      else { throw CleanerError.message("Archive contains excluded data") }
+    }
+    guard actual == plan.manifest else {
+      throw CleanerError.message("Archive changed after preview; deletion blocked")
+    }
+    try idle()
+    try cancellation.check()
+    // Cancellation is observed between archives, never during recursive deletion.
+    do {
+      try fm.removeItem(at: source)
+    } catch {
+      throw CleanerError.message(
+        "Archive deletion failed and may be partial. Retained backup: " + plan.backup.path
+          + ". " + error.localizedDescription)
+    }
+  }
   public func moveDerivedData(
     _ plan: DerivedDataPlan, protectedPaths: [String] = [],
     cancellation: Cancellation = Cancellation(),

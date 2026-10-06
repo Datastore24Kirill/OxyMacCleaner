@@ -40,14 +40,17 @@ struct XcodeArchiveView: View {
             + ByteCountFormatter.string(
               fromByteCount: beyond.reduce(0) { $0 + $1.bytes }, countStyle: .file))
         Spacer()
-        Button(vm.t("Все сверх лимита → карантин…", "Quarantine all beyond limit…")) {
+        Button(vm.t("Удалить сверх лимита…", "Delete beyond limit…"), role: .destructive) {
+          vm.deleteExcessArchives()
+        }.oxyHelp(.archiveDelete).disabled(vm.busy || beyond.isEmpty)
+        Button(vm.t("В карантин…", "Quarantine…")) {
           vm.quarantineExcessArchives()
         }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
       }
       Text(
         vm.t(
-          "Общая кнопка сначала создаст или проверит копии в выбранной папке, затем предложит перенос. Для освобождения места откройте «Карантин» и подтвердите окончательное удаление. На этом диске копии тоже занимают место.",
-          "The batch action first creates or verifies backups in a chosen folder, then offers transfer. To free space, open Quarantine and confirm permanent deletion. Backups on this disk also take space."
+          "Оба действия сначала создают или проверяют полные резервные копии. «Удалить сверх лимита» удаляет оригиналы без карантина после отдельного подтверждения. Карантин — вариант с восстановлением из приложения. Копии на этом диске тоже занимают место.",
+          "Both actions first create or verify full backups. Delete beyond limit removes originals without quarantine after separate confirmation. Quarantine offers in-app restoration. Backups on this disk also take space."
         )
       ).font(.caption).foregroundStyle(.secondary)
       DisclosureGroup(
@@ -58,8 +61,8 @@ struct XcodeArchiveView: View {
           Text(vm.t(HelpTopic.backup.text.ru, HelpTopic.backup.text.en))
           Text(
             vm.t(
-              "Порядок очистки: резервная копия → карантин → окончательное удаление. Копию выпущенной версии сохраните для разбора будущих сбоев.",
-              "Cleanup order: backup → quarantine → permanent deletion. Keep released-version backups for diagnosing future crashes."
+              "Выберите: проверенная копия → прямое удаление или копия → карантин → удаление позже. После прямого удаления восстановление возможно только вручную из копии. Сохраните её для разбора будущих сбоев.",
+              "Choose: verified backup → direct deletion, or backup → quarantine → delete later. Direct deletion requires manual recovery from backup. Keep it for future crash diagnosis."
             ))
         }.font(.callout).foregroundStyle(.secondary).padding(.top, 6)
       }.oxyHelp(.disclosure)

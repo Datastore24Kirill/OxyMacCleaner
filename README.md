@@ -6,7 +6,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.12 Preview — implemented
+## 0.1.13 Preview — implemented
 
 - Russian and English action tooltips, VoiceOver hints and a contextual “How to use” guide on every screen. Archive symbol checks and full backups now have explicit names and explanations.
 
@@ -15,7 +15,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 - Exact duplicate detection using size, SHA-256 and byte comparison; hard links and symlinks are handled conservatively.
 - Individual-file quarantine, integrity-checked restoration, destination conflict protection and separately confirmed permanent deletion.
 - Project-associated DerivedData intermediates/index/log caches can be quarantined after conservative Xcode/build-process and ten-minute write checks. SourcePackages and built products are excluded.
-- Batch archive backup/quarantine beyond retention, with a separate batch permanent-delete action in Quarantine.
+- Batch archive cleanup beyond retention: verified full backups followed by separately confirmed direct deletion, or optional quarantine. Protected archives, active builds, changed data and failed backup checks block direct deletion. Direct deletion bypasses Trash; restore manually from the retained backup.
 - Five-day quarantine reminder support (notifications require user permission).
 - Xcode archive inventory: application, version/build, team, creation date, size and dSYM package count. Keep-last-N recommendations per app/team, persistent pins and search. On-demand Mach-O/dSYM UUID matching, verified full backup creation and individually confirmed same-volume archive quarantine. Transfers require a matching backup, an archive beyond the retention limit, and no changes for 24 hours. Pinned or incomplete archives remain protected. Selectable simulator devices and runtimes, explicit deletion via simctl with fresh state checks; booted/busy devices and protected runtimes are blocked.
 - Catalog of 11 agent discovery hints. Import **one inactive session** as UTF-8 TXT/MD/JSON/JSONL; no mutation of agent databases.
@@ -27,7 +27,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.12-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.13-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 

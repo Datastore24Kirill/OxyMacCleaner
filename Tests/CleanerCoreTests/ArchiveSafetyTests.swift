@@ -180,4 +180,96 @@ final class ArchiveSafetyTests: XCTestCase {
       try store.moveArchive(plan, pinned: [], retained: [], protectedPaths: [source.path]))
     XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
   }
+  func directPlan() throws -> (ArchiveTransferPlan, QuarantineStore) {
+    let source = try fixture()
+    let backup = root.appendingPathComponent("Backup.xcarchive")
+    try ArchiveTransfer.createBackup(source: source, destination: backup)
+    return (
+      try ArchiveTransfer.prepare(archive: XcodeArchives.read(source), backup: backup),
+      try QuarantineStore(root: root.appendingPathComponent("quarantine"))
+    )
+  }
+  func testDirectDeletionRetainsVerifiedBackupWithoutQuarantine() throws {
+    let (plan, store) = try directPlan()
+    try store.deleteArchive(plan, pinned: [], retained: [], idle: {})
+    XCTAssertFalse(FileManager.default.fileExists(atPath: plan.source.path))
+    XCTAssertTrue(
+      ArchiveTransfer.sameContents(plan.manifest, try DirectoryManifest.capture(plan.backup)))
+    XCTAssertTrue(store.entries().isEmpty)
+    XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: store.root.path).isEmpty)
+  }
+  func testDirectDeletionProtectsRetentionExclusionsActivityAndCancellation() throws {
+    let (plan, store) = try directPlan()
+    XCTAssertThrowsError(
+      try store.deleteArchive(plan, pinned: [plan.source.path], retained: [], idle: {}))
+    XCTAssertThrowsError(
+      try store.deleteArchive(plan, pinned: [], retained: [plan.source.path], idle: {}))
+    XCTAssertThrowsError(
+      try store.deleteArchive(
+        plan, pinned: [], retained: [],
+        protectedPaths: [plan.source.appendingPathComponent("Info.plist").path], idle: {}))
+    XCTAssertThrowsError(
+      try store.deleteArchive(
+        plan, pinned: [], retained: [], idle: { throw CleanerError.message("Active build") }))
+    var checks = 0
+    XCTAssertThrowsError(
+      try store.deleteArchive(
+        plan, pinned: [], retained: [],
+        idle: {
+          checks += 1
+          if checks == 2 { throw CleanerError.message("Build started during validation") }
+        }))
+    XCTAssertEqual(checks, 2)
+    let token = Cancellation()
+    token.cancel()
+    XCTAssertThrowsError(
+      try store.deleteArchive(plan, pinned: [], retained: [], cancellation: token, idle: {}))
+    XCTAssertEqual(try DirectoryManifest.capture(plan.source), plan.manifest)
+  }
+  func testDirectDeletionRejectsChangedSource() throws {
+    let (plan, store) = try directPlan()
+    try Data("new data".utf8).write(to: plan.source.appendingPathComponent("added"))
+    XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    XCTAssertTrue(
+      FileManager.default.fileExists(atPath: plan.source.appendingPathComponent("added").path))
+  }
+  func testDirectDeletionRejectsChangedOrMissingBackup() throws {
+    let (plan, store) = try directPlan()
+    try Data("changed".utf8).write(to: plan.backup.appendingPathComponent("Info.plist"))
+    XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    try FileManager.default.removeItem(at: plan.backup)
+    XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    XCTAssertEqual(try DirectoryManifest.capture(plan.source), plan.manifest)
+  }
+  func testDirectDeletionRejectsProjectAndQuarantineBackup() throws {
+    let (plan, store) = try directPlan()
+    try FileManager.default.createDirectory(
+      at: root.appendingPathComponent(".git"), withIntermediateDirectories: false)
+    XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    try FileManager.default.removeItem(at: root.appendingPathComponent(".git"))
+    let unsafeStore = try QuarantineStore(root: root)
+    XCTAssertThrowsError(try unsafeStore.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    XCTAssertEqual(try DirectoryManifest.capture(plan.source), plan.manifest)
+  }
+
+  func testDirectDeletionRejectsBackupInsideQuarantine() throws {
+    let (plan, store) = try directPlan()
+    let unsafeBackup = store.root.appendingPathComponent("Stored.xcarchive")
+    try ArchiveTransfer.createBackup(source: plan.source, destination: unsafeBackup)
+    let unsafePlan = try ArchiveTransfer.prepare(
+      archive: XcodeArchives.read(plan.source), backup: unsafeBackup)
+    XCTAssertThrowsError(try store.deleteArchive(unsafePlan, pinned: [], retained: [], idle: {}))
+    XCTAssertEqual(try DirectoryManifest.capture(plan.source), plan.manifest)
+  }
+  func testDirectDeletionRejectsSourceReplacedBySymlink() throws {
+    let (plan, store) = try directPlan()
+    let preserved = root.appendingPathComponent("Preserved.xcarchive")
+    try FileManager.default.moveItem(at: plan.source, to: preserved)
+    try FileManager.default.createSymbolicLink(at: plan.source, withDestinationURL: preserved)
+    XCTAssertThrowsError(try store.deleteArchive(plan, pinned: [], retained: [], idle: {}))
+    XCTAssertTrue(
+      FileManager.default.fileExists(atPath: preserved.appendingPathComponent("Info.plist").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: plan.backup.path))
+  }
+
 }
