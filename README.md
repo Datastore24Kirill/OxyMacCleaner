@@ -6,7 +6,7 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.7 Preview — implemented
+## 0.1.8 Preview — implemented
 
 - Native SwiftUI app for macOS 14+ on Apple Silicon, Russian/English UI, light/dark/system appearance.
 - Startup disk selected by default, mounted local-volume selection and optional folder selection, cancellable scan, largest files and aggregated folder sizes, archive filtering and Finder reveal.
@@ -23,7 +23,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.1.7-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.1.8-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -74,3 +74,5 @@ File classification includes 15 categories. Embedded media in app bundles and re
 Completed and cancelled scan results are saved locally and restored on launch. The disk map supports folder navigation; file filters include size and modification age. Snapshots are dated and do not bypass file revalidation before cleanup. See [intelligent cleanup roadmap](docs/SMART-CLEANUP-PLAN-RU.md) for planned recommendation rules and competitor references.
 
 Ordinary folders can be moved to quarantine from the disk-map list context menu after inspection and confirmation. Folder transfers and restore destinations must stay on the same volume. Close apps using the folder first. Git projects, service data, app packages, links and protected descendants remain blocked. Use “Check interrupted operations” in Quarantine to reconcile interrupted transfer/restore journal records.
+
+Cleanup opportunities currently offer two review-only rules for old installers and large unmodified personal files. Each candidate has a reason; modification time is not treated as last use, and candidate bytes are not presented as guaranteed savings. No automatic selection or deletion is performed.

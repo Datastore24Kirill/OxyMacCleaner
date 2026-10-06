@@ -34,6 +34,36 @@ import UserNotifications
   @Published var volumes: [ScanVolume] = Volumes.discover()
   @Published var volumeID = "/"
   @Published var report = ScanReport()
+  @Published var recommendations: [CleanupCandidate] = []
+  @Published var recommendationsLoading = false
+  private var recommendationGeneration = UUID()
+  func refreshRecommendations() {
+    guard !isScanning else { return }
+    let generation = UUID()
+    recommendationGeneration = generation
+    let files = report.files
+    let excluded = exclusions
+    let userHome = home
+    recommendationsLoading = true
+    Task {
+      let result = await Task.detached {
+        CleanupAdvisor.candidates(files: files, home: userHome, exclusions: excluded)
+      }.value
+      guard recommendationGeneration == generation else { return }
+      recommendations = result
+      recommendationsLoading = false
+    }
+  }
+  func reviewCandidate(_ candidate: CleanupCandidate) {
+    do {
+      try candidate.file.validate()
+      reveal(candidate.file.path)
+    } catch {
+      self.error = t(
+        "Файл изменился или недоступен. Повторите сканирование.",
+        "File changed or is unavailable. Scan again.")
+    }
+  }
   @Published var diskIndex = DiskIndex(report: ScanReport())
   @Published var mapPath = "/"
   @Published var snapshotDate: Date?
@@ -71,6 +101,7 @@ import UserNotifications
           + error.localizedDescription
       }
       busy = false
+      refreshRecommendations()
     }
   }
   @Published var scanProgress: ScanProgress?
@@ -172,6 +203,9 @@ import UserNotifications
     roots = chosen
     busy = true
     isScanning = true
+    recommendationGeneration = UUID()
+    recommendations = []
+    recommendationsLoading = false
     scanProgress = ScanProgress()
     selected = []
     duplicates = []
@@ -236,6 +270,7 @@ import UserNotifications
             "Сканирование завершено с пропусками. См. отчёт.",
             "Scan finished with skipped items. See report."))
         : t("Остановлено. Результат неполный", "Stopped. Partial results")
+      refreshRecommendations()
       log(
         "Scan: \(result.files.count) files, \(result.issues.count) issues, complete=\(result.complete)"
       )
@@ -271,6 +306,7 @@ import UserNotifications
     exclusions.append(path)
     UserDefaults.standard.set(exclusions, forKey: "exclusions")
     selected.remove(path)
+    refreshRecommendations()
   }
   func confirm(_ title: String, _ text: String, destructive: Bool = false) -> Bool {
     let a = NSAlert()

@@ -60,6 +60,7 @@ struct RootView: View {
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
     ("overview", "Обзор", "Overview", "square.grid.2x2"),
+    ("advisor", "Возможности очистки", "Cleanup opportunities", "sparkles"),
     ("map", "Карта диска", "Disk map", "square.grid.3x3.fill"),
     ("files", "Файлы и папки", "Files & folders", "externaldrive"),
     ("duplicates", "Дубликаты", "Duplicates", "square.on.square"),
@@ -86,23 +87,29 @@ struct RootView: View {
             Text("CLEANER").font(.caption.monospaced()).tracking(3)
           }
         }.padding(.vertical, 24)
-        ForEach(pages, id: \.0) { p in
-          Button {
-            vm.page = p.0
-            vm.search = ""
-            vm.categoryFilter = "all"
-          } label: {
-            Label(vm.t(p.1, p.2), systemImage: p.3).frame(maxWidth: .infinity, alignment: .leading)
-              .padding(11).background(
-                vm.page == p.0 ? Color.mint.opacity(0.18) : .clear,
-                in: RoundedRectangle(cornerRadius: 10))
-          }.buttonStyle(.plain)
+        ScrollView {
+          VStack(alignment: .leading, spacing: 8) {
+            ForEach(pages, id: \.0) { p in
+              Button {
+                vm.page = p.0
+                vm.search = ""
+                vm.categoryFilter = "all"
+              } label: {
+                Label(vm.t(p.1, p.2), systemImage: p.3).frame(
+                  maxWidth: .infinity, alignment: .leading
+                )
+                .padding(11).background(
+                  vm.page == p.0 ? Color.mint.opacity(0.18) : .clear,
+                  in: RoundedRectangle(cornerRadius: 10))
+              }.buttonStyle(.plain)
+            }
+          }
         }
         Spacer()
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.7 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.8 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -128,6 +135,7 @@ struct RootView: View {
         Group {
           switch vm.page {
           case "overview": overview
+          case "advisor": CleanupAdvisorView().environmentObject(vm)
           case "map": DiskMapView().environmentObject(vm)
           case "files", "archives": files
           case "duplicates": duplicates
@@ -646,8 +654,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.7 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.7 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.8 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.8 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

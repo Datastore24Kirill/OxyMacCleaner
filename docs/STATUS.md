@@ -1,4 +1,4 @@
-# Implementation status — 0.1.7 Preview
+# Implementation status — 0.1.8 Preview
 
 This milestone starts implementation of SPEC-RU.md. It does not claim full version-one acceptance.
 
@@ -77,3 +77,7 @@ Atomic local binary-plist snapshots preserve completed and cancelled scan report
 ## 0.1.7 update
 
 Ordinary-directory quarantine via disk-map list context menu. Tree manifests include empty directories, content hashes and identity metadata; protected descendants, exclusions, Git projects, links, cloud data and broad user/system roots are blocked. Same-volume exclusive rename; post-move verification; directory restore and alternate destination; journal reconciliation for prepared/restoring operations. Recovery tests simulate interrupted journal commits after transfer/restore. No automatic active-process detection or cross-volume directory transfer is claimed. 41 local tests pass. User scan remains running in 0.1.6; local update is deferred until it completes.
+
+## 0.1.8 update
+
+Review-only cleanup advisor with two deterministic local rules: old installers in the user's Downloads (90 days), and large unmodified files in personal folders (500 MB, 180 days). Protected data, known dependencies, app/photo-library packages and hard links are excluded; overlapping rules emit one candidate. Refresh runs off the main actor with generation guards. Candidate reveal validates original file identity; exclusions persist. 45 tests pass locally, including threshold boundaries, rule precedence, path scope and deduplication. Combined 0.1.7/0.1.8 installed locally with backup of app and 55 MB saved scan; original partial scan restored with 237450 files. No real cleanup performed.
