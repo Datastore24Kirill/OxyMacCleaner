@@ -8,6 +8,8 @@ import UserNotifications
   @Published var volumes: [ScanVolume] = Volumes.discover()
   @Published var volumeID = "/"
   @Published var report = ScanReport()
+  @Published var scanProgress: ScanProgress?
+  @Published var isScanning = false
   @Published var selected = Set<String>()
   @Published var duplicates: [[FileRecord]] = []
   @Published var entries: [QuarantineEntry] = []
@@ -97,6 +99,8 @@ import UserNotifications
     }
     roots = chosen
     busy = true
+    isScanning = true
+    scanProgress = ScanProgress()
     selected = []
     duplicates = []
     report = ScanReport()
@@ -108,13 +112,27 @@ import UserNotifications
       exclusions + [support.path] + chosen.flatMap { Volumes.exclusions(for: $0, mounted: mounted) }
     status = t("Сканирование…", "Scanning…")
     task = Task {
-      let result = await Task.detached {
-        Scanner.scan(roots: chosen, excluded: excluded, cancellation: token) { n in
-          Task { @MainActor in self.status = self.t("Проверено файлов: \(n)", "Files scanned: \(n)")
+      let (result, finalSnapshot) = await Task.detached {
+        var latest = ScanProgress()
+        let report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token) {
+          snapshot in
+          latest = snapshot
+          Task { @MainActor in
+            guard self.cancellation === token, self.isScanning else { return }
+            self.scanProgress = snapshot
           }
         }
+        return (report, latest)
       }.value
       report = result
+      isScanning = false
+      // Commit authoritative totals; queued progress events cannot overwrite completion.
+      var final = finalSnapshot
+      final.files = result.files.count
+      final.bytes = result.total
+      final.issues = result.issues.count
+      final.phase = result.complete ? .finished : .cancelled
+      scanProgress = final
       busy = false
       status =
         result.complete

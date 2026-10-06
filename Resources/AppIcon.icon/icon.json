@@ -1,0 +1,35 @@
+{
+  "fill": {
+    "solid": "srgb:0.025,0.03,0.055,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "Logo.png",
+          "name": "OxyMac Cleaner",
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

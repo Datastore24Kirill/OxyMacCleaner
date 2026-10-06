@@ -53,3 +53,7 @@ All 11 agents currently use the same **explicit text-export import**, not automa
 ## 0.1.1 update
 
 Approved neon logo is now used by the packaged app, sidebar and README. Startup-disk selection is the default, with local mounted-volume discovery, usage bar and optional folder selection. The startup namespace skips `/System/Volumes`, `/Volumes`, `/dev` and other nested mounts to avoid duplicate traversal. Volume capacity is reported by macOS and may be shared in an APFS container. No whole-disk user-data scan was run during implementation; selection and boundary policy were tested without cleaning data.
+
+## 0.1.2 update
+
+Icon Composer asset and compiled Assets.car remove legacy icon framing. Scan progress uses throttled real filesystem snapshots, terminal snapshots are always emitted, and stale UI callbacks cannot overwrite completion. Animated radar honours Reduce Motion; byte composition is explicitly distinct from completion percentage. 21 tests pass locally; live scan and cancellation checked in the installed app.

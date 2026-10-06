@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Test core
@@ -19,5 +19,5 @@ jobs:
         with:
           name: OxyMacCleaner-arm64
           path: |
-            dist/OxyMacCleaner-0.1.1-macOS-arm64.zip
+            dist/OxyMacCleaner-0.1.2-macOS-arm64.zip
             dist/SHA256SUMS.txt

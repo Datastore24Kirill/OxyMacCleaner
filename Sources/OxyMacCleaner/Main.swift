@@ -98,7 +98,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.1 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.2 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -106,10 +106,13 @@ struct RootView: View {
             .largeTitle.bold())
           Spacer()
           if vm.busy {
-            ProgressView().controlSize(.small)
+            if !vm.isScanning { ProgressView().controlSize(.small) }
             Button(vm.t("Стоп", "Stop")) { vm.cancel() }
           }
         }.padding(.top, 22)
+        if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
+          ScanProgressView(progress: progress, active: vm.isScanning)
+        }
         Group {
           switch vm.page {
           case "overview": overview
@@ -227,8 +230,12 @@ struct RootView: View {
           ForEach(vm.roots, id: \.path) { Text($0.path).font(.caption).textSelection(.enabled) }
         }
         HStack {
-          metric(vm.t("Найдено файлов", "Files found"), "\(vm.report.files.count)")
-          metric(vm.t("Логический объём", "Logical size"), size(vm.report.total))
+          metric(
+            vm.t("Найдено файлов", "Files found"),
+            "\(vm.isScanning ? (vm.scanProgress?.files ?? 0) : vm.report.files.count)")
+          metric(
+            vm.t("Логический объём", "Logical size"),
+            size(vm.isScanning ? (vm.scanProgress?.bytes ?? 0) : vm.report.total))
           metric(
             vm.t("В карантине", "In quarantine"),
             size(vm.entries.filter { $0.state == "quarantined" }.reduce(0) { $0 + $1.bytes }))
@@ -587,8 +594,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.1 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.1 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.2 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.2 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

@@ -34,6 +34,30 @@ final class CoreTests: XCTestCase {
       Scanner.scan(roots: [temp], excluded: [temp.path], cancellation: Cancellation()).files.isEmpty
     )
   }
+  func testProgressAlwaysEmitsAuthoritativeFinalSnapshot() throws {
+    _ = try file("one.zip", "12345")
+    _ = try file("two.txt", "abc")
+    var updates: [ScanProgress] = []
+    let report = Scanner.scan(roots: [temp], excluded: [], cancellation: Cancellation()) {
+      updates.append($0)
+    }
+    XCTAssertEqual(updates.first?.files, 0)
+    XCTAssertEqual(updates.last?.phase, .finished)
+    XCTAssertEqual(updates.last?.files, report.files.count)
+    XCTAssertEqual(updates.last?.bytes, report.total)
+    XCTAssertEqual(updates.last?.categories["Archive"], 5)
+    XCTAssertEqual(updates.last?.categories.values.reduce(0, +), report.total)
+    XCTAssertTrue(updates.contains { $0.phase == .sorting })
+  }
+  func testCancelledProgressNeverClaimsCompletion() throws {
+    let token = Cancellation()
+    token.cancel()
+    var last: ScanProgress?
+    let report = Scanner.scan(roots: [temp], excluded: [], cancellation: token) { last = $0 }
+    XCTAssertFalse(report.complete)
+    XCTAssertEqual(last?.phase, .cancelled)
+    XCTAssertEqual(last?.files, 0)
+  }
   func testDuplicatesNotJustSize() throws {
     _ = try file("a.txt", "hello")
     _ = try file("b.txt", "hello")
