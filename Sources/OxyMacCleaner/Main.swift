@@ -111,7 +111,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.18 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.19 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -479,6 +479,13 @@ struct RootView: View {
               }
             }
           }
+          if ["codex", "claude"].contains(vm.agent) {
+            Button(vm.t("Открыть JSONL-историю агента…", "Open agent JSONL history…")) {
+              vm.importTranscript(native: true)
+            }.disabled(vm.busy).help(vm.t(
+              "Выберите одну историю Codex или Claude Code. Только чтение; оригинал и неизвестные записи сохраняются.",
+              "Choose one Codex or Claude Code history. Read only; original and unknown records are preserved."))
+          }
           Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
             .oxyHelp(.importSession)
             .disabled(vm.busy)
@@ -495,6 +502,14 @@ struct RootView: View {
                 "Исходник: \(input.text.count) символов", "Original: \(input.text.count) characters"
               )
             ).font(.caption)
+            if let report = input.nativeHistory {
+              Text(vm.t("JSONL: сообщений ", "JSONL: messages ") + "\(report.messages)"
+                + vm.t(" · других записей сохранено: ", " · other records retained: ") + "\(report.retainedRecords)")
+                .font(.caption)
+              Text(vm.t("Записи идут в порядке файла, включая ветки и служебные события. Сжатие создаёт отдельный текст для нового чата; оригинальная история не уменьшается и не удаляется.",
+                "Records remain in file order, including branches and system events. Compression creates separate text for a new chat; original history is not shrunk or deleted."))
+                .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
               Picker(vm.t("Режим", "Mode"), selection: $vm.style) {
                 Text(vm.t("Бережный", "Careful")).tag("Бережный")
@@ -682,8 +697,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.18 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.18 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.19 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.19 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

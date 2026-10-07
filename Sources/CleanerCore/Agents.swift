@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 public struct AgentDefinition: Identifiable, Sendable {
   public let id: String
@@ -42,6 +43,7 @@ public struct Transcript: Sendable {
   public let agent: String
   public let text: String
   public let digest: String
+  public var nativeHistory: NativeHistory.Result? = nil
   public static func load(_ url: URL, agent: String) throws -> Transcript {
     let record = try FileRecord.read(url)
     guard record.bytes <= 30_000_000 else {
@@ -55,9 +57,17 @@ public struct Transcript: Sendable {
     guard ["txt", "md", "json", "jsonl"].contains(url.pathExtension.lowercased()) else {
       throw CleanerError.message("Unsupported history format")
     }
-    let hash = try Scanner.hash(url)
+    let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     try record.validate()
     return Transcript(source: url, agent: agent, text: text, digest: hash)
+  }
+  public static func loadNative(_ url: URL, agent: String) throws -> Transcript {
+    guard url.pathExtension.lowercased() == "jsonl" else {
+      throw CleanerError.message("Choose a JSONL session file")
+    }
+    var transcript = try load(url, agent: agent)
+    transcript.nativeHistory = try NativeHistory.parse(transcript.text, agent: agent)
+    return transcript
   }
   public func backup(in folder: URL) throws -> URL {
     // Store exactly the bytes represented by the loaded text; never modify source.
@@ -72,7 +82,8 @@ public struct Transcript: Sendable {
     return target
   }
   public var numbered: String {
-    text.components(separatedBy: "\n").enumerated().map { "[L\($0.offset+1)] \($0.element)" }
+    if let nativeHistory { return nativeHistory.numbered }
+    return text.components(separatedBy: "\n").enumerated().map { "[L\($0.offset+1)] \($0.element)" }
       .joined(separator: "\n")
   }
 }

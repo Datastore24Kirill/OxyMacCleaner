@@ -696,18 +696,31 @@ import UserNotifications
       scheduleReminder()
     }
   }
-  func importTranscript() {
+  func importTranscript(native: Bool = false) {
+    guard !busy else { return }
     let p = NSOpenPanel()
     p.canChooseDirectories = false
     p.allowsMultipleSelection = false
+    if native {
+      p.directoryURL = Agents.catalog.first { $0.id == agent }?.locations(home: home).first
+    }
     p.message = t(
       "Экспорт одной завершённой сессии: TXT, MD, JSON или JSONL. Исходник не изменяется.",
       "Export of one inactive session: TXT, MD, JSON or JSONL. Original remains intact.")
     if p.runModal() == .OK, let url = p.url {
-      do {
-        transcript = try Transcript.load(url, agent: agent)
-        output = ""
-      } catch { self.error = error.localizedDescription }
+      let selectedAgent = agent
+      busy = true
+      transcript = nil
+      output = ""
+      task = Task {
+        do {
+          let loaded = try await Task.detached {
+            try native ? Transcript.loadNative(url, agent: selectedAgent) : Transcript.load(url, agent: selectedAgent)
+          }.value
+          if agent == selectedAgent { transcript = loaded }
+        } catch { self.error = error.localizedDescription }
+        busy = false
+      }
     }
   }
   func refreshModels() {

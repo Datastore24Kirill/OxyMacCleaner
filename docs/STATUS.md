@@ -20,12 +20,12 @@ This milestone starts implementation of SPEC-RU.md. It does not claim full versi
 
 ## Agent capability matrix
 
-All 11 agents currently use the same **explicit text-export import**, not automatic internal-history parsing. The catalog identifies known default locations when present; absence does not mean an agent is not installed. Installation variants and IDE profiles need separate validation.
+All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and Claude Code also support selected native JSONL files (see AGENT-ADAPTERS-RU.md); automatic history discovery is not implemented. The catalog identifies known default locations when present; absence does not mean an agent is not installed. Installation variants and IDE profiles need separate validation.
 
 | Agent | Discovery hint | Import TXT/MD/JSON/JSONL | Rewrite existing chat | Automatic new chat |
 |---|---|---|---|---|
-| Codex | Yes | Yes | No | No |
-| Claude Code | Yes | Yes | No | No |
+| Codex | Yes; selected native JSONL supported since 0.1.19 | Yes | No | No |
+| Claude Code | Yes; selected native JSONL supported since 0.1.19 | Yes | No | No |
 | Cursor | Yes | Yes | No | No |
 | GitHub Copilot | VS Code default | Yes | No | No |
 | Gemini CLI | Yes | Yes | No | No |
@@ -162,3 +162,9 @@ Added repository selection, native Git worktree inventory, branch/HEAD, linked-t
 Implemented a bounded catalog of generated data and dependencies, narrow Next.js/Rust cache cleanup with repeatable safety checks, and read-only dependency inventory. 107 core tests pass. See PROJECT-DATA-RU.md. Custom build paths and recursive project discovery remain out of scope.
 
 Packaged 0.1.18 launched locally; saved scan restored. Project-data UI displayed this repository’s SwiftPM size with cleanup disabled as intended. Full Disk Access probe still reports denial after ad-hoc update; permissions were not changed.
+
+## 0.1.19 — first native history readers
+
+Codex/Claude Code JSONL recognition with source-line references and complete record retention. Import runs off the UI thread. Original files remain unchanged; backups represent the loaded bytes. Other agents retain generic export import. Native branch reconstruction, automatic session discovery and real-model quality validation remain pending.
+
+112 core tests passed. Installed packaged 0.1.19 and imported a synthetic Codex history through the UI: one message and two retained records. No model selected locally, so generation was not exercised. Real user histories were not processed or modified.
