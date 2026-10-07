@@ -111,7 +111,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.23 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.24 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -430,6 +430,7 @@ struct RootView: View {
         Text(vm.t("Архивы Xcode", "Xcode archives")).tag("archives")
         Text("DerivedData").tag("derived")
         Text(vm.t("Симуляторы", "Simulators")).tag("simulators")
+        Text(vm.t("Тестовые симуляторы", "Test simulators")).tag("testSimulators")
         Text(vm.t("Рабочие деревья", "Worktrees")).tag("worktrees")
         Text(vm.t("Данные проектов", "Project data")).tag("projectData")
       }.oxyHelp(.developerTab).pickerStyle(.segmented)
@@ -441,6 +442,8 @@ struct RootView: View {
       ScrollView {
         if vm.developerSection == "archives" {
           card { XcodeArchiveView().environmentObject(vm) }
+        } else if vm.developerSection == "testSimulators" {
+          card { TestSimulatorView().environmentObject(vm) }
         } else if vm.developerSection == "derived" {
           card { DerivedDataView().environmentObject(vm) }
         } else if vm.developerSection == "projectData" {
@@ -708,8 +711,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.23 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.23 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.24 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.24 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

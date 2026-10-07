@@ -26,6 +26,31 @@ final class DeveloperCleanupTests: XCTestCase {
           ]
         ] : [:])
   }
+  func testTestDeviceDeletionNeverTargetsDefaultSet() throws {
+    var calls: [[String]] = []
+    var removed = false
+    XCTAssertTrue(try TestSimulators.remove(id, run: { args in
+      calls.append(args)
+      XCTAssertEqual(Array(args.prefix(2)), ["--set", TestSimulators.root.path])
+      if args.contains("delete") { removed = true; XCTAssertEqual(args.last, self.id); return Data() }
+      return try self.deviceJSON(present: !removed)
+    }, idle: {}))
+    XCTAssertEqual(calls.count, 3)
+  }
+  func testTestDevicesBlockActiveStateAndInvalidIDs() throws {
+    for state in ["Booted", "Booting", "Unknown"] {
+      XCTAssertThrowsError(try TestSimulators.remove(id, run: { args in
+        XCTAssertFalse(args.contains("delete"))
+        return try self.deviceJSON(state: state)
+      }, idle: {}))
+    }
+    XCTAssertThrowsError(try TestSimulators.remove("all", run: { _ in
+      XCTFail("Invalid ID must not run simctl"); return Data()
+    }, idle: {}))
+    XCTAssertThrowsError(try TestSimulators.remove(id, run: { _ in
+      XCTFail("Active test must not run simctl"); return Data()
+    }, idle: { throw CleanerError.message("Active tests") }))
+  }
   func testDeviceDeleteUsesExactIDAndRefreshes() throws {
     var calls: [[String]] = []
     var removed = false
