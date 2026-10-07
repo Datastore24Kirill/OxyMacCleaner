@@ -24,6 +24,21 @@ struct OpportunityCards: View {
       columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 12
     ) {
       opportunity(
+        "Рабочие деревья Git", "Git worktrees", icon: "arrow.triangle.branch", section: "worktrees",
+        result: vm.worktreeReadAt == nil || vm.worktreeIssue != nil
+          ? vm.t("Нужна проверка", "Inspection needed")
+          : "\(vm.worktreeReviews.filter(\.eligible).count) " + vm.t("кандидатов", "candidates"),
+        date: vm.worktreeReadAt,
+        explanation: vm.t(
+          "Дополнительные checkout без локальных данных и изменений за 30 дней. Основной checkout защищён.",
+          "Linked checkouts without local changes or changes within 30 days. The main checkout is protected."
+        ),
+        limitation: vm.worktreeIssue
+          ?? vm.t(
+            "Выберите репозиторий и запустите проверку в разделе. Завершите связанные задачи агентов перед удалением.",
+            "Choose a repository and inspect it in the section. Finish associated agent tasks before removal."
+          ))
+      opportunity(
         "Дубликаты", "Duplicates", icon: "square.on.square", section: "duplicates",
         result: summary(
           CleanupOpportunities.duplicates(vm.duplicates, exclusions: vm.exclusions),

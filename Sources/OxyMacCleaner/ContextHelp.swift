@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Action help shared by hover tooltips, VoiceOver and the section guide.
 enum HelpTopic {
-  case symbols, backupOption, derivedDelete, backup, archiveDelete, archiveBatch, archiveQuarantine,
+  case worktrees, symbols, backupOption, derivedDelete, backup, archiveDelete, archiveBatch, archiveQuarantine,
     retention, pin, archiveRead,
     archiveRoot,
     beyondFilter, search, previous, next, finder, stop, volume, refreshVolumes, scan, folder,
@@ -16,6 +16,8 @@ enum HelpTopic {
 
   var text: (ru: String, en: String) {
     switch self {
+    case .worktrees:
+      return ("Выберите репозиторий. Проверяются дополнительные рабочие деревья: локальные и ignored-файлы, коммиты, блокировки и открытые файлы. Для удаления нужно 30 дней без изменений и подтверждение завершения задач. Ветки сохраняются; --force не используется.", "Choose a repository. Linked worktrees are checked for local/ignored files, commits, locks and open files. Removal requires 30 days without changes and confirmation that tasks are finished. Branches remain; --force is never used.")
     case .backupOption:
       return (
         "По желанию сохраняет полную проверенную копию перед удалением. Если копию создать не удастся, этот архив не удаляется. Для экономии места выберите другой диск.",
@@ -473,6 +475,8 @@ struct SectionHelpView: View {
       ]
     case "developer":
       switch developerSection {
+      case "worktrees":
+        return [("Проверка и удаление рабочих деревьев", "Inspecting and removing worktrees", .worktrees)]
       case "derived":
         return [
           ("1. Прочитайте список кэшей", "1. Read project caches", .derivedRead),

@@ -206,6 +206,10 @@ import UserNotifications
   }
   @Published var page = "overview"
   @Published var developerSection = "archives"
+  @Published var worktreeRepository: URL? = UserDefaults.standard.string(forKey: "worktreeRepository").map { URL(fileURLWithPath: $0) }
+  @Published var worktreeReviews: [WorktreeReview] = []
+  @Published var worktreeReadAt: Date?
+  @Published var worktreeIssue: String?
   @Published var duplicatesReadAt: Date?
   @Published var simulatorReadAt: Date?
   @Published var simulatorReadIssue: String?
