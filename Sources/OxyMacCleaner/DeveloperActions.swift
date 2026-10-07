@@ -22,6 +22,13 @@ extension AppModel {
   }
   func deleteSelectedSimulators() {
     guard !busy else { return }
+    do { try DeveloperActivity.assertIdle() }
+    catch {
+      let reason = t("Удаление не началось: завершите сборки и тесты. ", "Deletion did not start: finish builds and tests. ") + error.localizedDescription
+      developerResult = reason; status = reason; self.error = reason
+      log(reason)
+      return
+    }
     let devices = simulatorInventory.devices.filter {
       selectedDevices.contains($0.id) && $0.removable
     }
@@ -48,23 +55,27 @@ extension AppModel {
     let token = cancellation
     task = Task {
       var messages: [String] = []
+      var completed = 0
+      var failures = 0
       for device in devices {
         if token.cancelled { break }
         status = t("Удаляем устройство: ", "Deleting device: ") + device.name
         do {
           let removed = try await Task.detached { try Simulators.removeDevice(device.id) }.value
+          if removed { completed += 1; selectedDevices.remove(device.id) }
           messages.append(
             device.name + ": "
               + (removed
                 ? t("удалено", "deleted")
                 : t("команда выполнена; проверьте список", "command completed; check inventory")))
-        } catch { messages.append(device.name + ": " + error.localizedDescription) }
+        } catch { failures += 1; messages.append(device.name + ": " + error.localizedDescription) }
       }
       for runtime in runtimes {
         if token.cancelled { break }
         status = t("Удаляем runtime: ", "Deleting runtime: ") + runtime.version
         do {
           let removed = try await Task.detached { try Simulators.removeRuntime(runtime.id) }.value
+          if removed { completed += 1; selectedRuntimes.remove(runtime.id) }
           messages.append(
             runtime.version + ": "
               + (removed
@@ -72,20 +83,19 @@ extension AppModel {
                 : t(
                   "удаление запрошено; обновите список позже", "deletion requested; refresh later"))
           )
-        } catch { messages.append(runtime.version + ": " + error.localizedDescription) }
+        } catch { failures += 1; messages.append(runtime.version + ": " + error.localizedDescription) }
       }
-      developerResult = messages.joined(separator: "\n")
+      let summary = t("Удалено: ", "Deleted: ") + "\(completed)/\(devices.count + runtimes.count)" + t(" · ошибок: ", " · errors: ") + "\(failures)"
+      developerResult = summary + "\n" + messages.joined(separator: "\n")
+      if failures > 0 { self.error = summary + "\n\n" + messages.joined(separator: "\n") }
       log(developerResult)
       do { simulatorInventory = try await Task.detached { try Simulators.inventory() }.value } catch
       { self.error = error.localizedDescription }
-      selectedDevices = []
-      selectedRuntimes = []
+
       status =
         token.cancelled
         ? t("Остановлено между операциями", "Stopped between operations")
-        : t(
-          "Обработка симуляторов завершена. См. отчёт.",
-          "Simulator processing complete. See report.")
+        : summary
       busy = false
     }
   }

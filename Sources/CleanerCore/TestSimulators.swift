@@ -6,12 +6,27 @@ public enum TestSimulators {
     FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Developer/XCTestDevices")
   }
   public static func run(_ args: [String]) throws -> Data {
-    var directory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: root.path, isDirectory: &directory), directory.boolValue,
-      root.resolvingSymlinksInPath() == root.standardizedFileURL else {
-      throw CleanerError.message("XCTestDevices is missing or is a symbolic link")
+    if try !exists(root) {
+      if args == ["--set", root.path, "list", "devices", "--json"] {
+        return Data("{\"devices\":{}}".utf8)
+      }
+      throw CleanerError.message("Test device set no longer exists; refresh the list")
     }
     return try Simulators.run(args)
+  }
+  /// Only a definite missing path is empty; access errors and links remain errors.
+  public static func exists(_ path: URL) throws -> Bool {
+    do {
+      let attributes = try FileManager.default.attributesOfItem(atPath: path.path)
+      guard attributes[.type] as? FileAttributeType == .typeDirectory,
+        path.resolvingSymlinksInPath() == path.standardizedFileURL else {
+        throw CleanerError.message("Test device set must be a real directory, not a symbolic link")
+      }
+      return true
+    } catch let error as NSError {
+      if error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code) { return false }
+      throw error
+    }
   }
   public static func devices(run: Simulators.Runner = run) throws -> [SimulatorDevice] {
     try Simulators.devices(run(["--set", root.path, "list", "devices", "--json"]))

@@ -26,6 +26,19 @@ final class DeveloperCleanupTests: XCTestCase {
           ]
         ] : [:])
   }
+  func testMissingTestSetIsEmptyButFileAndSymlinkAreErrors() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).resolvingSymlinksInPath()
+    XCTAssertFalse(try TestSimulators.exists(root))
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: root) }
+    XCTAssertTrue(try TestSimulators.exists(root))
+    let file = root.appendingPathComponent("file")
+    try Data().write(to: file)
+    XCTAssertThrowsError(try TestSimulators.exists(file))
+    let link = root.appendingPathComponent("link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: root)
+    XCTAssertThrowsError(try TestSimulators.exists(link))
+  }
   func testTestDeviceDeletionNeverTargetsDefaultSet() throws {
     var calls: [[String]] = []
     var removed = false

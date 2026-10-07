@@ -19,5 +19,5 @@ jobs:
         with:
           name: OxyMacCleaner-arm64
           path: |
-            dist/OxyMacCleaner-0.1.24-macOS-arm64.zip
+            dist/OxyMacCleaner-0.1.25-macOS-arm64.zip
             dist/SHA256SUMS.txt

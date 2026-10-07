@@ -215,6 +215,10 @@ import UserNotifications
   @Published var worktreeReadAt: Date?
   @Published var worktreeIssue: String?
   @Published var duplicatesReadAt: Date?
+  @Published var testDevices: [SimulatorDevice] = []
+  @Published var testDeviceSizes: [String: Int64] = [:]
+  @Published var testDeviceReadAt: Date?
+  @Published var testDeviceIssue: String?
   @Published var simulatorReadAt: Date?
   @Published var simulatorReadIssue: String?
   @Published var derivedReadIssue: String?

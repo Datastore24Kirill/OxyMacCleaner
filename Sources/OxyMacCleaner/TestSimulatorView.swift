@@ -3,9 +3,7 @@ import CleanerCore
 
 struct TestSimulatorView: View {
   @EnvironmentObject var vm: AppModel
-  @State private var devices: [SimulatorDevice] = []
   @State private var selected: Set<String> = []
-  @State private var sizes: [String: Int64] = [:]
   @State private var report = ""
   @State private var confirming = false
   @State private var measuring = false
@@ -17,16 +15,19 @@ struct TestSimulatorView: View {
       HStack {
         Button(vm.t("Обновить список", "Refresh")) { refresh() }
           .help(vm.t("Читает отдельный набор XCTestDevices через simctl. Ничего не удаляет.", "Reads the XCTestDevices set via simctl without deleting anything."))
-        Button(vm.t("Посчитать размеры", "Measure sizes")) { measure() }.disabled(devices.isEmpty)
+        Button(vm.t("Посчитать размеры", "Measure sizes")) { measure() }.disabled(vm.testDevices.isEmpty)
           .help(vm.t("Измеряет каждое устройство. APFS может совместно хранить блоки: сумма не гарантирует освобождение такого же места.", "Measures each device. Shared APFS blocks mean the sum is not guaranteed reclaimed space."))
         Button(vm.t("Удалить выбранные", "Delete selected"), role: .destructive) { confirming = true }
           .disabled(selected.isEmpty)
           .help(vm.t("Удаляет только отмеченные выключенные тестовые устройства через simctl. Завершите тесты и закройте Xcode перед удалением.", "Deletes selected shut-down test devices via simctl. Stop tests and close Xcode first."))
       }.disabled(vm.busy)
       if measuring { Button(vm.t("Остановить подсчёт", "Stop measuring")) { stopMeasurement = true }.help(vm.t("Останавливает после текущего устройства.", "Stops after the current device.")) }
-      Text("\(devices.count) · " + ByteCountFormatter.string(fromByteCount: sizes.values.reduce(0,+), countStyle: .file) + vm.t(" измерено", " measured"))
+      Text("\(vm.testDevices.count) · " + ByteCountFormatter.string(fromByteCount: vm.testDeviceSizes.values.reduce(0,+), countStyle: .file) + vm.t(" измерено", " measured"))
+      if vm.testDeviceReadAt != nil && vm.testDevices.isEmpty && vm.testDeviceIssue == nil && report.isEmpty {
+        Text(vm.t("Тестовых симуляторов пока нет. Xcode создаст их при необходимости.", "No test simulators yet. Xcode creates them when needed."))
+      }
       Text(report).font(.caption).textSelection(.enabled)
-      ForEach(devices) { device in
+      ForEach(vm.testDevices) { device in
         HStack {
           Toggle(isOn: Binding(get: { selected.contains(device.id) }, set: { if $0 { selected.insert(device.id) } else { selected.remove(device.id) } })) {
             VStack(alignment: .leading) {
@@ -36,11 +37,12 @@ struct TestSimulatorView: View {
             }
           }.disabled(vm.busy || !device.removable)
           Spacer()
-          Text(sizes[device.id].map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—")
+          Text(vm.testDeviceSizes[device.id].map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—")
         }
         Divider()
       }
-    }.confirmationDialog(vm.t("Удалить выбранные тестовые устройства без восстановления?", "Permanently delete selected test devices?"), isPresented: $confirming, titleVisibility: .visible) {
+    }.modifier(InventoryLoading(isLoaded: vm.testDeviceReadAt != nil, load: refresh))
+    .confirmationDialog(vm.t("Удалить выбранные тестовые устройства без восстановления?", "Permanently delete selected test devices?"), isPresented: $confirming, titleVisibility: .visible) {
       Button(vm.t("Удалить", "Delete"), role: .destructive) { remove() }
     } message: {
       Text(vm.t("Устройств: ", "Devices: ") + "\(selected.count). " + vm.t("Сохранённые внутри данные будут потеряны. Xcode создаст необходимые тестовые копии при следующих запусках тестов.", "Their stored data will be lost. Xcode creates required test copies on later test runs."))
@@ -51,24 +53,25 @@ struct TestSimulatorView: View {
     Task { @MainActor in
       defer { vm.busy = false }
       do {
-        devices = try await Task.detached { try TestSimulators.devices() }.value
-        selected.formIntersection(devices.filter(\.removable).map(\.id))
-        sizes = sizes.filter { key, _ in devices.contains { $0.id == key } }
-        report = vm.t("Список обновлён", "List refreshed")
-      } catch { report = error.localizedDescription }
+        vm.testDevices = try await Task.detached { try TestSimulators.devices() }.value
+        selected.formIntersection(vm.testDevices.filter(\.removable).map(\.id))
+        vm.testDeviceSizes = vm.testDeviceSizes.filter { key, _ in vm.testDevices.contains { $0.id == key } }
+        vm.testDeviceReadAt = Date(); vm.testDeviceIssue = nil
+        report = vm.testDevices.isEmpty ? vm.t("Тестовых симуляторов пока нет. Xcode создаст их при запуске тестов, которым они нужны.", "No test simulators yet. Xcode creates them when required by tests.") : vm.t("Список обновлён", "List refreshed")
+      } catch { vm.testDeviceIssue = error.localizedDescription; report = error.localizedDescription }
     }
   }
   func measure() {
     vm.busy = true
     measuring = true; stopMeasurement = false
-    let ids = devices.map(\.id)
+    let ids = vm.testDevices.map(\.id)
     Task { @MainActor in
       defer { vm.busy = false }
       defer { measuring = false }
       for (index,id) in ids.enumerated() {
         if stopMeasurement { report = vm.t("Подсчёт остановлен", "Measurement stopped"); break }
         report = vm.t("Измеряем: ", "Measuring: ") + "\(index+1)/\(ids.count)"
-        do { sizes[id] = try await Task.detached { try TestSimulators.size(id) }.value }
+        do { vm.testDeviceSizes[id] = try await Task.detached { try TestSimulators.size(id) }.value }
         catch { report = error.localizedDescription; return }
       }
       if !stopMeasurement { report = vm.t("Размеры измерены. Реальная экономия может отличаться.", "Sizes measured. Reclaimed space may differ.") }
@@ -84,7 +87,7 @@ struct TestSimulatorView: View {
         do {
           let removed = try await Task.detached { try TestSimulators.remove(id) }.value
           messages.append(id + (removed ? vm.t(": удалено", ": deleted") : vm.t(": осталось в списке", ": still present")))
-          if removed { devices.removeAll { $0.id == id }; selected.remove(id); sizes.removeValue(forKey: id) }
+          if removed { vm.testDevices.removeAll { $0.id == id }; selected.remove(id); vm.testDeviceSizes.removeValue(forKey: id) }
         } catch { messages.append(error.localizedDescription); break }
       }
       report = messages.joined(separator: "\n")

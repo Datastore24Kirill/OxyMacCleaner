@@ -24,6 +24,14 @@ struct OpportunityCards: View {
       columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 12
     ) {
       opportunity(
+        "Тестовые симуляторы", "Test simulators", icon: "iphone.gen3", section: "testSimulators",
+        result: vm.testDeviceReadAt == nil || vm.testDeviceIssue != nil
+          ? vm.t("Нужна проверка", "Inspection needed")
+          : "\(vm.testDevices.count) " + vm.t("устройств", "devices"),
+        date: vm.testDeviceReadAt,
+        explanation: vm.t("Отдельные устройства XCTestDevices для автотестов. Просмотрите их состояние и размеры перед выбором.", "Separate XCTestDevices used by tests. Review states and sizes before selecting."),
+        limitation: vm.testDeviceIssue ?? (size(vm.testDeviceSizes.isEmpty ? nil : vm.testDeviceSizes.values.reduce(0,+)) + vm.t(" · измеренная часть; экономия APFS может отличаться. Проверяется в разделе.", " · measured portion; APFS savings may differ. Inspect in the section.")))
+      opportunity(
         "Данные проектов", "Project data", icon: "shippingbox", section: "projectData",
         result: vm.projectDataDate == nil || vm.projectDataIssue != nil
           ? vm.t("Нужна проверка", "Inspection needed")

@@ -1,26 +1,30 @@
-# Implementation status — 0.1.8 Preview
+# Implementation status — 0.1.25 Preview
 
-This milestone starts implementation of SPEC-RU.md. It does not claim full version-one acceptance.
+This is an implementation milestone, not completion of the version-one specification. Historical release notes below describe the state at each release.
 
-| Specification area | Current state | Remaining |
+| Area | Implemented | Remaining |
 |---|---|---|
-| Native UI / RU+EN / themes | Implemented | Full VoiceOver audit; error localization; empty-state refinement |
-| Scan / files / folder sizes | Implemented; disk/folder roots, cancellation, exclusions, issue report, saved snapshots, navigable treemap, category/size/modified-age filters | Incremental file-list streaming, crash checkpoints during scan, large-volume benchmarks |
-| Exact duplicates | Implemented; hash plus byte comparison; hard-link deduplication; keeper validation | APFS allocated-block accounting; large-run performance |
-| Archives | Extension-based filtering | Versions, grouping, configurable retention |
-| Xcode | DerivedData and archive inspection, read-only simctl inventory | Archive metadata/dSYM retention, active-build detection and supported runtime deletion |
-| Projects | Generated-file classification; Git directories protected from movement | Safe generated-folder cleanup and worktree lifecycle checks |
-| Quarantine | Files and ordinary directories on the same volume; tree integrity, journal recovery, conflict refusal, confirmed erase | Cross-volume verified transfer, active-app detection, filesystem fault injection and richer recovery states |
-| Notifications | Repeating five-day notification while nonempty; in-app reminder | Long-duration OS delivery validation; refreshed notification count after inventory changes |
-| Agents | Discovery hints for 11 products; generic export import per agent | Versioned native adapters and supported automatic handoff paths |
-| Context | Verified backup, line-numbered chunks, local generation, editable result, copy/export | Real-model semantic benchmarks, conflict reconciliation across chunks, citations validator, model-specific token budgeting |
-| Ollama setup | Official app download, hash/code-signature/Gatekeeper validation, launch, model pull progress | Live clean-machine installation QA, model management/deletion UI, tested hardware recommendations |
-| Updates | GitHub Releases link | Signed update metadata, auto-install, launch health check and rollback |
-| Distribution | Ready-to-run arm64 app, checksums, source, CI | Developer ID signing/notarization, Intel (outside initial scope) |
+| UI | Native RU/EN interface, themes, contextual hints | Full accessibility audit and error localization |
+| Disk analysis | Disk/folder scans, cancellation, exclusions, snapshots, map and categories | Crash checkpoints and large-volume benchmarks |
+| Duplicates | Hash + byte comparison, keeper validation | APFS shared-block estimates and performance |
+| Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics; open Xcode allowed | Real-world race/failure verification; xcodebuild still blocks cleanup |
+| DerivedData / projects | Project mapping, narrow cache allowlist, project dependencies inventory, guarded Git worktree cleanup | Broader cache rules and project discovery |
+| Simulators | Selected standard devices/runtimes; separate XCTestDevices inventory, size measurement and selected deletion | Larger-scale validation and better last-use evidence |
+| Quarantine | Same-volume transfer, integrity, journal recovery, restore, five-day reminder | Cross-volume transfer and broader fault injection |
+| Agents | 11 discovery hints; generic exports; Codex/Claude native JSONL discovery and streaming import | Cursor native adapter, other versioned adapters, supported new-session handoff |
+| Context quality | Local Ollama installed and synthetic benchmark run | **3B benchmark failed**: secrets repeated and prohibitions distorted. Improve pipeline and acceptance tests before replacing histories |
+| Updates | Downloadable arm64 releases | Verified automatic installation, health check and rollback |
+| Permissions/distribution | Ad-hoc signed builds, access diagnostics | Stable Developer ID signing deferred; Full Disk Access continuity remains unresolved |
+
+## Next work
+
+1. Context quality: separate sensitive-data filtering, instruction/source separation, cross-chunk conflict handling and final-citation validation. Preserve originals; no automatic history deletion.
+2. Agent-specific context handoff following CONTEXT-ACTIONS-RU.md; Cursor requires a validated adapter, not blind database trimming.
+3. Verified automatic updates with rollback, followed by broader performance/accessibility acceptance checks.
 
 ## Agent capability matrix
 
-All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and Claude Code also support selected native JSONL files (see AGENT-ADAPTERS-RU.md); automatic history discovery is not implemented. The catalog identifies known default locations when present; absence does not mean an agent is not installed. Installation variants and IDE profiles need separate validation.
+All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and Claude Code also support selected native JSONL files (see AGENT-ADAPTERS-RU.md); metadata-only Codex/Claude session discovery is implemented since 0.1.20. The catalog identifies known default locations when present; absence does not mean an agent is not installed. Installation variants and IDE profiles need separate validation.
 
 | Agent | Discovery hint | Import TXT/MD/JSON/JSONL | Rewrite existing chat | Automatic new chat |
 |---|---|---|---|---|
@@ -198,3 +202,9 @@ Logs confirmed attempted cleanup blocked by Xcode/swift-frontend, not stale inve
 ## 0.1.24 — тестовые симуляторы
 
 Добавлена отдельная вкладка XCTestDevices: список simctl, состояния, измерение размеров, выборочное подтверждённое удаление. Запущенные устройства и активные инструменты блокируют удаление. Пользовательские данные при проверке не удалялись.
+
+## 0.1.25 — test-device empty state and discovery
+
+A missing XCTestDevices directory is a valid empty inventory; invalid files, symlinks and access errors remain errors. The test-device screen loads once on entry, keeps its inventory and measured sizes across navigation, and has a dedicated card in cleanup opportunities. It does not select or delete devices automatically.
+
+Simulator batch feedback: preflight before confirmation, actual deletion/error counts, error alert and retained failed selections. Logs showed active xctest/xcodebuild during the user attempts (including concurrent Cleaner verification). Global activity guard remains conservative; filter was not responsible.
