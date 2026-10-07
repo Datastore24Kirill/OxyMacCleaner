@@ -137,9 +137,9 @@ struct SimulatorCleanupView: View {
             })
         ) {
           VStack(alignment: .leading) {
-            Text(
-              (runtime.runtimeIdentifier.components(separatedBy: ".").last ?? "Runtime") + " · "
-                + runtime.version + " (" + runtime.build + ")")
+            let runtimeName = runtime.runtimeIdentifier.components(separatedBy: ".").last ?? "Runtime"
+            let runtimeTitle: String = "\(runtimeName) · \(runtime.version) (\(runtime.build))"
+            Text(runtimeTitle)
             let size = runtime.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?"
             let deviceCount = vm.simulatorInventory.devices.filter { $0.runtime == runtime.runtimeIdentifier }.count
             let devicesLabel = vm.t("Устройств: ", "Devices: ") + String(deviceCount)

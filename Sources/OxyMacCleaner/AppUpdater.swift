@@ -21,21 +21,30 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
   @Published var fraction: Double = 0
   private let session = URLSession(configuration: .ephemeral, delegate: UpdateRedirect(), delegateQueue: nil)
   private func download(_ url: URL, limit: Int, to destination: URL? = nil) async throws -> Data {
-    let (bytes,response) = try await session.bytes(from: url)
-    guard let response = response as? HTTPURLResponse, response.statusCode == 200,
-      response.expectedContentLength <= limit else { throw CleanerError.message("Update download failed or exceeded size limit") }
-    var data = Data(); data.reserveCapacity(min(limit, 8_000_000))
-    for try await byte in bytes {
-      try Task.checkCancellation()
-      guard data.count < limit else { throw CleanerError.message("Update exceeds size limit") }
-      data.append(byte)
-      if data.count % 65536 == 0 { fraction = response.expectedContentLength > 0 ? Double(data.count) / Double(response.expectedContentLength) : 0 }
+    let session = self.session
+    let transfer = Task.detached(priority: .utility) { () throws -> Data in
+      let (bytes,response) = try await session.bytes(from: url)
+      guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+        response.expectedContentLength <= limit else { throw CleanerError.message("Update download failed or exceeded size limit") }
+      var data = Data(); data.reserveCapacity(min(limit, 8_000_000))
+      for try await byte in bytes {
+        try Task.checkCancellation()
+        guard data.count < limit else { throw CleanerError.message("Update exceeds size limit") }
+        data.append(byte)
+        if data.count % 65536 == 0 {
+          let progress = response.expectedContentLength > 0 ? Double(data.count) / Double(response.expectedContentLength) : 0
+          await MainActor.run { self.fraction = progress }
+        }
+      }
+      if let destination { try data.write(to: destination, options: .atomic) }
+      await MainActor.run { self.fraction = 1 }
+      return data
     }
-    if let destination { try data.write(to: destination, options: .atomic) }
-    return data
+    return try await withTaskCancellationHandler(operation: { try await transfer.value }, onCancel: { transfer.cancel() })
   }
+
   func check() {
-    guard !busy else { return }; busy = true; status = "Проверяем релизы…"
+    guard !busy else { return }; busy = true; fraction = 0; status = "Проверяем релизы…"
     Task {
       defer { busy = false }
       do {
