@@ -200,7 +200,13 @@ extension AppModel {
     developerResult = ""
     task = Task {
       var messages: [String] = []
+      var completed = 0
+      var failures = 0
       do {
+        do { try await Task.detached { try DeveloperActivity.assertIdle() }.value }
+        catch {
+          throw CleanerError.message(t("Удаление не началось. Закройте Xcode и завершите сборки. ", "Cleanup did not start. Close Xcode and stop builds. ") + error.localizedDescription)
+        }
         let fresh = await Task.detached { XcodeArchives.scan(root: root, cancellation: token) }
           .value
         guard fresh.complete, fresh.issues.isEmpty else {
@@ -223,7 +229,7 @@ extension AppModel {
               try await Task.detached {
                 try ArchiveTransfer.prepare(archive: archive, cancellation: token)
               }.value)
-          } catch { messages.append(archive.path + ": " + error.localizedDescription) }
+          } catch { failures += 1; messages.append(archive.path + ": " + error.localizedDescription) }
         }
         try token.check()
         guard !plans.isEmpty else {
@@ -321,27 +327,29 @@ extension AppModel {
               }
               return plan.backup?.path
             }.value
+            completed += 1
             archiveInventory.archives.removeAll { $0.path == preview.source.path }
             archiveSymbols.removeValue(forKey: preview.source.path)
             messages.append(
               preview.source.path + ": "
                 + (deleteImmediately ? t("удалён", "deleted") : t("в карантине", "quarantined"))
                 + (backupPath.map { t("; копия: ", "; backup: ") + $0 } ?? ""))
-          } catch { messages.append(preview.source.path + ": " + error.localizedDescription) }
+          } catch { failures += 1; messages.append(preview.source.path + ": " + error.localizedDescription) }
         }
-      } catch { messages.append(error.localizedDescription) }
+      } catch { failures += 1; messages.append(error.localizedDescription) }
       status = t("Обновляем список архивов…", "Refreshing archives…")
       archiveInventory = await Task.detached {
         XcodeArchives.scan(root: root, cancellation: Cancellation())
       }.value
       archiveScanDate = Date()
-      developerResult = messages.joined(separator: "\n")
+      let summary = (deleteImmediately ? t("Удалено архивов: ", "Archives deleted: ") : t("В карантине: ", "Quarantined: ")) + "\(completed)" + t(" · ошибок/блокировок: ", " · errors/blocks: ") + "\(failures)"
+      developerResult = summary + "\n" + messages.joined(separator: "\n")
+      if completed == 0 && failures > 0 { error = summary + "\n\n" + (messages.first ?? "") }
       log(developerResult)
       entries = store.entries()
       busy = false
       if !deleteImmediately { scheduleReminder() }
-      status = t(
-        "Обработка архивов завершена. См. отчёт.", "Archive processing complete. See report.")
+      status = summary
     }
   }
   func eraseQuarantinedArchives() {

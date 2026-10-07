@@ -184,3 +184,9 @@ Native JSONL above 30 MB uses a private disk snapshot and bounded line/chunk rea
 ## Local-model quality benchmark preparation
 
 Added two synthetic scenarios and a local-only runner using the application system prompt. Three audit-rule tests pass. Reports explicitly require human semantic review. No actual model results yet: Ollama/model absent, internal disk space insufficient; user will free space before installation. See CONTEXT-QUALITY-RU.md. Application remains 0.1.21; no new binary required for benchmark-only changes.
+
+## 0.1.22 — archive cleanup feedback
+
+Logs confirmed attempted cleanup blocked by Xcode/swift-frontend, not stale inventory. Added early activity preflight, actual completion/error counts, zero-success error alert and visible developer operation report. Existing deletion guards unchanged. 121 tests pass; no real archives deleted. Context optimize/reset/delete product boundaries recorded in CONTEXT-ACTIONS-RU.md.
+
+07.10.2026: локально установлены Ollama 0.40.0 и qwen2.5:3b; приложение видит движок и модель. Первый реальный синтетический benchmark не прошёл критерии качества (повтор искусственных секретов, неоднозначный пересказ запретов); подробности в CONTEXT-QUALITY-RU.md. Пользовательские истории не изменялись. Установка 0.1.22 и запуск проверены; проверка полного доступа к диску показывает отказ, настройки разрешений не сбрасывались.
