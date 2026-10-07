@@ -180,3 +180,7 @@ Bounded metadata-only discovery of Codex/Claude JSONL files, sorted dates, sizes
 Native JSONL above 30 MB uses a private disk snapshot and bounded line/chunk readers, up to 1 GB. Cancellation and byte progress are wired into import and backup. Local generation consumes chunks incrementally, with an explicit 8 MB output ceiling. Real-model quality and long-run throughput remain unverified.
 
 121 core tests passed, including >30 MB native import, snapshot lifetime, unchanged verified backups after source mutation, malformed/oversize lines, cancellation and UTF-8 boundaries. Installed 0.1.21 and imported a synthetic 30.1 MB file through UI. Real histories and permissions unchanged; Full Disk Access probe still denies access. Model generation was not exercised.
+
+## Local-model quality benchmark preparation
+
+Added two synthetic scenarios and a local-only runner using the application system prompt. Three audit-rule tests pass. Reports explicitly require human semantic review. No actual model results yet: Ollama/model absent, internal disk space insufficient; user will free space before installation. See CONTEXT-QUALITY-RU.md. Application remains 0.1.21; no new binary required for benchmark-only changes.
