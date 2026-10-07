@@ -11,7 +11,7 @@ cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
 python3 - <<'PY'
 import plistlib
 from pathlib import Path
-info={'CFBundleName':'OxyMac Cleaner','CFBundleDisplayName':'OxyMac Cleaner','CFBundleIdentifier':'com.oxyfire.OxyMacCleaner','CFBundleVersion':'23','CFBundleShortVersionString':'0.1.22','CFBundleExecutable':'OxyMacCleaner','CFBundlePackageType':'APPL','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'CFBundleIconFile':'AppIcon','CFBundleIconName':'AppIcon','NSHumanReadableCopyright':'Copyright © 2026 Oxyfire. MIT License.'}
+info={'CFBundleName':'OxyMac Cleaner','CFBundleDisplayName':'OxyMac Cleaner','CFBundleIdentifier':'com.oxyfire.OxyMacCleaner','CFBundleVersion':'24','CFBundleShortVersionString':'0.1.23','CFBundleExecutable':'OxyMacCleaner','CFBundlePackageType':'APPL','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'CFBundleIconFile':'AppIcon','CFBundleIconName':'AppIcon','NSHumanReadableCopyright':'Copyright © 2026 Oxyfire. MIT License.'}
 Path('dist/OxyMac Cleaner.app/Contents/Info.plist').write_bytes(plistlib.dumps(info))
 PY
 swift scripts/icon.swift
@@ -26,5 +26,5 @@ else
   codesign --force --sign - "$APP"
 fi
 codesign --verify --deep --strict "$APP"
-ditto -c -k --sequesterRsrc --keepParent "$APP" dist/OxyMacCleaner-0.1.22-macOS-arm64.zip
-(cd dist && shasum -a 256 OxyMacCleaner-0.1.22-macOS-arm64.zip > SHA256SUMS.txt)
+ditto -c -k --sequesterRsrc --keepParent "$APP" dist/OxyMacCleaner-0.1.23-macOS-arm64.zip
+(cd dist && shasum -a 256 OxyMacCleaner-0.1.23-macOS-arm64.zip > SHA256SUMS.txt)

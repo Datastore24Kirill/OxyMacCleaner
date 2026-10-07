@@ -52,6 +52,18 @@ public enum DeveloperActivity {
         }.filter { names.contains($0) })
     ).sorted()
   }
+  /// An open IDE and background indexing do not make completed archives unsafe.
+  /// Conservatively defer while a command-line build/export may use an archive.
+  public static func archiveBlockers(_ processNames: String) -> [String] {
+    blockers(processNames).filter { $0 == "xcodebuild" }
+  }
+  public static func assertArchivesIdle() throws {
+    let names = String(
+      decoding: try DeveloperCommand.run("/bin/ps", ["-axo", "comm="], timeout: 10), as: UTF8.self)
+    guard archiveBlockers(names).isEmpty else {
+      throw CleanerError.message("Wait for xcodebuild to finish before cleaning archives. Xcode may remain open.")
+    }
+  }
   public static func assertIdle() throws {
     let names = String(
       decoding: try DeveloperCommand.run("/bin/ps", ["-axo", "comm="], timeout: 10), as: UTF8.self)

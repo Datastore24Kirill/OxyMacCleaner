@@ -120,8 +120,8 @@ extension AppModel {
           : t("Перенести выбранные кэши в карантин?", "Quarantine selected caches?"),
         caches.map { $0.project + " · " + $0.category }.joined(separator: "\n") + "\n\n"
           + t(
-            "Закройте Xcode и сборки. Индекс и промежуточные файлы будут созданы заново. Следующая сборка займёт больше времени. Старые логи восстановить нельзя. Исходники, SourcePackages и готовые продукты не затрагиваются.",
-            "Close Xcode and builds. Indexes and intermediates will be rebuilt. The next build will take longer. Old logs cannot be recovered. Sources, SourcePackages and built products are excluded."
+            "Xcode можно оставить открытым. Архивы, изменённые за последние 10 минут, пропускаются. Индекс и промежуточные файлы будут созданы заново. Следующая сборка займёт больше времени. Старые логи восстановить нельзя. Исходники, SourcePackages и готовые продукты не затрагиваются.",
+            "Xcode may remain open. Archives modified within 10 minutes are skipped. Indexes and intermediates will be rebuilt. The next build will take longer. Old logs cannot be recovered. Sources, SourcePackages and built products are excluded."
           )
           + "\n"
           + (permanently
@@ -203,9 +203,9 @@ extension AppModel {
       var completed = 0
       var failures = 0
       do {
-        do { try await Task.detached { try DeveloperActivity.assertIdle() }.value }
+        do { try await Task.detached { try DeveloperActivity.assertArchivesIdle() }.value }
         catch {
-          throw CleanerError.message(t("Удаление не началось. Закройте Xcode и завершите сборки. ", "Cleanup did not start. Close Xcode and stop builds. ") + error.localizedDescription)
+          throw CleanerError.message(t("Удаление не началось. Дождитесь завершения xcodebuild; Xcode можно оставить открытым. ", "Cleanup did not start. Wait for xcodebuild; Xcode may remain open. ") + error.localizedDescription)
         }
         let fresh = await Task.detached { XcodeArchives.scan(root: root, cancellation: token) }
           .value
@@ -266,8 +266,8 @@ extension AppModel {
                 fromByteCount: plans.reduce(0) { $0 + $1.manifest.bytes }, countStyle: .file)
               + "\n" + names + extra + "\n\n" + explanation + "\n\n"
               + t(
-                "Операция включает все архивы сверх лимита, независимо от фильтра. Защищённые архивы пропускаются. Закройте Xcode и сборки. Объём логический: реальная экономия может отличаться.",
-                "Includes all archives beyond the limit regardless of filters. Protected archives are skipped. Close Xcode and builds. Logical size may differ from reclaimed space."
+                "Операция включает все архивы сверх лимита, независимо от фильтра. Защищённые архивы пропускаются. Xcode можно оставить открытым. Архивы, изменённые за последние 10 минут, пропускаются. Объём логический: реальная экономия может отличаться.",
+                "Includes all archives beyond the limit regardless of filters. Protected archives are skipped. Xcode may remain open. Archives modified within 10 minutes are skipped. Logical size may differ from reclaimed space."
               ),
             destructive: deleteImmediately,
             action: deleteImmediately ? t("Удалить", "Delete") : t("В карантин", "Quarantine"))
@@ -285,7 +285,7 @@ extension AppModel {
           status = t("Обработка архивов: ", "Processing archives: ") + "\(index + 1)/\(plans.count)"
           do {
             let backupPath = try await Task.detached {
-              try DeveloperActivity.assertIdle()
+              try DeveloperActivity.assertArchivesIdle()
               let current = XcodeArchives.scan(root: root, cancellation: token)
               guard current.complete, current.issues.isEmpty else {
                 throw CleanerError.message("Inventory changed or incomplete")

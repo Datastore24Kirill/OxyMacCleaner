@@ -10,6 +10,12 @@ final class ArchiveSafetyTests: XCTestCase {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
   }
   override func tearDownWithError() throws { try FileManager.default.removeItem(at: root) }
+  func testOpenIDEAndIndexingDoNotBlockArchives() {
+    let processes = "/Applications/Xcode.app/Contents/MacOS/Xcode\n/usr/bin/swift-frontend\n/usr/bin/clang"
+    XCTAssertTrue(DeveloperActivity.archiveBlockers(processes).isEmpty)
+    XCTAssertFalse(DeveloperActivity.blockers(processes).isEmpty)
+    XCTAssertEqual(DeveloperActivity.archiveBlockers(processes + "\n/usr/bin/xcodebuild"), ["xcodebuild"])
+  }
   func word(_ value: UInt32, little: Bool = true) -> [UInt8] {
     let b = [
       UInt8(truncatingIfNeeded: value), UInt8(truncatingIfNeeded: value >> 8),

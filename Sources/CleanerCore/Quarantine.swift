@@ -168,7 +168,7 @@ public final class QuarantineStore: @unchecked Sendable {
   public func deleteArchive(
     _ plan: ArchiveTransferPlan, pinned: Set<String>, retained: Set<String>,
     protectedPaths: [String] = [], cancellation: Cancellation = Cancellation(),
-    idle: () throws -> Void = DeveloperActivity.assertIdle
+    idle: () throws -> Void = DeveloperActivity.assertArchivesIdle
   ) throws {
     lock.lock()
     defer { lock.unlock() }
