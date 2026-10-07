@@ -212,3 +212,7 @@ Simulator batch feedback: preflight before confirmation, actual deletion/error c
 ## 0.1.26 — scoped simulator activity
 
 Explicit xcodebuild destination UUID association replaces the blanket guard for standard simulator devices/runtimes. Related xctest descendants are associated through process ancestry; unknown destinations and GUI Xcode remain fail-closed. Runtime protection includes XCTestDevices and rejects unmapped active destinations. No process is stopped, and no user devices were deleted in verification. Checks are not an atomic lock against starting new work.
+
+## 0.1.27 — filtered simulator selection
+
+Available shut-down devices can be selected across all filtered pages, replacing old device selection. Missing-runtime selection moved to More and respects search. Separate device/runtime counters explain scope. Cleanup logic unchanged.

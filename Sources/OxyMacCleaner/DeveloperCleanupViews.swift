@@ -48,10 +48,17 @@ struct SimulatorCleanupView: View {
       DeveloperReportView()
       Text(vm.t("Устройства", "Devices")).font(.headline)
       HStack {
-        Button(vm.t("Отметить недоступные", "Select unavailable")) {
-          vm.selectedDevices.formUnion(
-            vm.simulatorInventory.devices.filter { !$0.isAvailable && $0.removable }.map(\.id))
-        }.oxyHelp(.simUnavailable)
+        Button(vm.t("Выбрать по поиску", "Select matching devices")) {
+          vm.selectedDevices = Set(devices.filter { $0.isAvailable && $0.removable }.map(\.id))
+        }.help(vm.t(
+          "Выбирает доступные выключенные устройства по текущему поиску на всех страницах. Заменяет прежний выбор устройств; версии ОС не выбирает. Активность тестов проверяется перед удалением.",
+          "Selects available shut-down devices matching the search on every page. Replaces the device selection; does not select OS runtimes. Test activity is checked before deletion."
+        )).disabled(!devices.contains { $0.isAvailable && $0.removable })
+        Menu(vm.t("Ещё", "More")) {
+          Button(vm.t("Выбрать без установленной ОС", "Select devices without an installed OS")) {
+            vm.selectedDevices = Set(devices.filter { !$0.isAvailable && $0.removable }.map(\.id))
+          }.help(vm.t("Выбирает выключенные устройства без доступного runtime с учётом поиска.", "Selects shut-down devices with unavailable runtimes matching the search."))
+        }
         Button(vm.t("Снять выбор", "Clear selection")) {
           vm.selectedDevices = []
           vm.selectedRuntimes = []
@@ -60,6 +67,8 @@ struct SimulatorCleanupView: View {
       TextField(vm.t("Поиск устройства или версии ОС", "Search device or OS"), text: $query)
         .oxyHelp(.search)
         .textFieldStyle(.roundedBorder)
+      Text(vm.t("Выбрано устройств: ", "Selected devices: ") + "\(vm.selectedDevices.count)" + vm.t(" · версий ОС: ", " · OS runtimes: ") + "\(vm.selectedRuntimes.count)")
+        .font(.caption).foregroundStyle(.secondary)
       HStack {
         Button(vm.t("Назад", "Previous")) { page -= 1 }.oxyHelp(.previous).disabled(page == 0)
         Text("\(page + 1)/\(max(1, (devices.count + 9) / 10)) · \(devices.count)")
