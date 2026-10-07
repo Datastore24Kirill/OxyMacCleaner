@@ -12,7 +12,22 @@ extension AppModel {
       error = t("Сначала установите Ollama.", "Install Ollama first.")
       return
     }
+    guard !busy, !engineChecking else { return }
+    engineChecking = true
+    engineMessage = t("Запускаем Ollama…", "Starting Ollama…")
     NSWorkspace.shared.open(app)
+    Task {
+      for _ in 0..<10 {
+        if let available = try? await engine.models() {
+          models = available; engineReady = true; engineChecking = false
+          if !models.contains(model) { model = models.first(where: { $0 == "qwen2.5:7b" }) ?? models.first ?? "" }
+          engineMessage = t("Ollama работает", "Ollama is running"); return
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+      }
+      engineChecking = false; engineReady = false
+      engineMessage = t("Ollama не ответила. Завершите её первый запуск и проверьте состояние ещё раз.", "Ollama did not respond. Complete its first-run setup and check again.")
+    }
   }
   func installOllama() {
     guard !busy else { return }

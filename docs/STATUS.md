@@ -1,19 +1,19 @@
-# Implementation status — 0.2.2 Preview
+# Implementation status — 0.3.1 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
 | Area | Implemented | Remaining |
 |---|---|---|
 | UI | RU/EN interface, themes, contextual hints | Complete accessibility and error localization audit |
-| Disk analysis | Disk/folder scans, cancellation, exclusions, snapshots, map/categories; 100k-file fixture | Crash checkpoints, multi-million-file benchmarks, lower peak memory |
+| Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, partial crash recovery, map/categories; 1M-file fixture | Exact traversal resume, broader disk benchmarks |
 | Duplicates | Hash + byte comparison, keeper validation | APFS shared-block estimates and performance |
 | Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics | Broader race/failure verification |
 | DerivedData / projects | Project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project discovery |
 | Simulators | Standard/test devices, runtimes, activity guards, select available Shutdown devices matching search | Broader runtime-version QA |
-| Quarantine | Same-volume transfer, integrity, journal recovery, restore, five-day reminder | Cross-volume transfer and broader fault injection |
-| Agents | 11 discovery hints; exports; Codex/Claude/Cursor native JSONL catalogs and import; two handoff actions | Other versioned native adapters; new chat remains manual |
+| Quarantine | Same-volume initial quarantine, verified cross-volume relocation/restore, journal recovery, five-day reminder | Broader fault injection and uncertain-copy recovery UI |
+| Agents | 11 discovery hints; exports; seven native file adapters and catalogs; two handoff actions | Other versioned native adapters; new chat remains manual |
 | Context | Local 7B available; secret-pattern filtering, cited source excerpts; original and verified backup retained | Broader semantic benchmarks, cross-chunk conflict resolution; no lossless-summary claim |
-| Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, automatic old-backup retention limits |
+| Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, full permission continuity; older backups are managed explicitly |
 | Permissions | In-process diagnostics, ad-hoc builds | Stable Developer ID signing deferred |
 
 ## Next work
@@ -232,3 +232,14 @@ Added localized common-error explanations, lifecycle labels, keyboard section co
 Installed final 0.3.0 build 32 locally with 0.2.2 rollback copy retained. UI verified: legacy user scan restored (237,450 files), Cmd+, settings and Cmd+4 agents, Russian/English navigation, light/dark rendering, synthetic Gemini import (2 messages + metadata), source/result comparison, and four completed updater copies with 0.2.2 protected. The backup expander was replaced with an explicit accessible button after UI testing. No copies were deleted. Theme restored to System and language to Russian. Full Disk Access probe reports denial after this ad-hoc binary replacement; no TCC reset or permission bypass performed. End-to-end VoiceOver speech, complete English localization of old status/template strings, and native history branch reconstruction remain limitations.
 
 Abrupt child-process exit test recovered exactly 256 synchronized records of 300 and correctly marked the result partial; 44 unflushed records were absent. The test used synthetic metadata only.
+
+
+## 0.3.1 — Ollama lifecycle and rollback names
+
+Ollama status checks run automatically on engine entry, app activation and completion of an operation. A bounded local tags check distinguishes reachable service from an installed app that needs launching. Existing 3B/7B models show Installed/Selected and cannot trigger a redundant pull. Model download has an immediate waiting state, per-file byte/fraction progress, cancellation and terminal-success validation. Missing service disables download. No existing model was removed to test downloading.
+
+Updater copies now preserve the application filename under rollback/OxyMac Cleaner.app, with compatible inventory and migration of validated completed legacy capsules. No TCC database editing, permission reset or weakened signature requirements. macOS may retain a cached old permission label; this is not a stable-signing substitute.
+
+147 core tests passed, including pull progress/error/incomplete stream and old/new backup layouts. Real helper tests passed successful launch and failed-launch rollback on disposable shell app stubs. Follow-up from the UX specification: translated update statuses and clean-context template into English. Complete VoiceOver coverage and all historical diagnostic strings remain unfinished.
+
+Final packaged 0.3.1 installed locally. Live UI automatically detected running Ollama and both installed models; install/launch/download buttons were absent. Switching 7B→3B→7B selected instantly without download or confirmation. Left 7B selected. Existing scan restored; validated legacy backup directories migrated with original bundle names. Full Disk Access probe still reports denial after replacing the ad-hoc binary; no permissions were reset. Byte-progress and incomplete-stream logic were tested with synthetic protocol responses; no model was removed or needlessly downloaded for UI testing.

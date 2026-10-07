@@ -16,6 +16,11 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
   private var checkedOnLaunch = false
   func checkOnLaunch() {
     guard !checkedOnLaunch else { return }; checkedOnLaunch = true
+    let app = Bundle.main.bundleURL
+    Task {
+      do { _ = try await Task.detached { try UpdateBackups.normalizeLegacyNames(beside: app) }.value }
+      catch { NSLog("Update backup name migration: %@", error.localizedDescription) }
+    }
     if UserDefaults.standard.object(forKey: "automaticUpdateCheck") as? Bool ?? true { check() }
   }
   @Published var fraction: Double = 0
@@ -112,10 +117,17 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
       } catch { status = error.localizedDescription }
     }
   }
+  func localizedStatus(russian: Bool) -> String {
+    guard !russian else { return ErrorPresentation.message(status, russian: true) }
+    let labels = ["Проверяем релизы…": "Checking releases…", "Установлена актуальная версия": "You are up to date", "Скачиваем обновление…": "Downloading update…", "Проверяем сборку…": "Verifying update…", "Перезапускаем. При сбое вернётся предыдущая версия.": "Restarting. The previous version will be restored if launch fails."]
+    if status.hasPrefix("Доступна версия ") { return "Version available: " + status.dropFirst("Доступна версия ".count) }
+    return labels[status] ?? status
+  }
   static let script = #"""
   set -eu
   old_pid="$1"; app="$2"; next="$3"; stage="$4"
-  backup="$stage/previous.app"
+  /bin/mkdir -p "$stage/rollback"
+  backup="$stage/rollback/OxyMac Cleaner.app"
   n=0
   while kill -0 "$old_pid" 2>/dev/null; do
     n=$((n+1)); [ "$n" -lt 60 ] || exit 1
@@ -127,14 +139,14 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
   child=$!
   n=0
   while [ "$n" -lt 45 ]; do
-    if [ -f "$stage/healthy" ]; then echo 'Update launched successfully; previous.app retained'; exit 0; fi
+    if [ -f "$stage/healthy" ]; then echo 'Update launched successfully; rollback copy retained'; exit 0; fi
     n=$((n+1)); sleep 1
   done
   echo 'No launch confirmation; restoring previous version'
   kill -TERM "$child" 2>/dev/null || true
   sleep 2
   if kill -0 "$child" 2>/dev/null; then echo 'New app still running; manual recovery required. Backup retained.'; exit 1; fi
-  /bin/mv "$app" "$stage/failed.app"
+  /bin/mv "$app" "$stage/failed-update"
   /bin/mv "$backup" "$app"
   /usr/bin/open "$app"
   """#
@@ -156,7 +168,7 @@ struct AppUpdateView: View {
   var body: some View {
     VStack(alignment: .leading) {
       Toggle(vm.t("Проверять при запуске", "Check at launch"), isOn: $automatic)
-      Text(updater.status)
+      Text(updater.localizedStatus(russian: vm.language != "en"))
       if updater.busy {
         ProgressView(value: updater.fraction)
         Text("\(Int(updater.fraction * 100)) %").font(.caption.monospacedDigit())

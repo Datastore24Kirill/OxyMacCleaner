@@ -272,7 +272,7 @@ enum HelpTopic {
       )
     case .launchEngine:
       return (
-        "Запускает установленное приложение Ollama. После запуска нажмите «Обновить модели», чтобы обновить список локальных моделей.",
+        "Запускает установленное приложение Ollama. Состояние и список моделей проверяются автоматически; повторная проверка доступна кнопкой «Проверить состояние».",
         "Launches the installed Ollama app. Then use Refresh models to refresh available local models."
       )
     case .checkEngine:

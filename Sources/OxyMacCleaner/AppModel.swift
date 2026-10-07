@@ -318,6 +318,14 @@ import UserNotifications
   @Published var transcript: Transcript?
   @Published var output = ""
   @Published var models: [String] = []
+  @Published var engineChecking = false
+  @Published var engineReady = false
+  @Published var engineMessage = ""
+  @Published var pullingModel: String?
+  @Published var modelProgress: ModelPullProgress?
+  var installedOllama: URL? {
+    [URL(fileURLWithPath: "/Applications/Ollama.app"), home.appendingPathComponent("Applications/Ollama.app")].first { FileManager.default.fileExists(atPath: $0.path) }
+  }
   @Published var model = ""
   @Published var style = "Бережный"
   @Published var simulatorInventory = SimulatorInventory()
@@ -752,40 +760,61 @@ import UserNotifications
     }
   }
   func refreshModels() {
-    guard !busy else { return }
-    busy = true
-    task = Task {
+    guard !busy, !engineChecking else { return }
+    engineChecking = true
+    engineMessage = t("Проверяем Ollama…", "Checking Ollama…")
+    Task {
+      defer { engineChecking = false }
       do {
-        models = try await engine.models()
+        models = try await engine.models(); engineReady = true
         if !models.contains(model) { model = models.first(where: { $0 == "qwen2.5:7b" }) ?? models.first ?? "" }
-        status = t("Локальный движок доступен", "Local engine ready")
+        engineMessage = t("Ollama работает. Локальных моделей: ", "Ollama is running. Local models: ") + String(models.count)
       } catch {
-        self.error = t("Запустите Ollama. ", "Start Ollama. ") + error.localizedDescription
+        engineReady = false
+        engineMessage = installedOllama == nil
+          ? t("Движок недоступен. Установите Ollama или запустите свою установку.", "Engine unavailable. Install Ollama or start your existing installation.")
+          : t("Ollama установлена, но не отвечает. Нажмите «Запустить».", "Ollama is installed but not responding. Click Launch.")
       }
-      busy = false
     }
   }
   func pull(_ name: String) {
-    guard !busy else { return }
-    guard
-      confirm(
-        t("Скачать локальную модель?", "Download local model?"),
-        name + "\n"
-          + t(
-            "3B: около 2 ГБ; 7B: около 5 ГБ. Нужен интернет для загрузки. Тексты чатов не отправляются.",
-            "3B: about 2 GB; 7B: about 5 GB. Internet required for download. No chat content is uploaded."
-          ))
-    else { return }
-    busy = true
-    task = Task {
-      do {
-        try await engine.pull(name) { s in Task { @MainActor in self.status = s } }
-        models = try await engine.models()
-        model = name
-        log("Local model downloaded: \(name)")
-      } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
-      busy = false
+    guard !busy, !engineChecking else { return }
+    if models.contains(name), engineReady {
+      model = name; engineMessage = t("Модель уже установлена и выбрана: ", "Model already installed and selected: ") + name
+      return
     }
+    guard engineReady else { refreshModels(); return }
+    guard confirm(t("Скачать локальную модель?", "Download local model?"), name + "\n" + t("3B: около 2 ГБ; 7B: около 5 ГБ. Нужен интернет. Тексты чатов не отправляются.", "3B: about 2 GB; 7B: about 5 GB. Internet required. No chat content is uploaded.")) else { return }
+    busy = true; pullingModel = name; modelProgress = nil
+    status = t("Подключаемся к загрузке модели…", "Connecting to model download…")
+    task = Task {
+      defer { busy = false; pullingModel = nil }
+      do {
+        try await engine.pull(name) { item in
+          Task { @MainActor in
+            guard self.pullingModel == name else { return }
+            self.modelProgress = item
+            self.status = self.pullStatus(item.status)
+          }
+        }
+        models = try await engine.models()
+        guard models.contains(name) else { throw CleanerError.message("Downloaded model not found. Refresh models and retry.") }
+        model = name; engineReady = true
+        status = t("Модель установлена и выбрана: ", "Model installed and selected: ") + name
+        engineMessage = status; log("Local model downloaded: \(name)")
+      } catch {
+        status = t("Загрузка остановлена. Можно повторить и продолжить её.", "Download stopped. Retry to resume.")
+        engineMessage = status
+        if !Task.isCancelled { self.error = error.localizedDescription }
+      }
+    }
+  }
+  func pullStatus(_ value: String) -> String {
+    if value == "success" { return t("Загрузка завершена. Проверяем модель…", "Download complete. Checking model…") }
+    if value.contains("verifying") { return t("Проверяем контрольную сумму…", "Verifying checksum…") }
+    if value.contains("manifest") { return t("Получаем сведения о модели…", "Reading model manifest…") }
+    if value.contains("pulling") { return t("Скачиваем модель…", "Downloading model…") }
+    return value
   }
   func summarize() {
     guard let transcript, !model.isEmpty, !busy else { return }

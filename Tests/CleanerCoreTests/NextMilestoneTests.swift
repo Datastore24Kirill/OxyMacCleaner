@@ -62,7 +62,7 @@ final class NextMilestoneTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: root) }
     for index in 0..<3 {
       let folder = root.appendingPathComponent(".OxyMacUpdate-" + UUID().uuidString)
-      let contents = folder.appendingPathComponent("previous.app/Contents")
+      let contents = folder.appendingPathComponent(index == 1 ? "rollback/OxyMac Cleaner.app/Contents" : "previous.app/Contents")
       try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
       let data = try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier":"com.oxyfire.OxyMacCleaner", "CFBundleShortVersionString":"0.2.\(index)"], format: .xml, options: 0)
       try data.write(to: contents.appendingPathComponent("Info.plist"))
@@ -75,6 +75,11 @@ final class NextMilestoneTests: XCTestCase {
     XCTAssertEqual(list.count, 2); XCTAssertEqual(list[0].version, "0.2.1"); XCTAssertTrue(list[0].protected)
     XCTAssertFalse(list[1].protected)
     XCTAssertThrowsError(try UpdateBackups.trash(list[0], beside: app))
+    XCTAssertEqual(try UpdateBackups.normalizeLegacyNames(beside: app), 1)
+    XCTAssertEqual(try UpdateBackups.normalizeLegacyNames(beside: app), 0)
+    let migrated = try UpdateBackups.list(beside: app)
+    XCTAssertEqual(migrated.count, 2); XCTAssertEqual(migrated[0].version, "0.2.1")
+    XCTAssertTrue(migrated[0].protected)
   }
 
 }

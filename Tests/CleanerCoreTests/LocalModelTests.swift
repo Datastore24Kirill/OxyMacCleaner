@@ -20,6 +20,8 @@ final class LocalProtocol: URLProtocol {
           ["name": "secret", "remote_host": "example.com"],
         ]
       ]
+    case "/api/pull":
+      body = Self.mode == "interrupted" ? ["status": "pulling", "completed": 5, "total": 10] : ["status": "success"]
     case "/api/show":
       body =
         Self.mode == "remote" ? ["remote_host": "example.com"] : ["details": ["format": "gguf"]]
@@ -48,6 +50,17 @@ final class LocalModelTests: XCTestCase {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [LocalProtocol.self]
     engine = LocalModel(configuration: config)
+  }
+  func testPullProgressAndMissingTotals() throws {
+    let progress = try ModelPullProgress.parse(Data(#"{"status":"pulling","completed":5,"total":10}"#.utf8))
+    XCTAssertEqual(progress.fraction, 0.5)
+    XCTAssertNil(try ModelPullProgress.parse(Data(#"{"status":"verifying sha256 digest"}"#.utf8)).fraction)
+    XCTAssertThrowsError(try ModelPullProgress.parse(Data(#"{"error":"disk full"}"#.utf8)))
+  }
+  func testPullRequiresSuccessEvent() async throws {
+    try await engine.pull("qwen2.5:7b") { _ in }
+    LocalProtocol.mode = "interrupted"
+    do { try await engine.pull("qwen2.5:7b") { _ in }; XCTFail("Incomplete stream accepted") } catch {}
   }
   func testModelsExcludeRemote() async throws {
     let list = try await engine.models()

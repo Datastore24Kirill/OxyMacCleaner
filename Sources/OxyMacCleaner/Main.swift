@@ -125,7 +125,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.3.0 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.3.1 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -599,47 +599,7 @@ struct RootView: View {
       }
     }
   }
-  var engine: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        card {
-          Text(vm.t("Локально на вашем Mac", "Local on your Mac")).font(.title2.bold())
-          note(
-            "Ollama выполняет обработку на 127.0.0.1. Облачные модели исключены. Нужен интернет только для установки компонентов.",
-            "Ollama processes text at 127.0.0.1. Cloud models are excluded. Internet is needed only to install components."
-          )
-          HStack {
-            Button(vm.t("Скачать и установить Ollama", "Download and install Ollama")) {
-              vm.installOllama()
-            }.oxyHelp(.installEngine).disabled(vm.busy)
-            Button(vm.t("Запустить", "Launch")) { vm.launchOllama() }.oxyHelp(.launchEngine)
-            Button(vm.t("Обновить модели", "Refresh models")) { vm.refreshModels() }.oxyHelp(
-              .checkEngine
-            )
-            .disabled(vm.busy)
-          }
-        }
-        card {
-          Text(vm.t("Модель для контекста", "Context model")).font(.headline)
-          Text(
-            vm.t("Память Mac: ", "Mac memory: ")
-              + size(Int64(ProcessInfo.processInfo.physicalMemory)))
-          HStack {
-            Button("Qwen 2.5 · 3B (~2 GB)") { vm.pull("qwen2.5:3b") }.oxyHelp(.pull)
-            Button("Qwen 2.5 · 7B (~5 GB)") { vm.pull("qwen2.5:7b") }.oxyHelp(.pull)
-          }.disabled(vm.busy)
-          Picker(vm.t("Установленная модель", "Installed model"), selection: $vm.model) {
-            Text(vm.t("Выберите модель", "Select model")).tag("")
-            ForEach(vm.models, id: \.self) { Text($0).tag($0) }
-          }.oxyHelp(.model)
-          note(
-            "Для контекста предпочтительна 7B; 3B не прошла проверку качества. Качество пересказа зависит от модели; длинная история обрабатывается частями, без молчаливого обрезания. Другие задачи Ollama не останавливаются.",
-            "Prefer 7B for context; 3B failed quality checks. Quality depends on the model. Long histories are processed in chunks without silent truncation. Other Ollama tasks are not stopped."
-          )
-        }
-      }
-    }
-  }
+  var engine: some View { EnginePanel() }
   var quarantine: some View {
     VStack(alignment: .leading, spacing: 12) {
       note(

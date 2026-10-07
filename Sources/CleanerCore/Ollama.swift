@@ -1,5 +1,17 @@
 import Foundation
 
+public struct ModelPullProgress: Sendable {
+  public let status: String
+  public let completed: Double
+  public let total: Double
+  public var fraction: Double? { total > 0 ? min(1, max(0, completed / total)) : nil }
+  public static func parse(_ data: Data) throws -> ModelPullProgress {
+    guard let j = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw CleanerError.message("Invalid download progress") }
+    if let error = j["error"] as? String { throw CleanerError.message(error) }
+    return ModelPullProgress(status: j["status"] as? String ?? "", completed: max(0, (j["completed"] as? NSNumber)?.doubleValue ?? 0), total: max(0, (j["total"] as? NSNumber)?.doubleValue ?? 0))
+  }
+}
+
 public final class LocalModel: @unchecked Sendable {
   private let session: URLSession
   public init(configuration: URLSessionConfiguration? = nil) {
@@ -19,7 +31,8 @@ public final class LocalModel: @unchecked Sendable {
     return r
   }
   public func models() async throws -> [String] {
-    let (data, response) = try await session.data(for: request("tags"))
+    var query = try request("tags"); query.timeoutInterval = 5
+    let (data, response) = try await session.data(for: query)
     try validate(response)
     let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     // Remote/cloud models are not eligible for local context processing.
@@ -27,28 +40,22 @@ public final class LocalModel: @unchecked Sendable {
       $0["remote_host"] == nil && $0["remote_model"] == nil
     }.compactMap { $0["name"] as? String }.filter { !$0.lowercased().contains("cloud") }
   }
-  public func pull(_ name: String, progress: @escaping @Sendable (String) -> Void) async throws {
+  public func pull(_ name: String, progress: @escaping @Sendable (ModelPullProgress) -> Void) async throws {
     guard ["qwen2.5:3b", "qwen2.5:7b"].contains(name) else {
       throw CleanerError.message("Choose an approved local model")
     }
     let (stream, response) = try await session.bytes(
       for: request("pull", ["model": name, "stream": true]))
     try validate(response)
+    var succeeded = false
     for try await line in stream.lines {
       try Task.checkCancellation()
-      guard let d = line.data(using: .utf8),
-        let j = try JSONSerialization.jsonObject(with: d) as? [String: Any]
-      else { continue }
-      if let error = j["error"] as? String { throw CleanerError.message(error) }
-      let done = (j["completed"] as? NSNumber)?.doubleValue ?? 0
-      let total = (j["total"] as? NSNumber)?.doubleValue ?? 0
-      progress(
-        (j["status"] as? String ?? "")
-          + (total > 0
-            ? String(
-              format: " · %.0f%% · %.0f / %.0f MB", done / total * 100, done / 1e6, total / 1e6)
-            : ""))
+      guard !line.isEmpty else { continue }
+      let item = try ModelPullProgress.parse(Data(line.utf8))
+      succeeded = item.status == "success"
+      progress(item)
     }
+    guard succeeded else { throw CleanerError.message("Model download interrupted before completion. Retry to resume.") }
   }
   public func generate(_ prompt: String, model: String) async throws -> String {
     let available = try await models()
