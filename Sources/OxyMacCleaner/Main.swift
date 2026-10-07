@@ -111,7 +111,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.19 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.20 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -456,6 +456,7 @@ struct RootView: View {
             ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
           }.oxyHelp(.agent).onChange(of: vm.agent) { _, _ in
             vm.transcript = nil
+            vm.sessionCatalog = nil
             vm.output = ""
           }
           if let definition = Agents.catalog.first(where: { $0.id == vm.agent }) {
@@ -480,6 +481,7 @@ struct RootView: View {
             }
           }
           if ["codex", "claude"].contains(vm.agent) {
+            SessionCatalogView()
             Button(vm.t("Открыть JSONL-историю агента…", "Open agent JSONL history…")) {
               vm.importTranscript(native: true)
             }.disabled(vm.busy).help(vm.t(
@@ -697,8 +699,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.19 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.19 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.20 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.20 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

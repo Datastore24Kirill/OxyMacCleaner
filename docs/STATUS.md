@@ -168,3 +168,9 @@ Packaged 0.1.18 launched locally; saved scan restored. Project-data UI displayed
 Codex/Claude Code JSONL recognition with source-line references and complete record retention. Import runs off the UI thread. Original files remain unchanged; backups represent the loaded bytes. Other agents retain generic export import. Native branch reconstruction, automatic session discovery and real-model quality validation remain pending.
 
 112 core tests passed. Installed packaged 0.1.19 and imported a synthetic Codex history through the UI: one message and two retained records. No model selected locally, so generation was not exercised. Real user histories were not processed or modified.
+
+## 0.1.20 — session file discovery
+
+Bounded metadata-only discovery of Codex/Claude JSONL files, sorted dates, sizes, path filtering and paginated rendering. Native validation runs only on selection. Missing access and limits report incomplete results. No history writes or model calls during discovery.
+
+116 core tests passed. Packaged 0.1.20 installed, saved scan restored, catalog and name filtering verified in the UI. Only metadata inspected; no real session content loaded or changed. Large histories above 30 MB remain blocked for import pending streaming support. Full Disk Access probe still denied; no permission changes made.

@@ -303,6 +303,7 @@ import UserNotifications
   @Published var search = ""
   @Published var categoryFilter = "all"
   @Published var agent = "codex"
+  @Published var sessionCatalog: SessionCatalogResult?
   @Published var transcript: Transcript?
   @Published var output = ""
   @Published var models: [String] = []
