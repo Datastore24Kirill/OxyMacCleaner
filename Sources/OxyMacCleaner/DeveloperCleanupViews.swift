@@ -140,12 +140,10 @@ struct SimulatorCleanupView: View {
             Text(
               (runtime.runtimeIdentifier.components(separatedBy: ".").last ?? "Runtime") + " · "
                 + runtime.version + " (" + runtime.build + ")")
-            Text(
-              (runtime.sizeBytes.map {
-                ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
-              } ?? "?") + " · " + runtime.state + " · " + vm.t("Устройств: ", "Devices: ")
-                + "\(vm.simulatorInventory.devices.filter { $0.runtime == runtime.runtimeIdentifier }.count)"
-            ).font(.caption)
+            let size = runtime.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?"
+            let deviceCount = vm.simulatorInventory.devices.filter { $0.runtime == runtime.runtimeIdentifier }.count
+            let devicesLabel = vm.t("Устройств: ", "Devices: ") + String(deviceCount)
+            Text([size, runtime.state, devicesLabel].joined(separator: " · ")).font(.caption)
             Text(
               vm.t("Последнее использование: ", "Last used: ")
                 + (runtime.lastUsedAt ?? vm.t("неизвестно", "unknown"))
