@@ -42,7 +42,7 @@ final class SessionCatalogTests: XCTestCase {
     _ = try write("empty.jsonl", "")
     let big = try write("large.jsonl", "")
     let handle = try FileHandle(forWritingTo: big)
-    try handle.truncate(atOffset: 30_000_001); try handle.close()
+    try handle.truncate(atOffset: 1_000_000_001); try handle.close()
     let result = try SessionCatalog.discover(roots: [root])
     XCTAssertEqual(result.files.count, 2)
     XCTAssertTrue(result.files.allSatisfy { !$0.importable })

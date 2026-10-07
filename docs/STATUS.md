@@ -174,3 +174,9 @@ Codex/Claude Code JSONL recognition with source-line references and complete rec
 Bounded metadata-only discovery of Codex/Claude JSONL files, sorted dates, sizes, path filtering and paginated rendering. Native validation runs only on selection. Missing access and limits report incomplete results. No history writes or model calls during discovery.
 
 116 core tests passed. Packaged 0.1.20 installed, saved scan restored, catalog and name filtering verified in the UI. Only metadata inspected; no real session content loaded or changed. Large histories above 30 MB remain blocked for import pending streaming support. Full Disk Access probe still denied; no permission changes made.
+
+## 0.1.21 — bounded streaming history import
+
+Native JSONL above 30 MB uses a private disk snapshot and bounded line/chunk readers, up to 1 GB. Cancellation and byte progress are wired into import and backup. Local generation consumes chunks incrementally, with an explicit 8 MB output ceiling. Real-model quality and long-run throughput remain unverified.
+
+121 core tests passed, including >30 MB native import, snapshot lifetime, unchanged verified backups after source mutation, malformed/oversize lines, cancellation and UTF-8 boundaries. Installed 0.1.21 and imported a synthetic 30.1 MB file through UI. Real histories and permissions unchanged; Full Disk Access probe still denies access. Model generation was not exercised.

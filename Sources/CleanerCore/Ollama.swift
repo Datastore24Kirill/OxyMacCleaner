@@ -82,15 +82,24 @@ public final class LocalModel: @unchecked Sendable {
     _ transcript: Transcript, model: String, style: String,
     progress: @escaping @Sendable (String) -> Void
   ) async throws -> String {
-    let chunks = ContextPlan.chunks(transcript.numbered)
+    let reader = try transcript.streaming?.chunks()
+    var small = (reader == nil ? ContextPlan.chunks(transcript.numbered) : []).makeIterator()
     var notes: [String] = []
-    for (i, chunk) in chunks.enumerated() {
+    var noteBytes = 0
+    var part = 0
+    while true {
       try Task.checkCancellation()
-      progress("\(i+1) / \(chunks.count)")
-      notes.append(
-        try await generate(
-          "Agent: \(transcript.agent). Compression: \(style). Extract handoff notes for part \(i+1)/\(chunks.count). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>",
-          model: model))
+      let next = try reader != nil ? reader!.next() : small.next()
+      guard let chunk = next else { break }
+      part += 1
+      progress("\(part)")
+      let note = try await generate(
+        "Agent: \(transcript.agent). Compression: \(style). Extract handoff notes for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>", model: model)
+      noteBytes += note.utf8.count
+      guard noteBytes <= 8_000_000 else {
+        throw CleanerError.message("Summary exceeds 8 MB. Process a smaller exported session; original and backup remain intact")
+      }
+      notes.append(note)
     }
     // Never silently truncate a long history to fit one prompt. Keep independently cited parts.
     let body = notes.enumerated().map { "## Часть \($0.offset+1)\n\n\($0.element)" }.joined(

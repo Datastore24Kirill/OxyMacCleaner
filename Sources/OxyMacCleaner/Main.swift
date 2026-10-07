@@ -111,7 +111,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.20 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.1.21 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -499,11 +499,15 @@ struct RootView: View {
         if let input = vm.transcript {
           card {
             Text(input.source.lastPathComponent).font(.headline)
+            if let streamed = input.streaming {
+              Text(vm.t("Потоковый импорт: ", "Streaming import: ") + ByteCountFormatter.string(fromByteCount: streamed.bytes, countStyle: .file)).font(.caption)
+            } else {
             Text(
               vm.t(
                 "Исходник: \(input.text.count) символов", "Original: \(input.text.count) characters"
               )
             ).font(.caption)
+            }
             if let report = input.nativeHistory {
               Text(vm.t("JSONL: сообщений ", "JSONL: messages ") + "\(report.messages)"
                 + vm.t(" · других записей сохранено: ", " · other records retained: ") + "\(report.retainedRecords)")
@@ -699,8 +703,8 @@ struct RootView: View {
       Section(vm.t("Обновления", "Updates")) {
         Text(
           vm.t(
-            "0.1.20 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.20 Preview. Automatic update installation and rollback are not implemented yet."))
+            "0.1.21 Preview. Автоустановка обновлений и откат ещё не реализованы.",
+            "0.1.21 Preview. Automatic update installation and rollback are not implemented yet."))
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

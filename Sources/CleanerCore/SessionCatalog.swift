@@ -5,7 +5,7 @@ public struct SessionFile: Identifiable, Sendable {
   public let url: URL
   public let bytes: Int64
   public let modified: Date
-  public var importable: Bool { bytes > 0 && bytes <= 30_000_000 }
+  public var importable: Bool { bytes > 0 && bytes <= 1_000_000_000 }
 }
 public struct SessionCatalogResult: Sendable {
   public var files: [SessionFile] = []

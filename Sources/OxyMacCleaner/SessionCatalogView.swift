@@ -26,13 +26,19 @@ extension AppModel {
   func openAgentSession(_ url: URL) {
     guard !busy else { return }
     let selected = agent
+    cancellation = Cancellation()
+    let token = cancellation
     busy = true
     transcript = nil
     output = ""
     task = Task {
       do {
-        let loaded = try await Task.detached { try Transcript.loadNative(url, agent: selected) }.value
+        let loaded = try await Task.detached { try Transcript.loadNative(url, agent: selected, cancellation: token) { done, total in
+          Task { @MainActor in self.status = self.t("Импорт истории: ", "Importing history: ") + "\(total > 0 ? done * 100 / total : 0)%" }
+        } }.value
+        try token.check()
         if selected == agent { transcript = loaded }
+        status = t("История загружена", "History loaded")
       } catch { self.error = error.localizedDescription }
       busy = false
     }
@@ -68,7 +74,7 @@ struct SessionCatalogView: View {
                 .disabled(vm.busy || !file.importable)
                 .help(vm.t("Загружает одну историю и проверяет агента и ID сессии. Исходник не меняется.", "Loads one history and validates agent and session ID. Original is unchanged."))
             }
-            if !file.importable { Text(vm.t("Пустой файл или размер больше 30 MB", "Empty file or larger than 30 MB")).font(.caption).foregroundStyle(.orange) }
+            if !file.importable { Text(vm.t("Пустой файл или размер больше 1 GB", "Empty file or larger than 1 GB")).font(.caption).foregroundStyle(.orange) }
           }.padding(8).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
         }
         if filtered.count > shown { Button(vm.t("Показать ещё", "Show more")) { shown += 20 } }

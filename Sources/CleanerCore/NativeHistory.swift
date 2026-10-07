@@ -1,23 +1,19 @@
 import Foundation
 
-/// Read-only JSONL adapters. Unknown records are retained verbatim, never discarded.
 public enum NativeHistory {
   public struct Result: Sendable {
     public let numbered: String
     public let messages: Int
     public let retainedRecords: Int
   }
-  public static func parse(_ text: String, agent: String) throws -> Result {
-    guard ["codex", "claude"].contains(agent) else {
-      throw CleanerError.message("Native history adapter unavailable for this agent")
-    }
-    var lines: [String] = []
+  struct Validator {
+    let agent: String
     var identities = Set<String>()
     var messages = 0
     var retained = 0
     var recognized = false
-    for (index, raw) in text.components(separatedBy: "\n").enumerated() {
-      guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+    mutating func consume(_ raw: String, index: Int) throws -> String? {
+      guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
       guard let data = raw.data(using: .utf8),
         let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
       else { throw CleanerError.message("Invalid JSONL at line \(index + 1)") }
@@ -44,15 +40,26 @@ public enum NativeHistory {
       // compaction events and unknown fields can all carry important context.
       if let message, let role = message["role"] as? String {
         messages += 1
-        lines.append("[L\(index + 1)] MESSAGE (\(role)): \(raw)")
+        return "[L\(index + 1)] MESSAGE (\(role)): \(raw)"
       } else {
         retained += 1
-        lines.append("[L\(index + 1)] RECORD (\(type)): \(raw)")
+        return "[L\(index + 1)] RECORD (\(type)): \(raw)"
       }
+
     }
-    guard recognized, identities.count == 1, messages > 0 else {
-      throw CleanerError.message("Unrecognized or mixed session. Import one JSONL session for the selected agent")
+    func finish(numbered: String = "") throws -> Result {
+      guard ["codex", "claude"].contains(agent), recognized, identities.count == 1, messages > 0 else {
+        throw CleanerError.message("Unrecognized or mixed session. Import one JSONL session for the selected agent")
+      }
+      return Result(numbered: numbered, messages: messages, retainedRecords: retained)
     }
-    return Result(numbered: lines.joined(separator: "\n"), messages: messages, retainedRecords: retained)
+  }
+  public static func parse(_ text: String, agent: String) throws -> Result {
+    var validator = Validator(agent: agent)
+    var lines: [String] = []
+    for (index, raw) in text.components(separatedBy: "\n").enumerated() {
+      if let line = try validator.consume(raw, index: index) { lines.append(line) }
+    }
+    return try validator.finish(numbered: lines.joined(separator: "\n"))
   }
 }

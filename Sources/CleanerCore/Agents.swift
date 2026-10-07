@@ -44,6 +44,7 @@ public struct Transcript: Sendable {
   public let text: String
   public let digest: String
   public var nativeHistory: NativeHistory.Result? = nil
+  public var streaming: StreamingHistory? = nil
   public static func load(_ url: URL, agent: String) throws -> Transcript {
     let record = try FileRecord.read(url)
     guard record.bytes <= 30_000_000 else {
@@ -61,15 +62,25 @@ public struct Transcript: Sendable {
     try record.validate()
     return Transcript(source: url, agent: agent, text: text, digest: hash)
   }
-  public static func loadNative(_ url: URL, agent: String) throws -> Transcript {
+  public static func loadNative(_ url: URL, agent: String, cancellation: Cancellation = Cancellation(), progress: @Sendable (Int64, Int64) -> Void = { _, _ in }) throws -> Transcript {
     guard url.pathExtension.lowercased() == "jsonl" else {
       throw CleanerError.message("Choose a JSONL session file")
+    }
+    try cancellation.check()
+    if try FileRecord.read(url).bytes > 30_000_000 {
+      let snapshot = try StreamingHistory.load(url, agent: agent, cancellation: cancellation, progress: progress)
+      var transcript = Transcript(source: url, agent: agent, text: "", digest: snapshot.digest)
+      transcript.nativeHistory = snapshot.report
+      transcript.streaming = snapshot
+      return transcript
     }
     var transcript = try load(url, agent: agent)
     transcript.nativeHistory = try NativeHistory.parse(transcript.text, agent: agent)
     return transcript
   }
-  public func backup(in folder: URL) throws -> URL {
+  public func backup(in folder: URL, cancellation: Cancellation = Cancellation()) throws -> URL {
+    if let streaming { return try streaming.backup(in: folder, cancellation: cancellation) }
+    try cancellation.check()
     // Store exactly the bytes represented by the loaded text; never modify source.
     try FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

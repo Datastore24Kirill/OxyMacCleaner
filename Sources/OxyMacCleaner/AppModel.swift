@@ -710,15 +710,24 @@ import UserNotifications
       "Export of one inactive session: TXT, MD, JSON or JSONL. Original remains intact.")
     if p.runModal() == .OK, let url = p.url {
       let selectedAgent = agent
+      cancellation = Cancellation()
+      let token = cancellation
       busy = true
       transcript = nil
       output = ""
       task = Task {
         do {
           let loaded = try await Task.detached {
-            try native ? Transcript.loadNative(url, agent: selectedAgent) : Transcript.load(url, agent: selectedAgent)
+            if native {
+              return try Transcript.loadNative(url, agent: selectedAgent, cancellation: token) { done, total in
+                Task { @MainActor in self.status = self.t("Импорт истории: ", "Importing history: ") + "\(total > 0 ? done * 100 / total : 0)%" }
+              }
+            }
+            return try Transcript.load(url, agent: selectedAgent)
           }.value
+          try token.check()
           if agent == selectedAgent { transcript = loaded }
+          status = t("История загружена", "History loaded")
         } catch { self.error = error.localizedDescription }
         busy = false
       }
@@ -774,10 +783,13 @@ import UserNotifications
     output = ""
     let selectedModel = model
     let compression = style
+    cancellation = Cancellation()
+    let token = cancellation
     let backupRoot = support.appendingPathComponent("HistoryBackups")
     task = Task {
       do {
-        let saved = try await Task.detached { try transcript.backup(in: backupRoot) }.value
+        let saved = try await Task.detached { try transcript.backup(in: backupRoot, cancellation: token) }.value
+        try token.check()
         log("Verified history backup: \(saved.lastPathComponent)")
         output = try await engine.summarize(transcript, model: selectedModel, style: compression) {
           s in
