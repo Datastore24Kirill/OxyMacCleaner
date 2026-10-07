@@ -743,7 +743,7 @@ import UserNotifications
     task = Task {
       do {
         models = try await engine.models()
-        if !models.contains(model) { model = models.first ?? "" }
+        if !models.contains(model) { model = models.first(where: { $0 == "qwen2.5:7b" }) ?? models.first ?? "" }
         status = t("Локальный движок доступен", "Local engine ready")
       } catch {
         self.error = t("Запустите Ollama. ", "Start Ollama. ") + error.localizedDescription

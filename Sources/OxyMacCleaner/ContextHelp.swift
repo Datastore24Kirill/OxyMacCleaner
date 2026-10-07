@@ -237,7 +237,7 @@ enum HelpTopic {
       )
     case .summaryStyle:
       return (
-        "Задаёт подробность инструкции локальной модели: бережный, сбалансированный или краткий пересказ. Результат всё равно требует проверки.",
+        "Задаёт подробность инструкции локальной модели: бережный, сбалансированный или краткий отбор исходных цитат. Результат всё равно требует проверки.",
         "Sets the local model’s requested detail level: careful, balanced or concise. The result still needs review."
       )
     case .summarize:
@@ -262,7 +262,7 @@ enum HelpTopic {
       )
     case .editor:
       return (
-        "Можно исправить пересказ перед копированием или экспортом. Проверьте решения, ограничения и следующие шаги: модель может пропустить детали.",
+        "Можно исправить выжимку перед копированием или экспортом. Проверьте решения, ограничения и следующие шаги: модель может пропустить детали.",
         "Edit the summary before copying or exporting. Check decisions, constraints and next steps: the model may omit details."
       )
     case .installEngine:

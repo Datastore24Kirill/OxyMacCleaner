@@ -3,6 +3,7 @@
 import argparse
 import json
 import re
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -34,8 +35,14 @@ def audit(text, case):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model', required=True)
+    parser.add_argument('--filter-cli', type=Path, help='Compiled context_filter.swift using the current CleanerCore')
+    parser.add_argument('--grounded', action='store_true', help='Render cited source excerpts using the application core')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    def sanitize(text):
+        if args.filter_cli:
+            return subprocess.run([str(args.filter_cli)], input=text, text=True, capture_output=True, check=True).stdout
+        return text
     models = request('tags').get('models', [])
     eligible = [m['name'] for m in models if not m.get('remote_host') and not m.get('remote_model') and 'cloud' not in m['name'].lower()]
     if args.model not in eligible:
@@ -48,15 +55,18 @@ def main():
     # Read the app's exact prompt to avoid testing a divergent instruction.
     source = Path(__file__).resolve().parents[2] / 'Sources/CleanerCore/Agents.swift'
     system = source.read_text().split('public static let system = """', 1)[1].split('"""', 1)[0].strip()
-    report = {'model': args.model, 'semantic_quality': 'requires human review', 'cases': []}
+    report = {'model': args.model, 'semantic_quality': 'requires human review', 'app_redaction': bool(args.filter_cli), 'grounded': args.grounded, 'cases': []}
     for case in cases:
         transcript = '\n'.join(f'[L{i}] {line}' for i, line in enumerate(case['lines'], 1))
         result = request('generate', {'model': args.model, 'system': system,
-            'prompt': 'Agent: codex. Compression: Бережный. Extract handoff notes for part 1. Preserve source line citations.\n<transcript>\n' + transcript + '\n</transcript>',
+            'prompt': 'Agent: codex. Compression: Бережный. Extract handoff notes for part 1. Preserve source line citations.\n<transcript>\n' + sanitize(transcript) + '\n</transcript>',
             'stream': False, 'options': {'temperature': 0.1, 'num_ctx': 16384, 'num_predict': 4096}, 'keep_alive': '5m'})
-        text = result.get('response', '')
+        text = sanitize(result.get('response', ''))
         if result.get('error') or not text.strip():
             raise RuntimeError(result.get('error', 'Empty response'))
+        if args.grounded:
+            if not args.filter_cli: raise RuntimeError('--grounded requires --filter-cli')
+            text = subprocess.run([str(args.filter_cli), '--ground'], input=json.dumps({'proposal': text, 'source': transcript}), text=True, capture_output=True, check=True).stdout
         output = args.output / (case['id'] + '.md')
         output.write_text(text); output.chmod(0o600)
         report['cases'].append({'id': case['id'], 'checks': audit(text, case),

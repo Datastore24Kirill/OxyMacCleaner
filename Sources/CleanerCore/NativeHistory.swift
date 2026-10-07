@@ -28,6 +28,13 @@ public enum NativeHistory {
         if type == "response_item", payload?["type"] as? String == "message" {
           message = payload
         }
+      } else if agent == "cursor" {
+        guard let role = value["role"] as? String, ["user", "assistant"].contains(role),
+          let body = value["message"] as? [String: Any], body["content"] is [Any] else {
+          throw CleanerError.message("Unsupported Cursor transcript record at line \(index + 1)")
+        }
+        message = ["role": role]
+        recognized = true
       } else {
         if let id = value["sessionId"] as? String, !id.isEmpty { identities.insert(id) }
         if ["user", "assistant"].contains(type), let body = value["message"] as? [String: Any],
@@ -48,7 +55,7 @@ public enum NativeHistory {
 
     }
     func finish(numbered: String = "") throws -> Result {
-      guard ["codex", "claude"].contains(agent), recognized, identities.count == 1, messages > 0 else {
+      guard ["codex", "claude", "cursor"].contains(agent), recognized, (agent == "cursor" ? identities.isEmpty : identities.count == 1), messages > 0 else {
         throw CleanerError.message("Unrecognized or mixed session. Import one JSONL session for the selected agent")
       }
       return Result(numbered: numbered, messages: messages, retainedRecords: retained)

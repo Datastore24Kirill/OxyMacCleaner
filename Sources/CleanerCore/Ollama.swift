@@ -65,7 +65,7 @@ public final class LocalModel: @unchecked Sendable {
     let r = try request(
       "generate",
       [
-        "model": model, "system": ContextPlan.system, "prompt": prompt, "stream": false,
+        "model": model, "system": ContextPlan.system, "prompt": ContextSafety.redact(prompt), "stream": false,
         "options": ["temperature": 0.1, "num_ctx": 16384, "num_predict": 4096], "keep_alive": "5m",
       ])
     let (data, response) = try await session.data(for: r)
@@ -76,7 +76,7 @@ public final class LocalModel: @unchecked Sendable {
     guard let result = j?["response"] as? String,
       !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else { throw CleanerError.message("Empty model response") }
-    return result
+    return ContextSafety.redact(result)
   }
   public func summarize(
     _ transcript: Transcript, model: String, style: String,
@@ -87,14 +87,17 @@ public final class LocalModel: @unchecked Sendable {
     var notes: [String] = []
     var noteBytes = 0
     var part = 0
+    var previousLine: Int?
     while true {
       try Task.checkCancellation()
       let next = try reader != nil ? reader!.next() : small.next()
-      guard let chunk = next else { break }
+      guard let rawChunk = next else { break }
+      let chunk = ContextSafety.labelContinuation(rawChunk, previous: &previousLine)
       part += 1
       progress("\(part)")
-      let note = try await generate(
+      let proposal = try await generate(
         "Agent: \(transcript.agent). Compression: \(style). Extract handoff notes for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>", model: model)
+      let note = try ContextSafety.groundedExcerpt(proposal, source: chunk)
       noteBytes += note.utf8.count
       guard noteBytes <= 8_000_000 else {
         throw CleanerError.message("Summary exceeds 8 MB. Process a smaller exported session; original and backup remain intact")
@@ -102,10 +105,11 @@ public final class LocalModel: @unchecked Sendable {
       notes.append(note)
     }
     // Never silently truncate a long history to fit one prompt. Keep independently cited parts.
+    // Preserve chronological source evidence, not unverified model paraphrases.
     let body = notes.enumerated().map { "## Часть \($0.offset+1)\n\n\($0.element)" }.joined(
       separator: "\n\n")
     return
-      "# Продолжение — \(transcript.agent)\n\nИсточник: \(transcript.source.lastPathComponent)\nSHA-256: \(transcript.digest)\n\nПроверьте факты перед использованием. Оригинал сохранён; это не замена истории текущего чата. Части могут содержать устаревшие решения — сверяйте ссылки на строки.\n\n"
+      "# Продолжение — \(transcript.agent)\n\nИсточник: \(transcript.source.lastPathComponent)\nSHA-256: \(transcript.digest)\n\nПроверяемая выжимка исходных строк: модель выбирает ссылки, но не дописывает факты. Оригинал сохранён; это не замена истории текущего чата. Строки идут хронологически и могут содержать отменённые решения. Перед продолжением определите актуальные требования; более позднее явное решение пользователя заменяет прежнее.\n\n"
       + body
   }
   private func validate(_ response: URLResponse) throws {

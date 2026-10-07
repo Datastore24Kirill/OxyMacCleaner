@@ -6,13 +6,15 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.1.27 Preview — implemented
+## 0.2.0 Preview — implemented
+
+New in 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
 
 Native JSONL histories up to 1 GB: bounded streaming import, private disk snapshots, progress/cancellation and incremental model input. Originals remain unchanged.
 
-Find Codex and Claude Code JSONL histories directly in the app: metadata-only discovery, dates, sizes, path search and paginated results.
+Find Codex, Claude Code and Cursor JSONL histories directly in the app: metadata-only discovery, dates, sizes, path search and paginated results.
 
-Selected native JSONL history import for Codex and Claude Code, with session validation and complete record retention. [Adapter scope](docs/AGENT-ADAPTERS-RU.md).
+Selected native JSONL history import for Codex, Claude Code and Cursor, with session validation and complete record retention. [Adapter scope](docs/AGENT-ADAPTERS-RU.md).
 
 Project data: inspect SwiftPM, CocoaPods, Node and Python dependency sizes; guarded cleanup of Next.js webpack and Rust incremental caches. [Rules and limitations](docs/PROJECT-DATA-RU.md).
 
@@ -37,11 +39,11 @@ Safety audit: generic cleanup now protects user Library, media libraries, signin
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
 - Local model download progress/cancellation; no automatic cloud fallback. Model metadata must identify a local GGUF model.
 
-This is an early implementation milestone, **not completion of the version-one specification**. Direct agent-history adapters, broader cache discovery and automatic updates/rollback remain planned. Context generation has protocol tests; its semantic quality has not yet been certified on real histories. Original histories are retained.
+This is an early implementation milestone, **not completion of the version-one specification**. Broader native adapters, cache discovery, accessibility auditing and signed distribution remain open. Grounded context extraction passed two synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
 
 ## Install
 
-Download `OxyMacCleaner-0.1.27-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.2.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 

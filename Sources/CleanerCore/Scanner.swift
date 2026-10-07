@@ -128,13 +128,14 @@ public enum Scanner {
       }
       for case let url as URL in e {
         if cancellation.cancelled { break }
+        autoreleasepool {
         snapshot.currentPath = url.deletingLastPathComponent().path
         emit()
         if excluded.contains(where: { inside(url.path, $0) })
           || [".git", ".ssh", ".Trash"].contains(url.lastPathComponent)
         {
           e.skipDescendants()
-          continue
+          return
         }
         do {
           let v = try url.resourceValues(forKeys: [
@@ -143,20 +144,20 @@ public enum Scanner {
           ])
           if v.isSymbolicLink == true {
             e.skipDescendants()
-            continue
+            return
           }
           if v.isUbiquitousItem == true && v.ubiquitousItemDownloadingStatus != .current {
             e.skipDescendants()
             result.issues.append("Cloud-only: \(url.path)")
-            continue
+            return
           }
           if v.isDirectory == true {
             snapshot.directories += 1
-            continue
+            return
           }
           let f = try FileRecord.read(url.resolvingSymlinksInPath())
           let identity = "\(f.device):\(f.inode)"
-          guard seen.insert(identity).inserted else { continue }
+          guard seen.insert(identity).inserted else { return }
           result.files.append(f)
           snapshot.files += 1
           snapshot.bytes += f.bytes
@@ -169,6 +170,7 @@ public enum Scanner {
           }
 
         } catch { result.issues.append("\(url.path): \(error.localizedDescription)") }
+        }
       }
     }
     result.complete = !cancellation.cancelled

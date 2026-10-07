@@ -1,26 +1,26 @@
-# Implementation status — 0.1.25 Preview
+# Implementation status — 0.2.0 Preview
 
-This is an implementation milestone, not completion of the version-one specification. Historical release notes below describe the state at each release.
+This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
 | Area | Implemented | Remaining |
 |---|---|---|
-| UI | Native RU/EN interface, themes, contextual hints | Full accessibility audit and error localization |
-| Disk analysis | Disk/folder scans, cancellation, exclusions, snapshots, map and categories | Crash checkpoints and large-volume benchmarks |
+| UI | RU/EN interface, themes, contextual hints | Complete accessibility and error localization audit |
+| Disk analysis | Disk/folder scans, cancellation, exclusions, snapshots, map/categories; 100k-file fixture | Crash checkpoints, multi-million-file benchmarks, lower peak memory |
 | Duplicates | Hash + byte comparison, keeper validation | APFS shared-block estimates and performance |
-| Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics; open Xcode allowed | Real-world race/failure verification; xcodebuild still blocks cleanup |
-| DerivedData / projects | Project mapping, narrow cache allowlist, project dependencies inventory, guarded Git worktree cleanup | Broader cache rules and project discovery |
-| Simulators | Selected standard devices/runtimes; separate XCTestDevices inventory, size measurement and selected deletion | Larger-scale validation and better last-use evidence |
+| Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics | Broader race/failure verification |
+| DerivedData / projects | Project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project discovery |
+| Simulators | Standard/test devices, runtimes, activity guards, select available Shutdown devices matching search | Broader runtime-version QA |
 | Quarantine | Same-volume transfer, integrity, journal recovery, restore, five-day reminder | Cross-volume transfer and broader fault injection |
-| Agents | 11 discovery hints; generic exports; Codex/Claude native JSONL discovery and streaming import | Cursor native adapter, other versioned adapters, supported new-session handoff |
-| Context quality | Local Ollama installed and synthetic benchmark run | **3B benchmark failed**: secrets repeated and prohibitions distorted. Improve pipeline and acceptance tests before replacing histories |
-| Updates | Downloadable arm64 releases | Verified automatic installation, health check and rollback |
-| Permissions/distribution | Ad-hoc signed builds, access diagnostics | Stable Developer ID signing deferred; Full Disk Access continuity remains unresolved |
+| Agents | 11 discovery hints; exports; Codex/Claude/Cursor native JSONL catalogs and import; two handoff actions | Other versioned native adapters; new chat remains manual |
+| Context | Local 7B available; secret-pattern filtering, cited source excerpts; original and verified backup retained | Broader semantic benchmarks, cross-chunk conflict resolution; no lossless-summary claim |
+| Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, automatic old-backup retention limits |
+| Permissions | In-process diagnostics, ad-hoc builds | Stable Developer ID signing deferred |
 
 ## Next work
 
-1. Context quality: separate sensitive-data filtering, instruction/source separation, cross-chunk conflict handling and final-citation validation. Preserve originals; no automatic history deletion.
-2. Agent-specific context handoff following CONTEXT-ACTIONS-RU.md; Cursor requires a validated adapter, not blind database trimming.
-3. Verified automatic updates with rollback, followed by broader performance/accessibility acceptance checks.
+1. Broaden grounded-handoff quality cases: long histories, changing decisions, split records and secret patterns.
+2. Audit VoiceOver, keyboard focus, RU/EN errors and real-world failure recovery.
+3. Reduce memory on very large scans and manage retained update backups explicitly.
 
 ## Agent capability matrix
 
@@ -30,7 +30,7 @@ All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and C
 |---|---|---|---|---|
 | Codex | Yes; selected native JSONL supported since 0.1.19 | Yes | No | No |
 | Claude Code | Yes; selected native JSONL supported since 0.1.19 | Yes | No | No |
-| Cursor | Yes | Yes | No | No |
+| Cursor | Yes; file JSONL supported since 0.2.0 | Yes | No | No |
 | GitHub Copilot | VS Code default | Yes | No | No |
 | Gemini CLI | Yes | Yes | No | No |
 | Windsurf | Yes | Yes | No | No |

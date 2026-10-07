@@ -3,7 +3,7 @@ import SwiftUI
 
 extension AppModel {
   func findAgentSessions() {
-    guard !busy, ["codex", "claude"].contains(agent),
+    guard !busy, ["codex", "claude", "cursor"].contains(agent),
       let definition = Agents.catalog.first(where: { $0.id == agent }) else { return }
     let selected = agent
     let roots = definition.locations(home: home)

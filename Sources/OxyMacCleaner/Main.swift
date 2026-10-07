@@ -4,13 +4,16 @@ import UserNotifications
 
 @main struct CleanerApp: App {
   @StateObject private var vm = AppModel()
+  @StateObject private var updater = AppUpdater()
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
   var body: some Scene {
     WindowGroup("OxyMac Cleaner") {
-      RootView().environmentObject(vm)
+      RootView().environmentObject(vm).environmentObject(updater)
         .preferredColorScheme(vm.theme == "light" ? .light : vm.theme == "dark" ? .dark : nil)
         .frame(minWidth: 1000, minHeight: 700)
         .onAppear {
+          updater.checkOnLaunch()
+          AppUpdater.markHealthy()
           delegate.model = vm
           vm.scheduleReminder()
           vm.prepareDiskAccess()
@@ -57,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
   }
 }
 struct RootView: View {
+  @EnvironmentObject var updater: AppUpdater
   @State private var showHelp = false
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
@@ -111,7 +115,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.1.27 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.2.0 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -132,6 +136,13 @@ struct RootView: View {
             Button(vm.t("Стоп", "Stop")) { vm.cancel() }.oxyHelp(.stop)
           }
         }.padding(.top, 22)
+        if let release = updater.release {
+          HStack {
+            Text(vm.t("Доступно обновление: ", "Update available: ") + release.version)
+            Button(vm.t("Подробнее", "Details")) { vm.page = "settings" }
+          }.font(.callout)
+        }
+        if updater.installing { ProgressView(updater.status, value: updater.fraction) }
         if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
           ScanProgressView(progress: progress, active: vm.isScanning)
         }
@@ -176,7 +187,7 @@ struct RootView: View {
           Spacer()
         }.padding(.bottom, 16)
       }.padding(.horizontal, 28)
-    }.sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
+    }.disabled(updater.installing).sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
       .alert(
         vm.t("Обратите внимание", "Attention"),
         isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })
@@ -488,13 +499,13 @@ struct RootView: View {
               }
             }
           }
-          if ["codex", "claude"].contains(vm.agent) {
+          if ["codex", "claude", "cursor"].contains(vm.agent) {
             SessionCatalogView()
             Button(vm.t("Открыть JSONL-историю агента…", "Open agent JSONL history…")) {
               vm.importTranscript(native: true)
             }.disabled(vm.busy).help(vm.t(
-              "Выберите одну историю Codex или Claude Code. Только чтение; оригинал и неизвестные записи сохраняются.",
-              "Choose one Codex or Claude Code history. Read only; original and unknown records are preserved."))
+              "Выберите одну историю Codex, Claude Code или Cursor. Только чтение; оригинал и неизвестные записи сохраняются.",
+              "Choose one Codex, Claude Code or Cursor history. Read only; original and unknown records are preserved."))
           }
           Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
             .oxyHelp(.importSession)
@@ -530,11 +541,14 @@ struct RootView: View {
                 Text(vm.t("Сбалансированный", "Balanced")).tag("Сбалансированный")
                 Text(vm.t("Краткий", "Concise")).tag("Краткий")
               }.oxyHelp(.summaryStyle)
-              Button(vm.t("Подготовить контекст", "Prepare handoff")) { vm.summarize() }.oxyHelp(
+              Button(vm.t("Оптимизировать для продолжения", "Optimize for continuation")) { vm.summarize() }.oxyHelp(
                 .summarize
               )
               .buttonStyle(.borderedProminent).disabled(vm.busy || vm.model.isEmpty)
             }
+            Button(vm.t("Начать с чистого контекста…", "Prepare a clean context…")) { vm.prepareCleanContext() }
+              .disabled(vm.busy).help(vm.t("Создаёт проверенную копию и пустой шаблон новой задачи без вызова модели. Новый чат открывается вами в агенте; исходная история остаётся.", "Creates a verified backup and a blank task template without a model call. Open the new chat in your agent; original history remains."))
+            Text(vm.t("Результат — цитаты исходных строк со ссылками, а не свободный пересказ. Проверьте актуальность решений перед переносом. Фильтр секретов не гарантирует обнаружение всех значений.", "The result uses cited source excerpts, not free-form paraphrase. Review current decisions before transfer. Secret filtering cannot detect every value.")).font(.caption).foregroundStyle(.secondary)
             if vm.model.isEmpty {
               Button(vm.t("Настроить локальную модель", "Set up local model")) {
                 vm.page = "engine"
@@ -602,8 +616,8 @@ struct RootView: View {
             ForEach(vm.models, id: \.self) { Text($0).tag($0) }
           }.oxyHelp(.model)
           note(
-            "Начните с 3B. Качество пересказа зависит от модели; длинная история обрабатывается частями, без молчаливого обрезания. Другие задачи Ollama не останавливаются.",
-            "Start with 3B. Quality depends on the model. Long histories are processed in chunks without silent truncation. Other Ollama tasks are not stopped."
+            "Для контекста предпочтительна 7B; 3B не прошла проверку качества. Качество пересказа зависит от модели; длинная история обрабатывается частями, без молчаливого обрезания. Другие задачи Ollama не останавливаются.",
+            "Prefer 7B for context; 3B failed quality checks. Quality depends on the model. Long histories are processed in chunks without silent truncation. Other Ollama tasks are not stopped."
           )
         }
       }
@@ -709,10 +723,7 @@ struct RootView: View {
         }.oxyHelp(.finder)
       }
       Section(vm.t("Обновления", "Updates")) {
-        Text(
-          vm.t(
-            "0.1.27 Preview. Автоустановка обновлений и откат ещё не реализованы.",
-            "0.1.27 Preview. Automatic update installation and rollback are not implemented yet."))
+        AppUpdateView().environmentObject(vm)
         Button("GitHub Releases") {
           NSWorkspace.shared.open(
             URL(string: "https://github.com/Datastore24Kirill/OxyMacCleaner/releases")!)

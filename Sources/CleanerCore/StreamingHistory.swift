@@ -39,8 +39,10 @@ public final class StreamingHistory: @unchecked Sendable {
     var validator = NativeHistory.Validator(agent: agent)
     var index = 0
     while let line = try reader.next(cancellation: cancellation) {
-      if let labeled = try validator.consume(line, index: index) {
-        try output.write(contentsOf: Data((labeled + "\n").utf8))
+      try autoreleasepool {
+        if let labeled = try validator.consume(line, index: index) {
+          try output.write(contentsOf: Data((labeled + "\n").utf8))
+        }
       }
       index += 1
       if index % 256 == 0 { progress(record.bytes + reader.consumed, record.bytes * 2) }
