@@ -54,3 +54,7 @@ Apple рекомендует сохранять архив **каждой рас
 ### Дополнение 0.1.17
 
 Для дополнительных рабочих деревьев появился отдельный инструмент Git. Общая очистка проектов остаётся запрещённой. Условия, ограничения определения активности и повторные проверки описаны в [WORKTREES-RU.md](WORKTREES-RU.md). Ветки не удаляются, force/prune не используются. Игнорируемые и незакоммиченные данные блокируют действие.
+
+## Project cache exception — 0.1.18
+
+Only recognized `.next/cache/webpack` and Cargo `target/{debug,release}/incremental` may be directly deleted after confirmation, Git ignored/untracked checks, process checks, 10-minute inactivity, protected-content checks and full manifest revalidation. Dependencies remain read-only. See PROJECT-DATA-RU.md. No package/build/install commands are executed. Concurrent writers cannot be locked out; partial deletion errors are surfaced.

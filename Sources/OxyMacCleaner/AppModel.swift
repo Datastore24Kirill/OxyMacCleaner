@@ -208,6 +208,10 @@ import UserNotifications
   @Published var developerSection = "archives"
   @Published var worktreeRepository: URL? = UserDefaults.standard.string(forKey: "worktreeRepository").map { URL(fileURLWithPath: $0) }
   @Published var worktreeReviews: [WorktreeReview] = []
+  @Published var dataProject: URL? = UserDefaults.standard.string(forKey: "dataProject").map { URL(fileURLWithPath: $0) }
+  @Published var projectData: [ProjectDataItem] = []
+  @Published var projectDataDate: Date?
+  @Published var projectDataIssue: String?
   @Published var worktreeReadAt: Date?
   @Published var worktreeIssue: String?
   @Published var duplicatesReadAt: Date?

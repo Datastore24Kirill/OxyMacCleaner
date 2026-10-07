@@ -24,6 +24,20 @@ struct OpportunityCards: View {
       columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 12
     ) {
       opportunity(
+        "Данные проектов", "Project data", icon: "shippingbox", section: "projectData",
+        result: vm.projectDataDate == nil || vm.projectDataIssue != nil
+          ? vm.t("Нужна проверка", "Inspection needed")
+          : "\(vm.projectData.count) " + vm.t("категорий для просмотра", "categories to review"),
+        date: vm.projectDataDate,
+        explanation: vm.t(
+          "Сборочные кэши и зависимости выбранного проекта. У каждой категории свой способ восстановления.",
+          "Build caches and dependencies in the chosen project. Each category explains recovery."),
+        limitation: vm.projectDataIssue
+          ?? vm.t(
+            "Зависимости — только просмотр. Для поддерживаемых кэшей выполняются отдельные проверки перед очисткой.",
+            "Dependencies are review-only. Supported caches require separate checks before cleanup."
+          ))
+      opportunity(
         "Рабочие деревья Git", "Git worktrees", icon: "arrow.triangle.branch", section: "worktrees",
         result: vm.worktreeReadAt == nil || vm.worktreeIssue != nil
           ? vm.t("Нужна проверка", "Inspection needed")
