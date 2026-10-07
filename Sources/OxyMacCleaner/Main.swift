@@ -115,7 +115,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.2.0 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.2.1 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -473,7 +473,7 @@ struct RootView: View {
         card {
           Picker(vm.t("Агент", "Agent"), selection: $vm.agent) {
             ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
-          }.oxyHelp(.agent).onChange(of: vm.agent) { _, _ in
+          }.oxyHelp(.agent).disabled(vm.busy).onChange(of: vm.agent) { _, _ in
             vm.transcript = nil
             vm.sessionCatalog = nil
             vm.output = ""
@@ -540,7 +540,7 @@ struct RootView: View {
                 Text(vm.t("Бережный", "Careful")).tag("Бережный")
                 Text(vm.t("Сбалансированный", "Balanced")).tag("Сбалансированный")
                 Text(vm.t("Краткий", "Concise")).tag("Краткий")
-              }.oxyHelp(.summaryStyle)
+              }.oxyHelp(.summaryStyle).disabled(vm.busy)
               Button(vm.t("Оптимизировать для продолжения", "Optimize for continuation")) { vm.summarize() }.oxyHelp(
                 .summarize
               )
@@ -574,8 +574,8 @@ struct RootView: View {
               .frame(
                 minHeight: 320)
             note(
-              "Пересказ может потерять детали и не всегда короче оригинала. Проверьте решения и следующие шаги. Резервная копия сохранена.",
-              "A summary can lose details and may not be shorter. Review decisions and next steps. A verified backup is retained."
+              "Проверьте и дополните результат перед переносом: он не заменяет полную историю. Резервная копия сохранена.",
+              "Review and complete the result before transfer; it does not replace the full history. A verified backup is retained."
             )
           }
         }

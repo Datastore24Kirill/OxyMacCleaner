@@ -1,4 +1,4 @@
-# Implementation status — 0.2.0 Preview
+# Implementation status — 0.2.1 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 

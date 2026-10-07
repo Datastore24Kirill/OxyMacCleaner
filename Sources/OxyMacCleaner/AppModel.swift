@@ -779,7 +779,7 @@ import UserNotifications
       confirm(
         t("Подготовить продолжение?", "Prepare handoff?"),
         t(
-          "Подтвердите, что сессия завершена. Создадим резервную копию и локальный пересказ для новой сессии. Исходную историю не удаляем.",
+          "Подтвердите, что сессия завершена. Создадим резервную копию и выжимку исходных цитат для новой сессии. Исходную историю не удаляем.",
           "Confirm the session is inactive. A backup and local handoff will be created. Original history is not deleted."
         ))
     else { return }

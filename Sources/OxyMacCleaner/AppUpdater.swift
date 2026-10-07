@@ -148,7 +148,10 @@ struct AppUpdateView: View {
     VStack(alignment: .leading) {
       Toggle(vm.t("Проверять при запуске", "Check at launch"), isOn: $automatic)
       Text(updater.status)
-      if updater.busy { ProgressView(value: updater.fraction) }
+      if updater.busy {
+        ProgressView(value: updater.fraction)
+        Text("\(Int(updater.fraction * 100)) %").font(.caption.monospacedDigit())
+      }
       Button(vm.t("Проверить обновления", "Check for updates")) { updater.check() }.disabled(updater.busy || vm.busy)
       if let release = updater.release {
         Button(vm.t("Обновить до ", "Update to ") + release.version) { updater.install() }.disabled(updater.busy || vm.busy)

@@ -337,8 +337,8 @@ enum HelpTopic {
       )
     case .releases:
       return (
-        "Открывает страницу готовых сборок в браузере. Эта версия не устанавливает обновление автоматически.",
-        "Opens the release download page in your browser. This version does not install updates automatically."
+        "Открывает страницу готовых сборок в браузере. Для установки внутри приложения используйте кнопку «Обновить».",
+        "Opens the release download page in your browser. Use the Update button to install within the app."
       )
     case .advisor:
       return (
