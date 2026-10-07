@@ -208,3 +208,7 @@ Logs confirmed attempted cleanup blocked by Xcode/swift-frontend, not stale inve
 A missing XCTestDevices directory is a valid empty inventory; invalid files, symlinks and access errors remain errors. The test-device screen loads once on entry, keeps its inventory and measured sizes across navigation, and has a dedicated card in cleanup opportunities. It does not select or delete devices automatically.
 
 Simulator batch feedback: preflight before confirmation, actual deletion/error counts, error alert and retained failed selections. Logs showed active xctest/xcodebuild during the user attempts (including concurrent Cleaner verification). Global activity guard remains conservative; filter was not responsible.
+
+## 0.1.26 — scoped simulator activity
+
+Explicit xcodebuild destination UUID association replaces the blanket guard for standard simulator devices/runtimes. Related xctest descendants are associated through process ancestry; unknown destinations and GUI Xcode remain fail-closed. Runtime protection includes XCTestDevices and rejects unmapped active destinations. No process is stopped, and no user devices were deleted in verification. Checks are not an atomic lock against starting new work.

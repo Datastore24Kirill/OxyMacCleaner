@@ -177,7 +177,7 @@ enum HelpTopic {
       )
     case .simDelete:
       return (
-        "После подтверждения удаляет выбранные устройства и runtimes через Xcode, без карантина. Данные приложений на устройствах будут потеряны. Закройте Xcode и остановите сборки; запущенные устройства защищены.",
+        "После подтверждения удаляет выбранные устройства и runtimes через Xcode, без карантина. Данные приложений на устройствах будут потеряны. Активные устройства и цели тестов защищены. Неопределённая цель сборки блокирует удаление.",
         "After confirmation, deletes selected devices and runtimes through Xcode without quarantine. Device app data is lost. Close Xcode and stop builds; running devices are protected."
       )
     case .simUnavailable:

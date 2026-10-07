@@ -22,13 +22,6 @@ extension AppModel {
   }
   func deleteSelectedSimulators() {
     guard !busy else { return }
-    do { try DeveloperActivity.assertIdle() }
-    catch {
-      let reason = t("Удаление не началось: завершите сборки и тесты. ", "Deletion did not start: finish builds and tests. ") + error.localizedDescription
-      developerResult = reason; status = reason; self.error = reason
-      log(reason)
-      return
-    }
     let devices = simulatorInventory.devices.filter {
       selectedDevices.contains($0.id) && $0.removable
     }
@@ -45,8 +38,8 @@ extension AppModel {
         t("Удалить выбранные симуляторы?", "Delete selected simulators?"),
         names.joined(separator: "\n") + "\n\n"
           + t(
-            "Это удаление через Xcode, без карантина. Устройства потеряют установленные приложения и тестовые данные без восстановления. Runtimes можно скачать заново в Xcode → Settings → Components, если версия доступна. Остальные устройства с удаляемым runtime станут недоступны. Закройте Xcode и остановите сборки.",
-            "This uses Xcode deletion without quarantine. Devices lose installed apps and test data permanently. Runtimes can be downloaded again in Xcode Settings → Components if available. Other devices using a removed runtime become unavailable. Close Xcode and stop builds."
+            "Это удаление через Xcode, без карантина. Устройства потеряют установленные приложения и тестовые данные без восстановления. Runtimes можно скачать заново в Xcode → Settings → Components, если версия доступна. Остальные устройства с удаляемым runtime станут недоступны. Запущенные устройства и устройства активных тестов защищены. Сборки на других устройствах не мешают.",
+            "This uses Xcode deletion without quarantine. Devices lose installed apps and test data permanently. Runtimes can be downloaded again in Xcode Settings → Components if available. Other devices using a removed runtime become unavailable. Running devices and active test destinations are protected. Builds on other devices do not block cleanup."
           ), destructive: true)
     else { return }
     busy = true

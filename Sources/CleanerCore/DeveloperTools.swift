@@ -146,27 +146,35 @@ public enum Simulators {
   }
   /// Always re-read state and only pass a validated UUID, never `all`/`unavailable` aliases.
   public static func removeDevice(
-    _ id: String, run: Runner = run, idle: () throws -> Void = DeveloperActivity.assertIdle
+    _ id: String, run: Runner = run, idle: (() throws -> Void)? = nil
   ) throws -> Bool {
-    try idle()
+    if let idle { try idle() }
     guard UUID(uuidString: id) != nil,
       let current = try devices(run(["list", "devices", "--json"])).first(where: { $0.id == id }),
       current.removable
     else {
       throw CleanerError.message("Device missing or not shut down; refresh the list")
     }
+    if let idle { try idle() } else { try SimulatorActivity.assertDeviceIdle(id) }
     _ = try run(["delete", id])
     return try !devices(run(["list", "devices", "--json"])).contains { $0.id == id }
   }
   public static func removeRuntime(
-    _ id: String, run: Runner = run, idle: () throws -> Void = DeveloperActivity.assertIdle
+    _ id: String, run: Runner = run, idle: (() throws -> Void)? = nil
   ) throws -> Bool {
-    try idle()
+    if let idle { try idle() }
     let current = try inventory(run: run)
     guard UUID(uuidString: id) != nil, let runtime = current.runtimes.first(where: { $0.id == id }),
       canRemove(runtime, devices: current.devices)
     else {
       throw CleanerError.message("Runtime unavailable, protected or in use; refresh the list")
+    }
+    if let idle { try idle() } else {
+      let testDevices = try TestSimulators.devices()
+      try SimulatorActivity.assertRuntimeIdle(runtime.runtimeIdentifier, devices: current.devices + testDevices)
+      guard testDevices.filter({ $0.runtime == runtime.runtimeIdentifier }).allSatisfy({ $0.state == "Shutdown" }) else {
+        throw CleanerError.message("Runtime is in use by a test simulator")
+      }
     }
     _ = try run(["runtime", "delete", id])
     return try !runtimeImages(run(["runtime", "list", "--json"])).contains { $0.id == id }
