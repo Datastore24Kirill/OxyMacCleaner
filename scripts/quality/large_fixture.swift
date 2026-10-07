@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import CleanerCore
 let fm = FileManager.default
 let root = fm.temporaryDirectory.appendingPathComponent("OxyLargeQA-" + UUID().uuidString).resolvingSymlinksInPath()
@@ -6,14 +7,16 @@ try fm.createDirectory(at: root, withIntermediateDirectories: false)
 defer { try? fm.removeItem(at: root) }
 let files = root.appendingPathComponent("files")
 try fm.createDirectory(at: files, withIntermediateDirectories: false)
-for directory in 0..<100 {
+let directories = CommandLine.arguments.dropFirst().first.flatMap(Int.init) ?? 100
+for directory in 0..<directories {
   let folder = files.appendingPathComponent(String(directory)); try fm.createDirectory(at: folder, withIntermediateDirectories: false)
   for file in 0..<1000 { try autoreleasepool { try Data("fixture".utf8).write(to: folder.appendingPathComponent("\(file).txt")) } }
 }
+var usage = rusage(); getrusage(RUSAGE_SELF, &usage); print("Peak RSS after fixture creation:", usage.ru_maxrss)
 let started = Date()
 let report = Scanner.scan(roots: [files], excluded: [], cancellation: Cancellation())
-guard report.files.count == 100_000, report.complete else { fatalError("Incomplete synthetic scan") }
-print("100000-file scan seconds:", Date().timeIntervalSince(started))
+guard report.files.count == directories * 1000, report.complete else { fatalError("Incomplete synthetic scan") }
+print("\(directories * 1000)-file scan seconds:", Date().timeIntervalSince(started))
 let history = root.appendingPathComponent("large.jsonl")
 fm.createFile(atPath: history.path, contents: nil)
 let handle = try FileHandle(forWritingTo: history)

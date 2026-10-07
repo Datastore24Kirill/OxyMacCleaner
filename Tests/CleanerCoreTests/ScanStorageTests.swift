@@ -39,6 +39,19 @@ final class ScanStorageTests: XCTestCase {
     try Data("changed".utf8).write(to: input.appendingPathComponent("a.txt"))
     XCTAssertThrowsError(try loaded.report.files[0].validate())
   }
+  func testLegacyAndTruncatedSnapshot() throws {
+    let store = ScanStore(url: root.appendingPathComponent("saved.plist"))
+    let snapshot = SavedScan(roots: [root], volumeID: "fixture", report: ScanReport(), progress: ScanProgress())
+    let encoder = PropertyListEncoder(); encoder.outputFormat = .binary
+    try encoder.encode(snapshot).write(to: store.url)
+    XCTAssertEqual(try store.load()?.volumeID, "fixture")
+    try store.save(snapshot)
+    let data = try Data(contentsOf: store.url)
+    try data.dropLast(5).write(to: store.url)
+    XCTAssertThrowsError(try store.load())
+    try store.save(snapshot)
+    XCTAssertEqual(try store.load()?.volumeID, "fixture")
+  }
   func testCorruptionIsReported() throws {
     let store = ScanStore(url: root.appendingPathComponent("broken.plist"))
     try Data("broken".utf8).write(to: store.url)

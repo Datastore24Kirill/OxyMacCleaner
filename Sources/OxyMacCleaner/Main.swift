@@ -20,7 +20,17 @@ import UserNotifications
           vm.restoreScan()
         }
     }.windowStyle(.hiddenTitleBar).defaultSize(width: 1180, height: 800)
-      .commands { CommandGroup(replacing: .newItem) {} }
+      .commands {
+        CommandGroup(replacing: .newItem) {}
+        CommandMenu(vm.t("Разделы", "Sections")) {
+          Button(vm.t("Обзор", "Overview")) { vm.page = "overview" }.keyboardShortcut("1").disabled(updater.installing)
+          Button(vm.t("Карта диска", "Disk map")) { vm.page = "map" }.keyboardShortcut("2").disabled(updater.installing)
+          Button(vm.t("Xcode и проекты", "Xcode and projects")) { vm.page = "developer" }.keyboardShortcut("3").disabled(updater.installing)
+          Button(vm.t("Агенты и контекст", "Agents and context")) { vm.page = "agents" }.keyboardShortcut("4").disabled(updater.installing)
+          Button(vm.t("Карантин", "Quarantine")) { vm.page = "quarantine" }.keyboardShortcut("5").disabled(updater.installing)
+          Button(vm.t("Настройки", "Settings")) { vm.page = "settings" }.keyboardShortcut(",").disabled(updater.installing)
+        }
+      }
   }
 }
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -115,7 +125,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.2.2 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.3.0 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -145,6 +155,12 @@ struct RootView: View {
         if updater.installing { ProgressView(updater.status, value: updater.fraction) }
         if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
           ScanProgressView(progress: progress, active: vm.isScanning)
+        }
+        if vm.recoveredInterruptedScan {
+          HStack {
+            Text(vm.t("Восстановлен неполный результат прерванного обхода. Для актуальных данных нужен новый обход.", "Partial results recovered from an interrupted scan. A new traversal is required for current data."))
+            Button(vm.t("Повторить обход", "Repeat scan")) { vm.scan() }.disabled(vm.busy)
+          }.font(.callout)
         }
         if let date = vm.snapshotDate {
           Text(
@@ -194,7 +210,7 @@ struct RootView: View {
       ) {
         Button("OK") { vm.error = nil }
       } message: {
-        Text(vm.error ?? "")
+        Text(ErrorPresentation.message(vm.error ?? "", russian: vm.t("ru", "en") == "ru"))
       }
   }
   func note(_ ru: String, _ en: String) -> some View {
@@ -499,13 +515,13 @@ struct RootView: View {
               }
             }
           }
-          if ["codex", "claude", "cursor"].contains(vm.agent) {
+          if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo"].contains(vm.agent) {
             SessionCatalogView()
-            Button(vm.t("Открыть JSONL-историю агента…", "Open agent JSONL history…")) {
+            Button(vm.t("Открыть историю агента…", "Open agent history…")) {
               vm.importTranscript(native: true)
             }.disabled(vm.busy).help(vm.t(
-              "Выберите одну историю Codex, Claude Code или Cursor. Только чтение; оригинал и неизвестные записи сохраняются.",
-              "Choose one Codex, Claude Code or Cursor history. Read only; original and unknown records are preserved."))
+              "Выберите одну историю поддерживаемого агента. JSON — до 30 MB; JSONL — до 1 GB. Только чтение; оригинал и неизвестные записи сохраняются.",
+              "Choose one supported agent history. JSON up to 30 MB; JSONL up to 1 GB. Read only; original and unknown records are preserved."))
           }
           Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
             .oxyHelp(.importSession)
@@ -528,7 +544,7 @@ struct RootView: View {
             ).font(.caption)
             }
             if let report = input.nativeHistory {
-              Text(vm.t("JSONL: сообщений ", "JSONL: messages ") + "\(report.messages)"
+              Text(vm.t("История: сообщений ", "History: messages ") + "\(report.messages)"
                 + vm.t(" · других записей сохранено: ", " · other records retained: ") + "\(report.retainedRecords)")
                 .font(.caption)
               Text(vm.t("Записи идут в порядке файла, включая ветки и служебные события. Сжатие создаёт отдельный текст для нового чата; оригинальная история не уменьшается и не удаляется.",
@@ -557,6 +573,7 @@ struct RootView: View {
           }
         }
         if !vm.output.isEmpty {
+          ContextComparisonView()
           card {
             HStack {
               Text(
@@ -665,13 +682,18 @@ struct RootView: View {
           Text(URL(fileURLWithPath: e.original).lastPathComponent).font(.headline)
           Text(
             (e.kind == "directory" ? vm.t("Папка", "Folder") : vm.t("Файл", "File")) + " · "
-              + e.state
+              + vm.quarantineState(e.state)
           ).font(.caption).foregroundStyle(.secondary)
           Text(e.original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+          if let external = e.externalPayload { Text(external).font(.caption).textSelection(.enabled) }
           HStack {
             Text(size(e.bytes))
             Text(e.date.formatted())
             Spacer()
+            if e.state == "quarantined" {
+              Button(vm.t("На другой диск…", "Move to another disk…")) { vm.relocateQuarantine(e) }
+                .disabled(vm.busy).help(vm.t("Копирует в выбранную папку, проверяет содержимое и только затем убирает прежнюю копию карантина.", "Copies to the selected folder, verifies content, then removes the previous quarantine payload."))
+            }
             Button(vm.t("Вернуть", "Restore")) { vm.restore(e) }.oxyHelp(.restore)
             Button(vm.t("Вернуть в…", "Restore to…")) { vm.restore(e, alternate: true) }.oxyHelp(
               .restoreElsewhere)

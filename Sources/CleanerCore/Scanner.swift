@@ -1,3 +1,4 @@
+import Darwin
 import CryptoKit
 import Foundation
 
@@ -46,14 +47,18 @@ public struct FileRecord: Identifiable, Codable, Hashable, Sendable {
     if v.isUbiquitousItem == true && v.ubiquitousItemDownloadingStatus != .current {
       throw CleanerError.message("Cloud-only file skipped")
     }
-    let a = try FileManager.default.attributesOfItem(atPath: url.path)
-    return FileRecord(
-      path: url.standardizedFileURL.path, bytes: (a[.size] as? NSNumber)?.int64Value ?? 0,
-      allocated: Int64(v.fileAllocatedSize ?? 0),
-      modified: a[.modificationDate] as? Date ?? .distantPast,
-      inode: (a[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0,
-      device: (a[.systemNumber] as? NSNumber)?.uint64Value ?? 0,
-      links: (a[.referenceCount] as? NSNumber)?.uint64Value ?? 1)
+    return try metadata(url)
+  }
+
+  /// Scanner has already excluded cloud placeholders and symlinks.
+  static func metadata(_ url: URL) throws -> FileRecord {
+    var info = stat()
+    guard lstat(url.path, &info) == 0, info.st_mode & S_IFMT == S_IFREG else {
+      throw CleanerError.message("File unavailable or not regular: " + url.path)
+    }
+    return FileRecord(path: url.standardizedFileURL.path, bytes: Int64(info.st_size), allocated: Int64(info.st_blocks) * 512,
+      modified: Date(timeIntervalSince1970: Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1_000_000_000),
+      inode: UInt64(info.st_ino), device: UInt64(UInt32(bitPattern: info.st_dev)), links: UInt64(info.st_nlink))
   }
   public func validate() throws {
     let now = try Self.read(URL(fileURLWithPath: path))
@@ -88,6 +93,7 @@ public enum Scanner {
   }
   public static func scan(
     roots: [URL], excluded: [String], cancellation: Cancellation,
+    record: ((FileRecord) throws -> Void)? = nil,
     progress: @escaping (ScanProgress) -> Void = { _ in }
   ) -> ScanReport {
     var result = ScanReport()
@@ -103,75 +109,62 @@ public enum Scanner {
       lastEmission = now
     }
     emit(true)
-    var seen = Set<String>()
-    let fm = FileManager.default
+    struct Identity: Hashable { let device: UInt64; let inode: UInt64 }
+    var seen = Set<Identity>()
+    var journalFailed = false
     let normalized = roots.map { $0.standardizedFileURL.resolvingSymlinksInPath() }
     let unique = normalized.filter { root in
       !normalized.contains { $0 != root && inside(root.path, $0.path) }
     }
     for root in Set(unique) {
       guard !cancellation.cancelled else { break }
-      guard
-        let e = fm.enumerator(
-          at: root,
-          includingPropertiesForKeys: [
-            .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isUbiquitousItemKey,
-            .ubiquitousItemDownloadingStatusKey,
-          ], options: [],
-          errorHandler: { u, error in
-            result.issues.append("\(u.path): \(error.localizedDescription)")
-            return true
-          })
-      else {
-        result.issues.append(root.path)
-        continue
-      }
-      for case let url as URL in e {
+      guard let name = strdup(root.path) else { result.issues.append(root.path); continue }
+      var paths: [UnsafeMutablePointer<CChar>?] = [name, nil]
+      let tree = paths.withUnsafeMutableBufferPointer { fts_open($0.baseAddress, FTS_PHYSICAL | FTS_NOCHDIR, nil) }
+      guard let tree else { free(name); result.issues.append(root.path); continue }
+      errno = 0
+      while let entry = fts_read(tree) {
         if cancellation.cancelled { break }
         autoreleasepool {
-        snapshot.currentPath = url.deletingLastPathComponent().path
-        emit()
-        if excluded.contains(where: { inside(url.path, $0) })
-          || [".git", ".ssh", ".Trash"].contains(url.lastPathComponent)
-        {
-          e.skipDescendants()
-          return
-        }
-        do {
-          let v = try url.resourceValues(forKeys: [
-            .isDirectoryKey, .isSymbolicLinkKey, .isUbiquitousItemKey,
-            .ubiquitousItemDownloadingStatusKey,
-          ])
-          if v.isSymbolicLink == true {
-            e.skipDescendants()
-            return
+          let item = entry.pointee
+          let path = String(cString: item.fts_path)
+          let kind = Int32(item.fts_info)
+          if excluded.contains(where: { inside(path, $0) }) || [".git", ".ssh", ".Trash"].contains(String(path.split(separator: "/").last ?? "")) {
+            if kind == FTS_D { fts_set(tree, entry, FTS_SKIP) }; return
           }
-          if v.isUbiquitousItem == true && v.ubiquitousItemDownloadingStatus != .current {
-            e.skipDescendants()
-            result.issues.append("Cloud-only: \(url.path)")
-            return
+          if kind == FTS_ERR || kind == FTS_DNR || kind == FTS_NS {
+            result.issues.append(path + ": " + String(cString: strerror(item.fts_errno))); return
           }
-          if v.isDirectory == true {
-            snapshot.directories += 1
-            return
+          guard let stat = item.fts_statp else { return }
+          // Dataless file-provider placeholders must not be hydrated by a cleanup scan.
+          if stat.pointee.st_flags & UInt32(SF_DATALESS) != 0 {
+            if kind == FTS_D { fts_set(tree, entry, FTS_SKIP) }
+            result.issues.append("Cloud-only: " + path); return
           }
-          let f = try FileRecord.read(url.resolvingSymlinksInPath())
-          let identity = "\(f.device):\(f.inode)"
-          guard seen.insert(identity).inserted else { return }
-          result.files.append(f)
-          snapshot.files += 1
-          snapshot.bytes += f.bytes
+          if kind == FTS_D { snapshot.directories += 1; return }
+          guard kind == FTS_F else { return }
+          snapshot.currentPath = (path as NSString).deletingLastPathComponent
+          emit()
+          let info = stat.pointee
+          let f = FileRecord(path: path, bytes: Int64(info.st_size), allocated: Int64(info.st_blocks) * 512,
+            modified: Date(timeIntervalSince1970: Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1_000_000_000),
+            inode: UInt64(info.st_ino), device: UInt64(UInt32(bitPattern: info.st_dev)), links: UInt64(info.st_nlink))
+          if f.links > 1, !seen.insert(Identity(device: f.device, inode: f.inode)).inserted { return }
+          if !journalFailed, let record {
+            do { try record(f) } catch { journalFailed = true; result.issues.append("Recovery journal unavailable: " + error.localizedDescription) }
+          }
+          result.files.append(f); snapshot.files += 1; snapshot.bytes += f.bytes
           snapshot.categories[f.category, default: 0] += f.bytes
-          var parent = URL(fileURLWithPath: f.path).deletingLastPathComponent()
-          while inside(parent.path, root.path) {
-            result.folders[parent.path, default: 0] += f.bytes
-            if parent.path == root.path { break }
-            parent.deleteLastPathComponent()
+          var parent = (path as NSString).deletingLastPathComponent
+          while inside(parent, root.path) {
+            result.folders[parent, default: 0] += f.bytes
+            if parent == root.path { break }; parent = (parent as NSString).deletingLastPathComponent
           }
-
-        } catch { result.issues.append("\(url.path): \(error.localizedDescription)") }
         }
+        errno = 0
       }
+      if !cancellation.cancelled, errno != 0 { result.issues.append(root.path + ": " + String(cString: strerror(errno))) }
+      fts_close(tree); free(name)
     }
     result.complete = !cancellation.cancelled
     snapshot.phase = .sorting

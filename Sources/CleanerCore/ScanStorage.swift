@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct SavedScan: Codable, Sendable {
   public let version: Int
@@ -21,29 +22,86 @@ public struct SavedScan: Codable, Sendable {
 public struct ScanStore: Sendable {
   public let url: URL
   public init(url: URL) { self.url = url }
+  private struct Metadata: Codable {
+    let version: Int
+    let date: Date
+    let roots: [URL]
+    let volumeID: String
+    let complete: Bool
+    let progress: ScanProgress
+    let fileCount: Int
+  }
+  private struct Folder: Codable { let path: String; let bytes: Int64 }
+  private enum Batch: Codable {
+    case metadata(Metadata), files([FileRecord]), folders([Folder]), issues([String]), end
+  }
   public func save(_ snapshot: SavedScan) throws {
     let fm = FileManager.default
-    try fm.createDirectory(
-      at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
-      attributes: [.posixPermissions: 0o700])
-    let encoder = PropertyListEncoder()
-    encoder.outputFormat = .binary
-    let data = try encoder.encode(snapshot)
-    // Complete replacement is atomic; a failed write leaves the prior scan available.
-    try data.write(to: url, options: [.atomic])
-    try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let temporary = url.deletingLastPathComponent().appendingPathComponent(".scan-" + UUID().uuidString)
+    guard fm.createFile(atPath: temporary.path, contents: nil, attributes: [.posixPermissions: 0o600]) else { throw CleanerError.message("Cannot create scan snapshot") }
+    defer { try? fm.removeItem(at: temporary) }
+    let handle = try FileHandle(forWritingTo: temporary); defer { try? handle.close() }
+    func write(_ batch: Batch) throws {
+      try autoreleasepool { var data = try JSONEncoder().encode(batch); data.append(10); try handle.write(contentsOf: data) }
+    }
+    try write(.metadata(Metadata(version: 2, date: snapshot.date, roots: snapshot.roots, volumeID: snapshot.volumeID, complete: snapshot.report.complete, progress: snapshot.progress, fileCount: snapshot.report.files.count)))
+    for start in stride(from: 0, to: snapshot.report.files.count, by: 256) {
+      try write(.files(Array(snapshot.report.files[start..<min(start+256, snapshot.report.files.count)])))
+    }
+    var folders: [Folder] = []
+    for (path, bytes) in snapshot.report.folders {
+      folders.append(Folder(path: path, bytes: bytes))
+      if folders.count == 256 { try write(.folders(folders)); folders.removeAll(keepingCapacity: true) }
+    }
+    if !folders.isEmpty { try write(.folders(folders)) }
+    for start in stride(from: 0, to: snapshot.report.issues.count, by: 256) {
+      try write(.issues(Array(snapshot.report.issues[start..<min(start+256, snapshot.report.issues.count)])))
+    }
+    try write(.end); try handle.synchronize()
+    guard rename(temporary.path, url.path) == 0 else { throw CleanerError.message("Cannot finish scan snapshot; previous result retained") }
   }
   public func load() throws -> SavedScan? {
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-    let snapshot = try PropertyListDecoder().decode(SavedScan.self, from: Data(contentsOf: url))
-    guard snapshot.version == 1 else {
-      throw CleanerError.message("Unsupported scan snapshot version")
+    let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
+    let prefix = try handle.read(upToCount: 8) ?? Data()
+    if prefix.starts(with: Data("bplist".utf8)) {
+      let snapshot = try PropertyListDecoder().decode(SavedScan.self, from: Data(contentsOf: url))
+      guard snapshot.version == 1 else { throw CleanerError.message("Unsupported scan snapshot version") }
+      try validate(snapshot.report)
+      return snapshot
     }
-    guard snapshot.report.files.allSatisfy({ $0.bytes >= 0 && $0.path.hasPrefix("/") }) else {
-      throw CleanerError.message("Invalid scan snapshot")
+    try handle.seek(toOffset: 0)
+    var buffer = Data(); var metadata: Metadata?; var report = ScanReport(); var ended = false
+    while true {
+      let data = try handle.read(upToCount: 1_048_576) ?? Data()
+      if data.isEmpty { break }; buffer.append(data)
+      while let newline = buffer.firstIndex(of: 10) {
+        let line = Data(buffer[..<newline]); buffer.removeSubrange(...newline)
+        guard !ended else { throw CleanerError.message("Unexpected data after scan snapshot") }
+        try autoreleasepool {
+          let batch = try JSONDecoder().decode(Batch.self, from: line)
+          switch batch {
+          case .metadata(let value):
+            guard metadata == nil, value.version == 2, value.fileCount >= 0 else { throw CleanerError.message("Invalid scan snapshot header") }
+            metadata = value
+          case .files(let files): report.files.append(contentsOf: files)
+          case .folders(let folders): for folder in folders { report.folders[folder.path] = folder.bytes }
+          case .issues(let issues): report.issues.append(contentsOf: issues)
+          case .end: ended = true
+          }
+        }
+      }
+      guard buffer.count < 8_000_000 else { throw CleanerError.message("Scan snapshot record too large") }
     }
-    return snapshot
+    guard ended, buffer.isEmpty, let metadata, report.files.count == metadata.fileCount else { throw CleanerError.message("Incomplete scan snapshot") }
+    try validate(report); report.complete = metadata.complete
+    return SavedScan(roots: metadata.roots, volumeID: metadata.volumeID, report: report, progress: metadata.progress, date: metadata.date)
   }
+  private func validate(_ report: ScanReport) throws {
+    guard report.files.allSatisfy({ $0.bytes >= 0 && $0.path.hasPrefix("/") }) else { throw CleanerError.message("Invalid scan snapshot") }
+  }
+
 }
 public struct DiskNode: Identifiable, Sendable {
   public var id: String { path }
@@ -62,11 +120,11 @@ public struct DiskIndex: Sendable {
   public init(report: ScanReport) {
     for (path, bytes) in report.folders {
       guard path != "/" else { continue }
-      let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
+      let parent = (path as NSString).deletingLastPathComponent
       children[parent, default: []].append(DiskNode(path: path, bytes: bytes, directory: true))
     }
     for file in report.files {
-      let parent = URL(fileURLWithPath: file.path).deletingLastPathComponent().path
+      let parent = (file.path as NSString).deletingLastPathComponent
       children[parent, default: []].append(
         DiskNode(path: file.path, bytes: file.bytes, directory: false))
     }

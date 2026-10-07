@@ -66,7 +66,7 @@ public final class LocalModel: @unchecked Sendable {
       "generate",
       [
         "model": model, "system": ContextPlan.system, "prompt": ContextSafety.redact(prompt), "stream": false,
-        "options": ["temperature": 0.1, "num_ctx": 16384, "num_predict": 4096], "keep_alive": "5m",
+        "options": ["temperature": 0.1, "num_ctx": 16384, "num_predict": 1024], "keep_alive": "5m",
       ])
     let (data, response) = try await session.data(for: r)
     try validate(response)
@@ -82,8 +82,8 @@ public final class LocalModel: @unchecked Sendable {
     _ transcript: Transcript, model: String, style: String,
     progress: @escaping @Sendable (String) -> Void
   ) async throws -> String {
-    let reader = try transcript.streaming?.chunks()
-    var small = (reader == nil ? ContextPlan.chunks(transcript.numbered) : []).makeIterator()
+    let reader = try transcript.streaming?.chunks(redacting: true)
+    var small = (reader == nil ? ContextPlan.chunks(ContextSafety.redact(transcript.numbered)) : []).makeIterator()
     var notes: [String] = []
     var noteBytes = 0
     var part = 0
@@ -96,7 +96,7 @@ public final class LocalModel: @unchecked Sendable {
       part += 1
       progress("\(part)")
       let proposal = try await generate(
-        "Agent: \(transcript.agent). Compression: \(style). Extract handoff notes for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>", model: model)
+        "Agent: \(transcript.agent). Compression: \(style). Select evidence references for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>", model: model)
       let note = try ContextSafety.groundedExcerpt(proposal, source: chunk)
       noteBytes += note.utf8.count
       guard noteBytes <= 8_000_000 else {

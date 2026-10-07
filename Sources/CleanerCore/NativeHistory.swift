@@ -28,6 +28,12 @@ public enum NativeHistory {
         if type == "response_item", payload?["type"] as? String == "message" {
           message = payload
         }
+      } else if agent == "gemini" {
+        let patch = value["$set"] as? [String: Any]
+        if let id = (value["sessionId"] ?? patch?["sessionId"]) as? String, !id.isEmpty { identities.insert(id); recognized = true }
+        if ["user", "gemini"].contains(type), value["content"] != nil {
+          message = ["role": type == "user" ? "user" : "assistant"]
+        }
       } else if agent == "cursor" {
         guard let role = value["role"] as? String, ["user", "assistant"].contains(role),
           let body = value["message"] as? [String: Any], body["content"] is [Any] else {
@@ -55,7 +61,7 @@ public enum NativeHistory {
 
     }
     func finish(numbered: String = "") throws -> Result {
-      guard ["codex", "claude", "cursor"].contains(agent), recognized, (agent == "cursor" ? identities.isEmpty : identities.count == 1), messages > 0 else {
+      guard ["codex", "claude", "cursor", "gemini"].contains(agent), recognized, (agent == "cursor" ? identities.isEmpty : identities.count == 1), messages > 0 else {
         throw CleanerError.message("Unrecognized or mixed session. Import one JSONL session for the selected agent")
       }
       return Result(numbered: numbered, messages: messages, retainedRecords: retained)

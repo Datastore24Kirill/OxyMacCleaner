@@ -3,7 +3,7 @@ import SwiftUI
 
 extension AppModel {
   func findAgentSessions() {
-    guard !busy, ["codex", "claude", "cursor"].contains(agent),
+    guard !busy, ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo"].contains(agent),
       let definition = Agents.catalog.first(where: { $0.id == agent }) else { return }
     let selected = agent
     let roots = definition.locations(home: home)
@@ -15,7 +15,7 @@ extension AppModel {
     task = Task {
       do {
         let result = try await Task.detached {
-          try SessionCatalog.discover(roots: roots, cancellation: token)
+          try SessionCatalog.discover(roots: roots, cancellation: token, agent: selected)
         }.value
         if agent == selected { sessionCatalog = result }
         status = t("Список файлов обновлён", "Session file list refreshed")
@@ -51,7 +51,7 @@ struct SessionCatalogView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Button(vm.t("Найти сессии", "Find sessions")) { vm.findAgentSessions() }
-        .disabled(vm.busy).help(vm.t("Читает имена, даты и размеры JSONL в стандартных папках. Содержимое проверяется только при открытии.", "Reads JSONL names, dates and sizes in default folders. Content is validated only when opened."))
+        .disabled(vm.busy).help(vm.t("Читает имена, даты и размеры файлов истории в стандартных папках. Содержимое проверяется только при открытии.", "Reads history filenames, dates and sizes in default folders. Content is validated only when opened."))
       if let catalog = vm.sessionCatalog {
         Text(vm.t("Найдено файлов: ", "Files found: ") + "\(catalog.files.count)")
         if catalog.issues > 0 || catalog.limited {

@@ -86,7 +86,7 @@ public final class StreamingHistory: @unchecked Sendable {
       return target
     } catch { try? FileManager.default.removeItem(at: target); throw error }
   }
-  public func chunks() throws -> HistoryChunkReader { try HistoryChunkReader(numbered) }
+  public func chunks(redacting: Bool = false) throws -> HistoryChunkReader { try HistoryChunkReader(numbered, redacting: redacting) }
 }
 
 /// A bounded UTF-8 line reader; oversized single records fail explicitly, never truncate.
@@ -123,7 +123,8 @@ final class HistoryLineReader {
 public final class HistoryChunkReader {
   private let reader: HistoryLineReader
   private var remaining = ""
-  init(_ url: URL) throws { reader = try HistoryLineReader(url) }
+  private let redacting: Bool
+  init(_ url: URL, redacting: Bool = false) throws { reader = try HistoryLineReader(url); self.redacting = redacting }
   public func next(cancellation: Cancellation = Cancellation()) throws -> String? {
     var chunk = ""
     var count = 0
@@ -131,7 +132,7 @@ public final class HistoryChunkReader {
       try cancellation.check()
       if remaining.isEmpty {
         guard let line = try reader.next(cancellation: cancellation) else { break }
-        remaining = line + "\n"
+        remaining = (redacting ? ContextSafety.redact(line) : line) + "\n"
       }
       let end = remaining.index(remaining.startIndex, offsetBy: 12000 - count, limitedBy: remaining.endIndex) ?? remaining.endIndex
       let part = remaining[..<end]; chunk += part; count += part.count

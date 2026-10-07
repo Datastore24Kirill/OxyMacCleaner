@@ -260,18 +260,25 @@ import UserNotifications
   @Published var mapPath = "/"
   @Published var snapshotDate: Date?
   @Published var restoredSnapshot = false
+  @Published var recoveredInterruptedScan = false
   @Published var minimumMB = 0
   @Published var olderThanDays = 0
   var scanStore: ScanStore { ScanStore(url: support.appendingPathComponent("Scans/latest.plist")) }
+  var scanJournalURL: URL { support.appendingPathComponent("Scans/interrupted.jsonl") }
   func restoreScan() {
     guard !busy, snapshotDate == nil else { return }
     busy = true
     status = t("Загружаем прошлый результат…", "Loading previous scan…")
     let store = scanStore
+    let journalURL = scanJournalURL
     task = Task {
       do {
-        let saved = try await Task.detached { try store.load() }.value
-        if let saved {
+        let recovery = try await Task.detached { () throws -> (SavedScan?, Bool) in
+          if let partial = try ScanJournal.recover(journalURL) { return (partial, true) }
+          return (try store.load(), false)
+        }.value
+        recoveredInterruptedScan = recovery.1
+        if let saved = recovery.0 {
           let index = await Task.detached { DiskIndex(report: saved.report) }.value
           report = saved.report
           scanProgress = saved.progress
@@ -413,6 +420,7 @@ import UserNotifications
     diskIndex = DiskIndex(report: ScanReport())
     snapshotDate = nil
     restoredSnapshot = false
+    recoveredInterruptedScan = false
     mapPath = chosen.first?.path ?? "/"
     cancellation = Cancellation()
     let token = cancellation
@@ -421,10 +429,13 @@ import UserNotifications
     let excluded =
       exclusions + [support.path] + chosen.flatMap { Volumes.exclusions(for: $0, mounted: mounted) }
     status = t("Сканирование…", "Scanning…")
+    let journalURL = scanJournalURL
+    let selectedVolume = volumeID
     task = Task {
       let (result, finalSnapshot) = await Task.detached {
         var latest = ScanProgress()
-        let report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token) {
+        let journal = try? ScanJournal(url: journalURL, roots: chosen, volumeID: selectedVolume)
+        var report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token, record: { file in try journal?.append(file) }) {
           snapshot in
           latest = snapshot
           Task { @MainActor in
@@ -432,6 +443,8 @@ import UserNotifications
             self.scanProgress = snapshot
           }
         }
+        do { try journal?.flush() } catch { report.issues.append("Recovery journal: " + error.localizedDescription) }
+        if journal == nil { report.issues.append("Recovery journal could not be created") }
         return (report, latest)
       }.value
       report = result
@@ -450,6 +463,7 @@ import UserNotifications
         let index = DiskIndex(report: result)
         do {
           try store.save(saved)
+          try? FileManager.default.removeItem(at: journalURL)
           return (index, Optional<String>.none)
         } catch { return (index, Optional(error.localizedDescription)) }
       }.value

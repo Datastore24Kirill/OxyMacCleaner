@@ -165,6 +165,7 @@ struct AppUpdateView: View {
       if let release = updater.release {
         Button(vm.t("Обновить до ", "Update to ") + release.version) { updater.install() }.disabled(updater.busy || vm.busy)
       }
+      UpdateBackupsView()
       Text(vm.t("Источник — GitHub проекта. Проверяем SHA-256 и целостность подписи. Подпись Developer ID пока отсутствует. Предыдущая версия сохраняется рядом с приложением для отката; после обновления macOS может снова запросить доступ.", "Source: project GitHub. SHA-256 and signature integrity are checked. Developer ID is not available yet. The previous version is retained beside the app for rollback; macOS may ask for access again.")).font(.caption)
     }
   }

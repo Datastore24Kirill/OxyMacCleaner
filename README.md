@@ -6,9 +6,11 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.2.2 Preview — implemented
+## 0.3.0 Preview — implemented
 
-New in 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
+New in 0.3.0: lower scan memory, interrupted-scan recovery, source/output comparison, four additional history readers, verified quarantine relocation, update-backup management and keyboard navigation. [Release details](docs/release-0.3.0.md).
+
+Previous milestone 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
 
 Native JSONL histories up to 1 GB: bounded streaming import, private disk snapshots, progress/cancellation and incremental model input. Originals remain unchanged.
 
@@ -39,11 +41,11 @@ Safety audit: generic cleanup now protects user Library, media libraries, signin
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
 - Local model download progress/cancellation; no automatic cloud fallback. Model metadata must identify a local GGUF model.
 
-This is an early implementation milestone, **not completion of the version-one specification**. Broader native adapters, cache discovery, accessibility auditing and signed distribution remain open. Grounded context extraction passed two synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
+This is an early implementation milestone, **not completion of the version-one specification**. Database-backed agent adapters, further cache discovery, complete VoiceOver auditing and signed distribution remain open. Grounded context extraction passed short and multi-part synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
 
 ## Install
 
-Download `OxyMacCleaner-0.2.2-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.3.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -52,7 +54,7 @@ The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may bl
 1. Choose a disk (the startup disk is selected by default) or use the optional folder picker for a small test. Nothing is moved automatically.
 2. Review files and duplicates; keep at least one copy per duplicate group.
 3. Moving a file into quarantine **does not free its disk space**. Restore first to verify the workflow on a disposable file.
-4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after integrity and retention checks), agent storage, credentials and system paths are excluded from cleanup in this preview. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Cross-volume quarantine is unavailable.
+4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after integrity and retention checks), agent storage, credentials and system paths are excluded from cleanup in this preview. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Already-quarantined objects can be relocated to another local volume after verification; initial quarantine still requires the same volume.
 5. To prepare an agent handoff, import an exported inactive session, configure a local model, review the result and paste it into a new chat. Existing chats are not rewritten.
 
 APFS clones/snapshots mean logical file sizes are not a guarantee of reclaimable storage. Large scans currently retain file metadata in memory. Only the first 2,000 filtered files are rendered; narrow the search to access more results.

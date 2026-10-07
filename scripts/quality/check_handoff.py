@@ -59,8 +59,8 @@ def main():
     for case in cases:
         transcript = '\n'.join(f'[L{i}] {line}' for i, line in enumerate(case['lines'], 1))
         result = request('generate', {'model': args.model, 'system': system,
-            'prompt': 'Agent: codex. Compression: Бережный. Extract handoff notes for part 1. Preserve source line citations.\n<transcript>\n' + sanitize(transcript) + '\n</transcript>',
-            'stream': False, 'options': {'temperature': 0.1, 'num_ctx': 16384, 'num_predict': 4096}, 'keep_alive': '5m'})
+            'prompt': 'Agent: codex. Compression: Бережный. Select evidence references for part 1. Preserve source line citations.\n<transcript>\n' + sanitize(transcript) + '\n</transcript>',
+            'stream': False, 'options': {'temperature': 0.1, 'num_ctx': 16384, 'num_predict': 1024}, 'keep_alive': '5m'})
         text = sanitize(result.get('response', ''))
         if result.get('error') or not text.strip():
             raise RuntimeError(result.get('error', 'Empty response'))

@@ -15,7 +15,7 @@ public struct SessionCatalogResult: Sendable {
 public enum SessionCatalog {
   /// Metadata only. Native format/session identity is validated when a user opens a file.
   public static func discover(roots: [URL], cancellation: Cancellation = Cancellation(),
-    maximumEntries: Int = 20_000) throws -> SessionCatalogResult {
+    maximumEntries: Int = 20_000, agent: String? = nil) throws -> SessionCatalogResult {
     var result = SessionCatalogResult()
     var pending = roots
     var seen = Set<String>()
@@ -43,7 +43,9 @@ public enum SessionCatalog {
             if pending.count + visited >= maximumEntries { result.limited = true; break }
             pending.append(child)
           }
-        } else if values.isRegularFile == true, url.pathExtension.lowercased() == "jsonl" {
+        } else if values.isRegularFile == true, (url.pathExtension.lowercased() == "jsonl" || (agent.map { JSONHistory.agents.contains($0) } == true && url.pathExtension.lowercased() == "json")) {
+          if ["cline", "roo"].contains(agent ?? ""), url.lastPathComponent != "api_conversation_history.json" { continue }
+          if agent == "continue", url.lastPathComponent == "sessions.json" { continue }
           guard let size = values.fileSize, let modified = values.contentModificationDate else {
             result.issues += 1; continue
           }

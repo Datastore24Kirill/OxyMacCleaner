@@ -216,3 +216,19 @@ Explicit xcodebuild destination UUID association replaces the blanket guard for 
 ## 0.1.27 — filtered simulator selection
 
 Available shut-down devices can be selected across all filtered pages, replacing old device selection. Missing-runtime selection moved to More and respects search. Separate device/runtime counters explain scope. Cleanup logic unchanged.
+
+## 0.3.0 — пять направлений, 07.10.2026
+
+Implemented FTS metadata traversal, batched atomic scan snapshots with legacy binary-plist loading, and append-only crash journals. Recovery restores partial results and offers a fresh traversal; it does not resume exactly at the interrupted directory. Metadata remains in RAM. A corrupted completed snapshot is rejected.
+
+Measured on this Mac using disposable synthetic fixtures: 1,000,000 physical files scanned in 159.09 s, peak process RSS 869,072,896 bytes, compared with 248.14 s / 5,671,190,528 bytes before the traversal change. Both include synthetic 100 MB history import/backup in the same process; fixture creation is excluded from scan duration. Different filesystem cache states make this a local comparison, not a universal speed guarantee. Separate million-record metadata test: save 2.80 s, load+index 22.42 s, peak RSS 1,303,625,728 bytes while retaining original and restored reports. This does not measure the full live UI scan pipeline.
+
+Added Gemini CLI, Continue, Cline and Roo Code readers with structure validation and retained unknown fields; seven native file adapters total. Added bounded source/output comparison and reference-only local-model selection. Short and five-part synthetic 7B cases passed; manual semantic review remains required.
+
+Added verified relocation of existing quarantine payloads to another volume, conflict-safe restoration, and explicit management of completed updater backups with newest protected. Real APFS image cross-volume copy/restore passed using only an owned fixture. Interrupted copy may leave extra copies; no automated pruning of uncertain leftovers. Initial quarantine still requires same-volume placement.
+
+Added localized common-error explanations, lifecycle labels, keyboard section commands and accessibility labels for new views. 145 Swift tests passed, plus three Python audit tests. Full VoiceOver end-to-end coverage and signed distribution remain open. No real user archives, simulator devices, histories or quarantine payloads were removed during development.
+
+Installed final 0.3.0 build 32 locally with 0.2.2 rollback copy retained. UI verified: legacy user scan restored (237,450 files), Cmd+, settings and Cmd+4 agents, Russian/English navigation, light/dark rendering, synthetic Gemini import (2 messages + metadata), source/result comparison, and four completed updater copies with 0.2.2 protected. The backup expander was replaced with an explicit accessible button after UI testing. No copies were deleted. Theme restored to System and language to Russian. Full Disk Access probe reports denial after this ad-hoc binary replacement; no TCC reset or permission bypass performed. End-to-end VoiceOver speech, complete English localization of old status/template strings, and native history branch reconstruction remain limitations.
+
+Abrupt child-process exit test recovered exactly 256 synchronized records of 300 and correctly marked the result partial; 44 unflushed records were absent. The test used synthetic metadata only.
