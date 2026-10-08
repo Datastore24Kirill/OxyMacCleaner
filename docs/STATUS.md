@@ -1,4 +1,4 @@
-# Implementation status — 0.4.3 Preview
+# Implementation status — 0.4.4 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -16,10 +16,14 @@ This is an implementation milestone, not completion of the version-one specifica
 | Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, full permission continuity; older backups are managed explicitly |
 | Permissions | In-process diagnostics, ad-hoc builds | Stable Developer ID signing deferred |
 
+## Verification update — 0.4.4
+
+User marked VoiceOver verification complete on 2026-10-08. Owned APFS image tests cover disconnect during relocation/scan, offline restore refusal, a detach/restore race (restore completed first), and reconnect recovery. New quarantine entries retain original volume UUID; restoring to that path refuses a missing/replaced volume. Legacy entries lack this guard. Each agent now displays its import format and boundaries. See [spec readiness](READINESS-RU.md) and [first launch](FIRST-LAUNCH-RU.md).
+
 ## Next work
 
 1. Broader semantic conflict detection and real-history quality cases. Full-history review now indexes explicit change/test phrases with source offsets, progress and cancellation. It does not resolve contradictory requirements; long records are inspected only through a bounded prefix and reported.
-2. Broader assistive-technology testing; all sections have keyboard commands, selected-state labels and VoiceOver heading focus. Cancellation/destination/disk-space errors have RU/EN guidance.
+2. User VoiceOver check complete; broader assistive-technology testing remains; all sections have keyboard commands, selected-state labels and VoiceOver heading focus. Cancellation/destination/disk-space errors have RU/EN guidance.
 3. More native agent formats and broader disk failure tests. Both saved-stop and crash-journal resume reuse committed subtrees; an unfinished subtree is rescanned. APFS shared-block ownership remains unknown.
 4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.
 

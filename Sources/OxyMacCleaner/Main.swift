@@ -134,7 +134,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.3 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.4 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -511,6 +511,10 @@ struct RootView: View {
             vm.output = ""
           }
           if let definition = Agents.catalog.first(where: { $0.id == vm.agent }) {
+            Text(definition.nativeFormat.map { vm.t("Формат истории: ", "History format: ") + $0 }
+              ?? vm.t("Импорт экспорта", "Export import")).font(.subheadline).bold()
+            Text(definition.importLimitations(russian: vm.t("ru", "en") == "ru"))
+              .font(.caption).foregroundStyle(.secondary)
             let paths = definition.locations(home: vm.home)
             note(
               paths.isEmpty

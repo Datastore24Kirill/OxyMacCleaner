@@ -6,9 +6,9 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.4.3 Preview — implemented
+## 0.4.4 Preview — implemented
 
-New in 0.4.3: crash recovery retains committed folder checkpoints and skip diagnostics, allowing unfinished subtrees to be resumed. [Release details](docs/release-0.4.3.md).
+New in 0.4.4: crash recovery retains committed folder checkpoints and skip diagnostics, allowing unfinished subtrees to be resumed. [Release details](docs/release-0.4.4.md).
 
 Previous milestone 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
 
@@ -41,13 +41,15 @@ Safety audit: generic cleanup now protects user Library, media libraries, signin
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
 - Local model download progress/cancellation; no automatic cloud fallback. Model metadata must identify a local GGUF model.
 
-This is an early implementation milestone, **not completion of the version-one specification**. Database-backed agent adapters, further cache discovery, complete VoiceOver auditing and signed distribution remain open. Grounded context extraction passed short and multi-part synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
+This is an early implementation milestone, **not completion of the version-one specification**. Database-backed agent adapters, further cache discovery, broader accessibility auditing and signed distribution remain open. Grounded context extraction passed short and multi-part synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
 
 ## Install
 
-Download `OxyMacCleaner-0.4.3-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.4.4-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
+
+[Инструкция первого запуска](docs/FIRST-LAUNCH-RU.md) · [Сверка ТЗ и ограничения](docs/READINESS-RU.md)
 
 ## Safe first use
 

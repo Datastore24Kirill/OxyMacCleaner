@@ -10,6 +10,26 @@ public struct AgentDefinition: Identifiable, Sendable {
     self.name = name
     relativePaths = paths
   }
+  public var nativeFormat: String? {
+    switch id {
+    case "codex", "claude", "cursor": return "JSONL · ≤ 1 GB"
+    case "gemini", "continue", "cline", "roo": return "JSON · ≤ 30 MB"
+    case "opencode": return "opencode export · JSON · ≤ 30 MB"
+    case "aider": return "Markdown · ≤ 30 MB"
+    default: return nil
+    }
+  }
+  public func importLimitations(russian: Bool) -> String {
+    let specific: String
+    if id == "aider" {
+      specific = russian ? "Только один сеанс с маркером начала Aider; объединённые истории не поддерживаются." : "One session with an Aider start marker only; merged histories are unsupported."
+    } else if nativeFormat == nil {
+      specific = russian ? "Только выбранный вами текстовый экспорт до 30 MB; внутренний формат чатов не поддерживается." : "Only a text export you select, up to 30 MB; the internal chat format is unsupported."
+    } else {
+      specific = russian ? "Один файл одной сессии с распознаваемой структурой. Неизвестные версии формата могут быть отклонены." : "One file for one session with a recognized structure. Unknown format versions may be rejected."
+    }
+    return specific + (russian ? " Базы данных не изменяются. Результат нужно проверить и перенести в новый чат вручную; оригинал не удаляется, место сжатием не освобождается." : " Databases are not modified. Review the result and transfer it to a new chat manually; the original is retained and summarizing does not reclaim disk space.")
+  }
   public func locations(home: URL) -> [URL] {
     relativePaths.map { home.appendingPathComponent($0) }.filter {
       FileManager.default.fileExists(atPath: $0.path)

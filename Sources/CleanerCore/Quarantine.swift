@@ -14,6 +14,7 @@ public struct QuarantineEntry: Codable, Identifiable, Sendable {
   public var externalPayload: String? = nil
   public var restoreDigest: String? = nil
   public var previousPayload: String? = nil
+  public var originalVolumeUUID: String? = nil
   public var isArchive: Bool { archive == true || archiveBackup != nil }
   public var state: String
 }
@@ -186,6 +187,7 @@ public final class QuarantineStore: @unchecked Sendable {
     var entry = QuarantineEntry(
       id: UUID(), original: file.path, bytes: file.bytes, date: Date(), hash: digest,
       state: "prepared")
+    entry.originalVolumeUUID = try source.resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
     let dir = folder(entry.id)
     try FileManager.default.createDirectory(
       at: dir, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -369,6 +371,7 @@ public final class QuarantineStore: @unchecked Sendable {
       id: UUID(), original: path, bytes: expected.bytes, date: Date(), hash: try expected.digest,
       kind: "directory", archiveBackup: archivePlan?.backup?.path, archive: archivePlan != nil,
       state: "prepared")
+    entry.originalVolumeUUID = try URL(fileURLWithPath: path).resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
     try fm.createDirectory(
       at: folder(entry.id), withIntermediateDirectories: false,
       attributes: [.posixPermissions: 0o700])
@@ -432,6 +435,7 @@ public final class QuarantineStore: @unchecked Sendable {
     try cancellation.check()
     let dest = destination ?? URL(fileURLWithPath: entry.original)
     let payload = payloadURL(entry)
+    try Self.validateRestoreVolume(entry, destination: dest)
     guard !FileManager.default.fileExists(atPath: dest.path) else {
       throw CleanerError.message("Destination already exists; choose another name")
     }
@@ -459,6 +463,7 @@ public final class QuarantineStore: @unchecked Sendable {
       var saved = entry; saved.state = "restoring"; saved.restoreDestination = dest.path
       saved.restoreDigest = try payloadHash(entry, stage)
       try save(saved)
+      try Self.validateRestoreVolume(entry, destination: dest)
       guard renameatx_np(AT_FDCWD, stage.path, AT_FDCWD, dest.path, UInt32(RENAME_EXCL)) == 0 else {
         throw CleanerError.message("Restore destination changed; quarantine retained")
       }
@@ -473,11 +478,21 @@ public final class QuarantineStore: @unchecked Sendable {
     saved.state = "restoring"
     saved.restoreDestination = dest.path
     try save(saved)
+    try Self.validateRestoreVolume(entry, destination: dest)
     guard renameatx_np(AT_FDCWD, payload.path, AT_FDCWD, dest.path, UInt32(RENAME_EXCL)) == 0 else {
       throw CleanerError.message("Restore failed; quarantine retained")
     }
     saved.state = "restored"
     try save(saved)
+  }
+  /// UUID survives remounts, unlike a device number. Explicit alternative destinations remain allowed.
+  static func validateRestoreVolume(_ entry: QuarantineEntry, destination: URL) throws {
+    guard destination.standardizedFileURL.path == URL(fileURLWithPath: entry.original).standardizedFileURL.path,
+      let expected = entry.originalVolumeUUID else { return }
+    let actual = try? destination.deletingLastPathComponent().resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
+    guard actual == expected else {
+      throw CleanerError.message("Original volume disconnected or replaced; reconnect it or choose another restore destination. Quarantine retained")
+    }
   }
   public struct Inspection: Sendable {
     public let payload: String

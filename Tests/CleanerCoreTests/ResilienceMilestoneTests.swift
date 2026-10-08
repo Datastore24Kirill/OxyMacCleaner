@@ -2,6 +2,27 @@ import XCTest
 @testable import CleanerCore
 
 final class ResilienceMilestoneTests: XCTestCase {
+  func testRestoreRefusesDifferentOriginalVolumeButAllowsChosenAlternative() throws {
+    let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent("source"); try Data("safe".utf8).write(to: file)
+    let store = try QuarantineStore(root: root.appendingPathComponent("q"))
+    var entry = try store.move(FileRecord.read(file))
+    XCTAssertNotNil(entry.originalVolumeUUID)
+    entry.originalVolumeUUID = "unavailable-volume"
+    XCTAssertThrowsError(try store.restore(entry))
+    XCTAssertTrue(store.inspect(entry).payloadValid)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    let alternative = root.appendingPathComponent("alternative")
+    try store.restore(entry, destination: alternative)
+    XCTAssertEqual(try String(contentsOf: alternative), "safe")
+  }
+  func testEveryAgentExplainsItsImportBoundary() {
+    XCTAssertEqual(Agents.catalog.filter { $0.nativeFormat != nil }.count, 9)
+    for agent in Agents.catalog {
+      XCTAssertTrue(agent.importLimitations(russian: true).contains("оригинал"))
+      XCTAssertTrue(agent.importLimitations(russian: false).contains("original"))
+    }
+  }
   func fixture() throws -> URL {
     let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/OxyResilienceQA-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true); return root

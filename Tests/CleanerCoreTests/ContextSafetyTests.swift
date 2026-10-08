@@ -1,6 +1,14 @@
 import XCTest
 @testable import CleanerCore
 final class ContextSafetyTests: XCTestCase {
+  func testGenericTokenAndNextStepRetention() throws {
+    let source = "[L1] user: retain original\n[L2] assistant: Next step: inspect Echo; not completed. token=EchoSynthetic4821"
+    let result = try ContextSafety.groundedExcerpt("[L1]", source: source)
+    XCTAssertTrue(result.contains("Next step: inspect Echo"))
+    XCTAssertFalse(result.contains("EchoSynthetic4821"))
+    XCTAssertTrue(result.contains("[REDACTED]"))
+  }
+
   func testCredentialsRemovedWithoutLosingProhibitionsOrReferences() {
     let text = "[L1] Никогда не удалять оригинал.\n[L2] password=topsecret123\n[L3] Тестовая строка секрета FAKE_BENCH_KEY_4821\n[L4] sk-1234567890123456789"
     let safe = ContextSafety.redact(text)

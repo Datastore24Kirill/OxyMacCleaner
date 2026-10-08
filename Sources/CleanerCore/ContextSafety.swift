@@ -8,7 +8,7 @@ public enum ContextSafety {
       #"\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{12,}|github_pat_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{16})\b"#,
       #"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"#,
       #"(?i)(?:bearer\s+)[A-Za-z0-9._~+/-]{8,}"#,
-      #"(?i)(?:api[_-]?key|access[_-]?token|password|client[_-]?secret)\s*[\"']?\s*[:=]\s*[\"']?[^\s\"',;}]{4,}"#,
+      #"(?i)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|client[_-]?secret)\s*[\"']?\s*[:=]\s*[\"']?[^\s\"',;}]{4,}"#,
     ]
     let filtered = patterns.reduce(input) { text, pattern in
       guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
@@ -50,6 +50,8 @@ public enum ContextSafety {
         || lower.contains("user:") || lower.contains("\"role\":\"user\"")
         || lower.contains("failed") || lower.contains("passed") || lower.contains("error")
         || lower.contains("ошиб") || lower.contains("не опубликован")
+        || lower.contains("следующий шаг") || lower.contains("next step")
+        || lower.contains("не выполнен") || lower.contains("not completed")
       return !sourceReferences(line).isDisjoint(with: selected) || required
     }
     guard !kept.isEmpty else { throw CleanerError.message("No grounded facts selected") }
