@@ -156,7 +156,11 @@ import UserNotifications
   @Published var roots: [URL] = [URL(fileURLWithPath: "/")]
   @Published var volumes: [ScanVolume] = Volumes.discover()
   @Published var volumeID = "/"
-  @Published var report = ScanReport()
+  @Published var report = ScanReport() { didSet { reportRevision += 1; cachedBrowser = nil } }
+  @Published var reportRevision = 0
+  var cachedBrowser: FileBrowserIndex?
+  var cachedBrowserRevision = -1
+  var cachedBrowserExclusions: [String] = []
   @Published var recommendations: [CleanupCandidate] = []
   @Published var recommendationsLoading = false
   private var recommendationGeneration = UUID()
@@ -707,12 +711,14 @@ import UserNotifications
       }
     }
   }
-  func refreshModels() {
+  private var engineCheckedAt: Date?
+  func refreshModels(force: Bool = true) {
     guard !busy, !engineChecking else { return }
+    if !force, let engineCheckedAt, Date().timeIntervalSince(engineCheckedAt) < 30 { return }
     engineChecking = true
     engineMessage = t("Проверяем Ollama…", "Checking Ollama…")
     Task {
-      defer { engineChecking = false }
+      defer { engineChecking = false; engineCheckedAt = Date() }
       do {
         models = try await engine.models(); engineReady = true
         if !models.contains(model) { model = models.first(where: { $0 == "qwen2.5:7b" }) ?? models.first ?? "" }

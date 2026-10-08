@@ -81,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
   }
 }
 struct RootView: View {
+  private static let brandImage = NSImage(contentsOf: Bundle.main.url(forResource: "BrandIcon", withExtension: "png") ?? URL(fileURLWithPath: "/nonexistent")) ?? NSImage()
   @AccessibilityFocusState(for: .voiceOver) private var headingFocused: Bool
   @EnvironmentObject var updater: AppUpdater
   @State private var showHelp = false
@@ -105,11 +106,7 @@ struct RootView: View {
     HStack(spacing: 0) {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Image(
-            nsImage: NSImage(
-              contentsOf: Bundle.main.url(forResource: "BrandIcon", withExtension: "png")
-                ?? URL(fileURLWithPath: "/nonexistent")) ?? NSImage()
-          ).resizable().scaledToFit().frame(width: 58, height: 58).accessibilityLabel(
+          Image(nsImage: Self.brandImage).resizable().scaledToFit().frame(width: 58, height: 58).accessibilityLabel(
             "OxyMac Cleaner")
           VStack(alignment: .leading) {
             Text("OxyMac").font(.title2.bold())
@@ -119,6 +116,11 @@ struct RootView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 8) {
             ForEach(pages, id: \.0) { p in
+              if p.0 == "overview" || p.0 == "developer" || p.0 == "quarantine" {
+                Text(p.0 == "overview" ? vm.t("ОЧИСТКА", "CLEANUP") : p.0 == "developer" ? vm.t("РАЗРАБОТЧИКУ", "DEVELOPER") : vm.t("УПРАВЛЕНИЕ", "MANAGE"))
+                  .font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                  .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10).padding(.leading, 11)
+              }
               Button {
                 vm.page = p.0
                 vm.search = ""
@@ -139,7 +141,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.11 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.12 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -168,7 +170,7 @@ struct RootView: View {
           }.font(.callout)
         }
         if updater.installing { ProgressView(updater.status, value: updater.fraction) }
-        if let progress = vm.scanProgress, vm.isScanning || vm.page == "overview" {
+        if let progress = vm.scanProgress, vm.isScanning {
           ScanProgressView(progress: progress, active: vm.isScanning)
         }
         if vm.recoveredInterruptedScan {
@@ -190,7 +192,7 @@ struct RootView: View {
           case "overview": overview
           case "advisor": CleanupAdvisorView().environmentObject(vm)
           case "map": DiskMapView().environmentObject(vm)
-          case "files", "archives": files
+          case "files", "archives": FileBrowserView().environmentObject(vm)
           case "duplicates": duplicates
           case "developer": developer
           case "agents": agents
@@ -308,6 +310,7 @@ struct RootView: View {
           scanButtons
           ForEach(vm.roots, id: \.path) { Text($0.path).font(.caption).textSelection(.enabled) }
         }
+        HomeShortcuts()
         HStack {
           metric(
             vm.t("Найдено файлов", "Files found"),
@@ -350,117 +353,9 @@ struct RootView: View {
       Text(value).font(.title2.bold()).monospacedDigit()
     }
   }
-  var visibleFiles: [FileRecord] {
-    vm.report.files.filter {
-      (vm.page != "archives" || $0.category == "Archive" || Scanner.inside($0.path, vm.home.appendingPathComponent("Downloads").path))
-        && (vm.page == "archives" || vm.categoryFilter == "all" || $0.category == vm.categoryFilter)
-        && $0.bytes >= Int64(vm.minimumMB) * 1_000_000
-        && (vm.olderThanDays == 0
-          || $0.modified < Date().addingTimeInterval(-Double(vm.olderThanDays) * 86400))
-        && (vm.search.isEmpty || $0.path.localizedCaseInsensitiveContains(vm.search))
-    }
-  }
-  var files: some View {
-    VStack(alignment: .leading) {
-      if vm.snapshotDate == nil { scanButtons }
-      else {
-        DisclosureGroup(vm.t("Диск и повторное сканирование", "Disk and rescan")) { scanButtons }
-          .font(.callout)
-      }
-      if vm.page != "archives" {
-      Picker(vm.t("Категория", "Category"), selection: $vm.categoryFilter) {
-        Text(vm.t("Все категории", "All categories")).tag("all")
-        ForEach(FileCategory.allCases, id: \.rawValue) { kind in
-          Text(vm.t(kind.russian, kind.english)).tag(kind.rawValue)
-        }
-      }.oxyHelp(.category)
-      }
-      HStack {
-        Picker(vm.t("Размер", "Size"), selection: $vm.minimumMB) {
-          Text(vm.t("Любой", "Any")).tag(0)
-          Text("≥ 100 MB").tag(100)
-          Text("≥ 1 GB").tag(1000)
-          Text("≥ 10 GB").tag(10000)
-        }.oxyHelp(.size)
-        Picker(vm.t("Не изменялись", "Unmodified for"), selection: $vm.olderThanDays) {
-          Text(vm.t("Любая дата", "Any date")).tag(0)
-          Text(vm.t("30 дней", "30 days")).tag(30)
-          Text(vm.t("90 дней", "90 days")).tag(90)
-          Text(vm.t("Год", "One year")).tag(365)
-        }.oxyHelp(.age)
-      }
-      TextField(vm.t("Найти по имени или пути", "Search name or path"), text: $vm.search).oxyHelp(
-        .search
-      )
-      .textFieldStyle(.roundedBorder)
-      HStack {
-        Text(vm.t("Файлы отсортированы по размеру", "Files sorted by size")).font(.caption)
-          .foregroundStyle(.secondary)
-        Spacer()
-        Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.oxyHelp(.quarantine)
-          .disabled(
-            vm.selected.isEmpty || vm.busy)
-      }
-      SpaceEstimateView()
-      SelectionControls(count: vm.selected.count,
-        bytes: SpaceEstimate(files: visibleFiles.filter { vm.selected.contains($0.path) }).logical,
-        canSelect: visibleFiles.prefix(2000).contains { vm.fileSelectable($0) },
-        select: { vm.selected = Set(visibleFiles.prefix(2000).filter { vm.fileSelectable($0) }.map(\.path)) },
-        clear: { vm.selected = [] }, shownOnly: true)
-      if visibleFiles.isEmpty { Text(vm.t("Нет файлов по выбранным условиям. Измените фильтры или выполните сканирование.", "No matching files. Adjust filters or run a scan.")).foregroundStyle(.secondary) }
-      List(visibleFiles.prefix(2000)) { f in
-        HStack {
-          Toggle(vm.t("Выбрать ", "Select ") + f.name, isOn: Binding(
-            get: { vm.selected.contains(f.path) },
-            set: { if $0 { vm.selected.insert(f.path) } else { vm.selected.remove(f.path) } }
-          )).labelsHidden().toggleStyle(.checkbox).disabled(vm.busy || !vm.fileSelectable(f))
-            .help(vm.fileSelectable(f) ? vm.t("Выбрать для карантина. Возможность переноса проверяется повторно.", "Select for quarantine. Eligibility is rechecked before moving.") : vm.t("Защищённый объект или жёсткая ссылка. Доступен просмотр в Finder.", "Protected item or hard link. Available for review in Finder."))
-          Image(systemName: f.category == "Archive" ? "shippingbox" : "doc").foregroundStyle(.teal)
-          VStack(alignment: .leading) {
-            Text(f.name).lineLimit(1)
-            Text(f.path).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-          }
-          Spacer()
-          Text(size(f.bytes)).monospacedDigit()
-          Button {
-            vm.reveal(f.path)
-          } label: {
-            Image(systemName: "folder")
-          }.oxyHelp(.finder).buttonStyle(.borderless)
-          Menu { FileActions(path: f.path, file: f) } label: { Image(systemName: "ellipsis") }
-            .menuStyle(.borderlessButton).fixedSize().accessibilityLabel(vm.t("Действия с файлом", "File actions"))
-        }.contextMenu { FileActions(path: f.path, file: f) }
-      }
-      .onChange(of: vm.search) { _, _ in vm.selected = [] }
-      .onChange(of: vm.categoryFilter) { _, _ in vm.selected = [] }
-      .onChange(of: vm.minimumMB) { _, _ in vm.selected = [] }
-      .onChange(of: vm.olderThanDays) { _, _ in vm.selected = [] }
-
-      DisclosureGroup(
-        vm.t("Крупные папки · сумма размеров файлов", "Large folders · summed logical file sizes")
-      ) {
-        ScrollView {
-          ForEach(vm.report.folders.sorted { $0.value > $1.value }.prefix(30), id: \.key) { p in
-            HStack {
-              Text(p.key).lineLimit(1)
-              Spacer()
-              Text(size(p.value))
-              Button {
-                vm.reveal(p.key)
-              } label: {
-                Image(systemName: "folder")
-              }.oxyHelp(.finder)
-            }.font(.caption)
-          }
-        }.frame(maxHeight: 180)
-      }.oxyHelp(.disclosure)
-      note(
-        "Показаны первые 2000 совпадений. Защищённые файлы и внутренние файлы пакетов не перемещаются.",
-        "First 2,000 matches shown. Protected files and package internals cannot be moved.")
-    }
-  }
   var duplicates: some View {
     VStack(alignment: .leading, spacing: 12) {
+      SectionIntro(icon: "square.on.square.fill", title: vm.t("Оставьте одну копию", "Keep one copy"), subtitle: vm.t("Сравним содержимое файлов и поможем выбрать лишние.", "Compare file contents and review extra copies."))
       note(
         "Сначала выполните сканирование. Проверяем содержимое; ссылки не считаем отдельными копиями. Выберите лишние файлы, сохранив минимум одну копию.",
         "Scan first. Contents are verified; hard links are not separate copies. Select extras while retaining at least one copy."
@@ -506,7 +401,7 @@ struct RootView: View {
     VStack(alignment: .leading, spacing: 12) {
       Picker(vm.t("Раздел", "Section"), selection: $vm.developerSection) {
         Text(vm.t("Архивы Xcode", "Xcode archives")).tag("archives")
-        Text("DerivedData").tag("derived")
+        Text(vm.t("Кэши сборки", "Build caches")).tag("derived")
         Text(vm.t("Симуляторы", "Simulators")).tag("simulators")
         Text(vm.t("Тестовые симуляторы", "Test simulators")).tag("testSimulators")
         Text(vm.t("Рабочие деревья", "Worktrees")).tag("worktrees")
@@ -537,6 +432,7 @@ struct RootView: View {
   var agents: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
+        SectionIntro(icon: "text.bubble.fill", title: vm.t("Продолжите работу с коротким контекстом", "Continue with a shorter context"), subtitle: vm.t("1. Выберите историю   2. Подготовьте пересказ   3. Проверьте и перенесите", "1. Choose a history   2. Prepare a summary   3. Review and transfer"))
         card {
           Picker(vm.t("Агент", "Agent"), selection: $vm.agent) {
             ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
@@ -662,6 +558,7 @@ struct RootView: View {
   }
   var quarantine: some View {
     VStack(alignment: .leading, spacing: 12) {
+      SectionIntro(icon: "arrow.uturn.backward.circle.fill", title: vm.t("Вернуть или удалить", "Restore or remove"), subtitle: vm.t("Здесь хранятся отложенные файлы. Пока они занимают место.", "Your set-aside files remain here and still occupy space."))
       note(
         "Файлы здесь продолжают занимать диск. Удаление безвозвратно; восстановление не перезаписывает существующие файлы.",
         "Files here still occupy disk space. Deletion is permanent; restoration never overwrites existing files."

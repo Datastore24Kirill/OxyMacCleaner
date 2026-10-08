@@ -1,4 +1,4 @@
-# Implementation status — 0.4.11 Preview
+# Implementation status — 0.4.12 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -269,3 +269,7 @@ Final packaged 0.3.1 installed locally. Live UI automatically detected running O
 ## Usability review — 0.4.11
 
 Explicit file/archive selection, filtered batch actions, quarantine restore/delete selection and visible file menus. Selection is cleared when switching file sections or filters. See [section-by-section audit](UX-AUDIT-0.4.11-RU.md). Safety eligibility and dedicated cleanup operations remain in force.
+
+## UX and navigation — 0.4.12
+
+Background file index, protected-by-default list, task cards and clearer Xcode caches. 187 tests passed; local build installed and all sections opened. See [scenario audit](UX-AUDIT-0.4.12-RU.md). Legacy macOS previous.app label remains unresolved; access works.

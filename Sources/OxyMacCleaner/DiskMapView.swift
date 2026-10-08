@@ -3,6 +3,8 @@ import SwiftUI
 
 struct DiskMapView: View {
   @EnvironmentObject var vm: AppModel
+  @State private var files: [String: FileRecord] = [:]
+  @State private var limit = 200
   private var nodes: [DiskNode] { vm.diskIndex.children[vm.mapPath] ?? [] }
   private var shown: [DiskNode] {
     let top = Array(nodes.filter { $0.bytes > 0 }.prefix(24))
@@ -13,7 +15,6 @@ struct DiskMapView: View {
     ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
   }
   var body: some View {
-    let files = Dictionary(vm.report.files.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
     VStack(alignment: .leading, spacing: 12) {
       HStack {
         Button {
@@ -49,7 +50,7 @@ struct DiskMapView: View {
             }
           }
         }.frame(minHeight: 180, idealHeight: 250, maxHeight: 320)
-        List(nodes.prefix(2000)) { node in
+        List(nodes.prefix(limit)) { node in
           HStack {
             Button {
               if node.directory { vm.mapPath = node.path } else { vm.reveal(node.path) }
@@ -79,16 +80,23 @@ struct DiskMapView: View {
             FileActions(path: node.path, file: files[node.path])
           }
         }
+        if nodes.count > limit { Button(vm.t("Показать ещё 200", "Show 200 more")) { limit += 200 } }
         Text(
           vm.t(
-            "Площадь — логический размер файлов. Нажмите папку, чтобы открыть её. Карта не показывает гарантированно освобождаемое место. В списке до 2000 объектов.",
-            "Area represents logical file size. Click a folder to explore. This is not guaranteed reclaimable space. List shows up to 2,000 items."
+            "Площадь — логический размер файлов. Нажмите папку, чтобы открыть её. Карта не показывает гарантированно освобождаемое место. Список загружается порциями по 200 объектов.",
+            "Area represents logical file size. Click a folder to explore. This is not guaranteed reclaimable space. List loads 200 items at a time."
           )
         )
         .font(.caption).foregroundStyle(.secondary)
       }
-    }
+    }.task(id: vm.reportRevision) {
+      let source = vm.report.files
+      let lookup = await Task.detached { Dictionary(source.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first }) }.value
+      guard !Task.isCancelled else { return }
+      files = lookup
+    }.onChange(of: vm.mapPath) { _, _ in limit = 200 }
   }
+
   private func tileHelp(_ node: DiskNode) -> String {
     if node.path == "remaining" {
       return vm.t(

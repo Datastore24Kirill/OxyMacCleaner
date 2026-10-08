@@ -9,6 +9,23 @@ public struct DerivedCache: Identifiable, Sendable {
   public let bytes: Int64
   public let modified: Date
   public let issues: Int
+
+  public func displayCategory(russian: Bool) -> String {
+    switch category {
+    case "Build/Intermediates.noindex": return russian ? "Промежуточные сборки" : "Build intermediates"
+    case "Index.noindex": return russian ? "Индекс кода" : "Code index"
+    case "Logs": return russian ? "Журналы сборок" : "Build logs"
+    default: return category
+    }
+  }
+  public func cleanupConsequence(russian: Bool) -> String {
+    switch category {
+    case "Build/Intermediates.noindex": return russian ? "Следующая сборка будет дольше. Исходники остаются." : "The next build will take longer. Sources are retained."
+    case "Index.noindex": return russian ? "Xcode заново подготовит поиск и автодополнение." : "Xcode will rebuild search and code completion."
+    case "Logs": return russian ? "Старые отчёты о сборках будут удалены." : "Old build reports will be removed."
+    default: return russian ? "Проверьте назначение данных перед очисткой." : "Review the data before cleanup."
+    }
+  }
 }
 public struct DerivedDataPlan: Sendable {
   public let source: URL

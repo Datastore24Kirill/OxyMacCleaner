@@ -20,8 +20,7 @@ struct XcodeArchiveView: View {
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Label(vm.t("Архивы приложений", "Application archives"), systemImage: "archivebox").font(
-        .title2.bold())
+      SectionIntro(icon: "archivebox.fill", title: vm.t("Архивы приложений", "Application archives"), subtitle: vm.t("Выберите ненужные сборки. Архивы выпущенных версий могут понадобиться для разбора сбоев.", "Choose unneeded builds. Released archives may be needed to diagnose crashes."))
       HStack {
         Button(vm.t("Обновить список", "Refresh list")) { vm.scanArchives() }.oxyHelp(
           .archiveRead
@@ -34,6 +33,7 @@ struct XcodeArchiveView: View {
         Spacer()
         if vm.archivesLoading { ProgressView().controlSize(.small) }
       }
+      DisclosureGroup(vm.t("Правила хранения и резервная копия", "Retention and backup options")) {
       let beyond = vm.archiveInventory.archives.filter { decisions[$0.path] == .review }
       HStack {
         Text(
@@ -94,6 +94,7 @@ struct XcodeArchiveView: View {
         )
       )
       .font(.caption).foregroundStyle(.secondary)
+      }
       HStack {
         TextField(vm.t("Поиск приложения / Bundle ID", "Search app / Bundle ID"), text: $query)
           .oxyHelp(.search)

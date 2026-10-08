@@ -168,7 +168,7 @@ struct SimulatorCleanupView: View {
       ).font(.caption).foregroundStyle(.secondary)
     }.modifier(
       InventoryLoading(
-        isLoaded: !vm.simulatorInventory.devices.isEmpty || !vm.simulatorInventory.runtimes.isEmpty,
+        isLoaded: vm.simulatorReadAt != nil,
         load: vm.readSimulators)
     ).onChange(of: query) { _, _ in page = 0; vm.selectedDevices = [] }.onChange(of: vm.simulatorInventory.devices.count) {
       _, _ in page = 0
@@ -181,7 +181,7 @@ struct DerivedDataView: View {
   private var filtered: [DerivedCache] { vm.derivedCaches.filter { query.isEmpty || ($0.project + $0.workspace + $0.category).localizedCaseInsensitiveContains(query) } }
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("DerivedData").font(.title2.bold())
+      SectionIntro(icon: "hammer.fill", title: vm.t("Кэши сборки Xcode", "Xcode build caches"), subtitle: vm.t("Временные данные проектов. Xcode создаст их заново.", "Temporary project data. Xcode recreates it when needed."))
       Text(
         vm.t(
           "Кэши привязаны к проекту по info.plist Xcode. Можно очистить промежуточные сборки, индекс и логи. Исходники, SourcePackages, готовые продукты и общие неизвестные кэши не выбираются.",
@@ -240,12 +240,15 @@ struct DerivedDataView: View {
             })
         ) {
           VStack(alignment: .leading, spacing: 4) {
-            Text(cache.project + " · " + cache.category).font(.headline)
+            Text(cache.project + " · " + cache.displayCategory(russian: vm.language != "en")).font(.headline)
+            Text(cache.cleanupConsequence(russian: vm.language != "en")).font(.caption).foregroundStyle(.secondary)
             Text(
               ByteCountFormatter.string(fromByteCount: cache.bytes, countStyle: .file) + " · "
                 + cache.modified.formatted()
             ).font(.caption)
-            Text(cache.workspace).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            DisclosureGroup(vm.t("Технические подробности", "Technical details")) {
+              Text(cache.category + "\n" + cache.workspace).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
             if cache.issues > 0 {
               Text(
                 vm.t(

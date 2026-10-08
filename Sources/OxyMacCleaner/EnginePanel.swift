@@ -61,9 +61,9 @@ struct EnginePanel: View {
         }
       }
     }
-    .task { vm.refreshModels() }
-    .onChange(of: scenePhase) { _, phase in if phase == .active { vm.refreshModels() } }
-    .onChange(of: vm.busy) { _, busy in if !busy { vm.refreshModels() } }
+    .task { vm.refreshModels(force: false) }
+    .onChange(of: scenePhase) { _, phase in if phase == .active { vm.refreshModels(force: false) } }
+    .onChange(of: vm.busy) { _, busy in if !busy { vm.refreshModels(force: false) } }
   }
   private func modelRow(_ name: String, title: String, size: String) -> some View {
     HStack {
