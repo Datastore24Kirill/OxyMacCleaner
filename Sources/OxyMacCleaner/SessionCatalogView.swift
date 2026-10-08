@@ -3,10 +3,10 @@ import SwiftUI
 
 extension AppModel {
   func findAgentSessions() {
-    guard !busy, ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo"].contains(agent),
+    guard !busy, ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo", "aider"].contains(agent),
       let definition = Agents.catalog.first(where: { $0.id == agent }) else { return }
     let selected = agent
-    let roots = definition.locations(home: home)
+    let roots = definition.locations(home: home) + (agent == "aider" ? dataProject.map { [$0] } ?? [] : [])
     busy = true
     cancellation = Cancellation()
     let token = cancellation

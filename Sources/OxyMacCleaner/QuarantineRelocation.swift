@@ -7,6 +7,7 @@ extension AppModel {
     case "quarantined": return t("В карантине", "In quarantine")
     case "prepared": return t("Перенос не завершён", "Transfer incomplete")
     case "restoring": return t("Восстановление не завершено", "Restore incomplete")
+    case "restored-copy": return t("Восстановлено; осталась копия карантина", "Restored; quarantine copy remains")
     case "attention": return t("Требует проверки", "Needs inspection")
     default: return state
     }

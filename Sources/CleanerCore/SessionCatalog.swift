@@ -43,7 +43,7 @@ public enum SessionCatalog {
             if pending.count + visited >= maximumEntries { result.limited = true; break }
             pending.append(child)
           }
-        } else if values.isRegularFile == true, (url.pathExtension.lowercased() == "jsonl" || (agent.map { JSONHistory.agents.contains($0) } == true && url.pathExtension.lowercased() == "json")) {
+        } else if values.isRegularFile == true, ((agent == "aider" && url.lastPathComponent == ".aider.chat.history.md") || url.pathExtension.lowercased() == "jsonl" || (agent.map { JSONHistory.agents.contains($0) } == true && url.pathExtension.lowercased() == "json")) {
           if ["cline", "roo"].contains(agent ?? ""), url.lastPathComponent != "api_conversation_history.json" { continue }
           if agent == "continue", url.lastPathComponent == "sessions.json" { continue }
           guard let size = values.fileSize, let modified = values.contentModificationDate else {

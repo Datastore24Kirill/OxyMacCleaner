@@ -59,8 +59,8 @@ struct EnginePanel: View {
       }
     }
     .task { vm.refreshModels() }
-    .onChange(of: scenePhase) { phase in if phase == .active { vm.refreshModels() } }
-    .onChange(of: vm.busy) { busy in if !busy { vm.refreshModels() } }
+    .onChange(of: scenePhase) { _, phase in if phase == .active { vm.refreshModels() } }
+    .onChange(of: vm.busy) { _, busy in if !busy { vm.refreshModels() } }
   }
   private func modelRow(_ name: String, title: String, size: String) -> some View {
     HStack {
@@ -71,7 +71,7 @@ struct EnginePanel: View {
       Spacer()
       if vm.models.contains(name) {
         if vm.model == name { Label(vm.t("Выбрана", "Selected"), systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
-        else { Button(vm.t("Выбрать", "Select")) { vm.pull(name) }.disabled(vm.busy || !vm.engineReady) }
+        else { Button(vm.t("Выбрать", "Select")) { vm.pull(name) }.accessibilityLabel(vm.t("Выбрать модель ", "Select model ") + title).disabled(vm.busy || !vm.engineReady) }
       } else {
         Button(vm.t("Скачать", "Download")) { vm.pull(name) }.oxyHelp(.pull).disabled(vm.busy || vm.engineChecking || !vm.engineReady)
       }

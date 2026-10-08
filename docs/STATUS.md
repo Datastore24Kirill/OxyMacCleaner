@@ -1,4 +1,4 @@
-# Implementation status — 0.3.1 Preview
+# Implementation status — 0.4.0 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -6,21 +6,22 @@ This is an implementation milestone, not completion of the version-one specifica
 |---|---|---|
 | UI | RU/EN interface, themes, contextual hints | Complete accessibility and error localization audit |
 | Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, partial crash recovery, map/categories; 1M-file fixture | Exact traversal resume, broader disk benchmarks |
-| Duplicates | Hash + byte comparison, keeper validation | APFS shared-block estimates and performance |
+| Duplicates | Hash + byte comparison, keeper validation, unique-inode logical/allocated estimates | Exact APFS reclaim is unknown; performance |
 | Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics | Broader race/failure verification |
-| DerivedData / projects | Project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project discovery |
+| DerivedData / projects | Bounded project discovery, project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project-marker and dependency-manager coverage |
 | Simulators | Standard/test devices, runtimes, activity guards, select available Shutdown devices matching search | Broader runtime-version QA |
-| Quarantine | Same-volume initial quarantine, verified cross-volume relocation/restore, journal recovery, five-day reminder | Broader fault injection and uncertain-copy recovery UI |
-| Agents | 11 discovery hints; exports; seven native file adapters and catalogs; two handoff actions | Other versioned native adapters; new chat remains manual |
-| Context | Local 7B available; secret-pattern filtering, cited source excerpts; original and verified backup retained | Broader semantic benchmarks, cross-chunk conflict resolution; no lossless-summary claim |
+| Quarantine | Same-volume initial quarantine, verified cross-volume relocation/restore, journal recovery, retained-copy inspection/revalidation, five-day reminder | Broader fault injection; old relocation copies require manual review |
+| Agents | 11 discovery hints; exports; eight native file adapters and catalogs; two handoff actions | Other versioned native adapters; new chat remains manual |
+| Context | Local 7B available; full-history paging/search, review markers, secret-pattern filtering, cited source excerpts; original and verified backup retained | Broader semantic benchmarks, cross-chunk conflict resolution; no lossless-summary claim |
 | Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, full permission continuity; older backups are managed explicitly |
 | Permissions | In-process diagnostics, ad-hoc builds | Stable Developer ID signing deferred |
 
 ## Next work
 
-1. Broaden grounded-handoff quality cases: long histories, changing decisions, split records and secret patterns.
-2. Audit VoiceOver, keyboard focus, RU/EN errors and real-world failure recovery.
-3. Reduce memory on very large scans and manage retained update backups explicitly.
+1. Broader semantic conflict detection and real-history quality cases. Current review markers only flag selected words on the visible page; they do not resolve contradictory requirements.
+2. Full real VoiceOver, keyboard-focus and RU/EN failure-message audit; current additions have accessible labels and cancellation.
+3. More native agent formats, exact traversal resume and broader disk/failure benchmarks. APFS shared-block ownership remains unknown.
+4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.
 
 ## Agent capability matrix
 
@@ -36,7 +37,7 @@ All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and C
 | Windsurf | Yes | Yes | No | No |
 | Cline | VS Code default | Yes | No | No |
 | Roo Code | VS Code default | Yes | No | No |
-| Aider | Home hint only; project histories require import | Yes | No | No |
+| Aider | Home and selected-project hint; single-session Markdown reader | Yes | No | No |
 | Continue | Yes | Yes | No | No |
 | OpenCode | Yes | Yes | No | No |
 
@@ -47,12 +48,9 @@ All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and C
 - Local packaged UI: launched, manually scanned synthetic files and detected the expected duplicate pair.
 - No user files or histories were cleaned during implementation.
 
-## Next milestones
+## Historical milestones
 
-1. Directory quarantine, recovery after interruption, active-work detection and Xcode metadata.
-2. Versioned read-only session adapters, starting with Codex and Claude Code; real local-model fixtures.
-3. Complete UI/accessibility and large-scan performance verification.
-4. Automatic update installation with rollback; signed distribution when a certificate is available.
+The following sections record earlier releases; use the current table above for remaining work.
 
 ## 0.1.1 update
 
@@ -223,7 +221,7 @@ Implemented FTS metadata traversal, batched atomic scan snapshots with legacy bi
 
 Measured on this Mac using disposable synthetic fixtures: 1,000,000 physical files scanned in 159.09 s, peak process RSS 869,072,896 bytes, compared with 248.14 s / 5,671,190,528 bytes before the traversal change. Both include synthetic 100 MB history import/backup in the same process; fixture creation is excluded from scan duration. Different filesystem cache states make this a local comparison, not a universal speed guarantee. Separate million-record metadata test: save 2.80 s, load+index 22.42 s, peak RSS 1,303,625,728 bytes while retaining original and restored reports. This does not measure the full live UI scan pipeline.
 
-Added Gemini CLI, Continue, Cline and Roo Code readers with structure validation and retained unknown fields; seven native file adapters total. Added bounded source/output comparison and reference-only local-model selection. Short and five-part synthetic 7B cases passed; manual semantic review remains required.
+Added Gemini CLI, Continue, Cline and Roo Code readers with structure validation and retained unknown fields; eight native file adapters total. Added bounded source/output comparison and reference-only local-model selection. Short and five-part synthetic 7B cases passed; manual semantic review remains required.
 
 Added verified relocation of existing quarantine payloads to another volume, conflict-safe restoration, and explicit management of completed updater backups with newest protected. Real APFS image cross-volume copy/restore passed using only an owned fixture. Interrupted copy may leave extra copies; no automated pruning of uncertain leftovers. Initial quarantine still requires same-volume placement.
 

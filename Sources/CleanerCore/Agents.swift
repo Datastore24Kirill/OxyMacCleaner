@@ -63,6 +63,11 @@ public struct Transcript: Sendable {
     return Transcript(source: url, agent: agent, text: text, digest: hash)
   }
   public static func loadNative(_ url: URL, agent: String, cancellation: Cancellation = Cancellation(), progress: @Sendable (Int64, Int64) -> Void = { _, _ in }) throws -> Transcript {
+    if agent == "aider", url.pathExtension.lowercased() == "md" {
+      var transcript = try load(url, agent: agent)
+      transcript.nativeHistory = try AiderHistory.parse(transcript.text)
+      return transcript
+    }
     if url.pathExtension.lowercased() == "json", JSONHistory.agents.contains(agent) {
       var transcript = try load(url, agent: agent)
       transcript.nativeHistory = try JSONHistory.parse(transcript.text, agent: agent, filename: url.lastPathComponent)

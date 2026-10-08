@@ -63,3 +63,7 @@ JSON целиком ограничен 30 MB. Неизвестные поля о
 - [Continue session](https://github.com/continuedev/continue/blob/main/extensions/cli/src/session.ts)
 - [Cline storage](https://github.com/cline/cline/blob/main/apps/vscode/src/core/storage/disk.ts)
 - [Roo Code API messages](https://github.com/RooCodeInc/Roo-Code/blob/main/src/core/task-persistence/apiMessages.ts)
+
+## Aider: ограниченный Markdown-адаптер (0.4.0)
+
+Распознаётся один `# aider chat started at ...` и наличие пользовательских строк `#### `. Источник формата: [aider/io.py](https://github.com/Aider-AI/aider/blob/main/aider/io.py). При нескольких заголовках начала требуется экспорт отдельного сеанса. Сохраняются все строки, без угадывания ролей и количества сообщений. Лимит 30 МБ. Каталог проверяет домашний путь и выбранный проект; отсутствие файла не означает отсутствие Aider.

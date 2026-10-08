@@ -13,6 +13,7 @@ public struct QuarantineEntry: Codable, Identifiable, Sendable {
   public var archive: Bool? = nil
   public var externalPayload: String? = nil
   public var restoreDigest: String? = nil
+  public var previousPayload: String? = nil
   public var isArchive: Bool { archive == true || archiveBackup != nil }
   public var state: String
 }
@@ -40,6 +41,7 @@ public final class QuarantineStore: @unchecked Sendable {
     lock.lock(); defer { lock.unlock() }
     let fm = FileManager.default
     let source = payloadURL(entry)
+    if let previous = entry.previousPayload, fm.fileExists(atPath: previous) { throw CleanerError.message("Previous transfer copy remains; inspect it before relocating again") }
     try checkPayloadPath(source)
     guard entry.state == "quarantined", try payloadHash(entry, source) == entry.hash,
       directory.resolvingSymlinksInPath() == directory.standardizedFileURL,
@@ -55,14 +57,14 @@ public final class QuarantineStore: @unchecked Sendable {
     defer { if !published { try? fm.removeItem(at: capsule) } }
     try cancellation.check()
     try verifiedCopy(entry, from: source, to: destination, cancellation: cancellation)
-    var next = entry; next.externalPayload = destination.path; next.hash = try payloadHash(entry, destination)
+    var next = entry; next.previousPayload = source.path; next.externalPayload = destination.path; next.hash = try payloadHash(entry, destination)
     try JSONEncoder().encode(next).write(to: capsule.appendingPathComponent("entry.json"), options: .atomic)
     try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: capsule.appendingPathComponent("entry.json").path)
     try cancellation.check()
     guard try payloadHash(entry, source) == entry.hash else { throw CleanerError.message("Quarantine changed during copy; source retained") }
     try save(next); published = true
     // The verified external copy and local journal are durable before removing the old payload.
-    do { try fm.removeItem(at: source) }
+    do { try fm.removeItem(at: source); next.previousPayload = nil; try save(next) }
     catch { throw CleanerError.message("Verified external copy is ready, but the old payload could not be fully removed: " + source.path) }
   }
   private func verifiedCopy(_ entry: QuarantineEntry, from source: URL, to destination: URL,
@@ -381,10 +383,10 @@ public final class QuarantineStore: @unchecked Sendable {
     try save(entry)
     return entry
   }
-  private func payloadHash(_ entry: QuarantineEntry, _ payload: URL) throws -> String {
+  private func payloadHash(_ entry: QuarantineEntry, _ payload: URL, cancellation: Cancellation = Cancellation()) throws -> String {
     try checkPayloadPath(payload)
-    if entry.kind == "directory" { return try DirectoryManifest.capture(payload).digest }
-    return try Scanner.hash(payload)
+    if entry.kind == "directory" { return try DirectoryManifest.capture(payload, cancellation: cancellation).digest }
+    return try Scanner.hash(payload, cancellation: cancellation)
   }
   public func recover() throws {
     lock.lock()
@@ -397,10 +399,10 @@ public final class QuarantineStore: @unchecked Sendable {
         dir.lastPathComponent == entry.id.uuidString
       else { continue }
       let payload = payloadURL(entry)
-      if entry.state == "prepared" || entry.state == "restoring" {
-        if entry.state == "restoring", let destination = entry.restoreDestination,
+      if entry.state == "prepared" || entry.state == "restoring" || (entry.state == "restored" && fm.fileExists(atPath: payload.path)) {
+        if ["restoring", "restored"].contains(entry.state), let destination = entry.restoreDestination,
           (try? payloadHash(entry, URL(fileURLWithPath: destination))) == (entry.restoreDigest ?? entry.hash) {
-          entry.state = "restored"
+          entry.state = fm.fileExists(atPath: payload.path) ? "restored-copy" : "restored"
         } else if fm.fileExists(atPath: payload.path) {
           entry.state =
             (try? payloadHash(entry, payload)) == entry.hash ? "quarantined" : "attention"
@@ -454,7 +456,7 @@ public final class QuarantineStore: @unchecked Sendable {
       saved.state = "restored"; try save(saved)
       // If removal fails, both verified copies remain; never remove the restored copy.
       do { try FileManager.default.removeItem(at: payload) }
-      catch { throw CleanerError.message("Restored successfully; old quarantine payload remains: " + payload.path) }
+      catch { saved.state = "restored-copy"; try save(saved); throw CleanerError.message("Restored successfully; old quarantine payload remains: " + payload.path) }
       return
     }
     var saved = entry
@@ -466,6 +468,33 @@ public final class QuarantineStore: @unchecked Sendable {
     }
     saved.state = "restored"
     try save(saved)
+  }
+  public struct Inspection: Sendable {
+    public let payload: String
+    public let payloadValid: Bool
+    public let payloadPresent: Bool
+    public let destination: String?
+    public let destinationValid: Bool
+    public let previous: String?
+  }
+  public func inspect(_ entry: QuarantineEntry, cancellation: Cancellation = Cancellation()) -> Inspection {
+    lock.lock(); defer { lock.unlock() }
+    let payload = payloadURL(entry)
+    let previous = entry.previousPayload ?? (entry.externalPayload != nil ? folder(entry.id).appendingPathComponent("payload").path : nil)
+    return Inspection(payload: payload.path, payloadValid: (try? payloadHash(entry, payload, cancellation: cancellation)) == entry.hash,
+      payloadPresent: FileManager.default.fileExists(atPath: payload.path), destination: entry.restoreDestination,
+      destinationValid: entry.restoreDestination.map { (try? payloadHash(entry, URL(fileURLWithPath: $0), cancellation: cancellation)) == (entry.restoreDigest ?? entry.hash) } ?? false,
+      previous: previous.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil })
+  }
+  public func trashRestoredCopy(_ entry: QuarantineEntry) throws {
+    lock.lock(); defer { lock.unlock() }
+    guard let fresh = try? JSONDecoder().decode(QuarantineEntry.self, from: Data(contentsOf: folder(entry.id).appendingPathComponent("entry.json"))), fresh.id == entry.id, fresh.state == "restored-copy",
+      let destination = fresh.restoreDestination,
+      try payloadHash(fresh, URL(fileURLWithPath: destination)) == (fresh.restoreDigest ?? fresh.hash),
+      try payloadHash(fresh, payloadURL(fresh)) == fresh.hash else { throw CleanerError.message("Both copies must be verified; nothing removed") }
+    var resulting: NSURL?
+    try FileManager.default.trashItem(at: payloadURL(fresh), resultingItemURL: &resulting)
+    var saved = fresh; saved.state = "restored"; try save(saved)
   }
   public func erase(_ entry: QuarantineEntry) throws {
     lock.lock()

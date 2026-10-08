@@ -627,7 +627,7 @@ import UserNotifications
     guard
       confirm(
         t("Переместить в карантин?", "Move to quarantine?"),
-        "\(files.count) · \(ByteCountFormatter.string(fromByteCount:files.reduce(0){$0+$1.bytes},countStyle:.file))\n"
+        "\(files.count) · \(ByteCountFormatter.string(fromByteCount:SpaceEstimate(files: files).logical,countStyle:.file))\n"
           + t(
             "Место не освободится до окончательного удаления.\n",
             "Space remains occupied until permanent deletion.\n")

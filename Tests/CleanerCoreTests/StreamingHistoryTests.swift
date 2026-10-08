@@ -35,7 +35,13 @@ final class StreamingHistoryTests: XCTestCase {
     XCTAssertEqual(transcript!.nativeHistory?.retainedRecords, 302)
     let directory = try XCTUnwrap(transcript!.streaming?.directory)
     XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+    var review: TranscriptReview? = try TranscriptReview(transcript!)
+    XCTAssertNotNil(try review!.find("[L303]"))
+    let tail = try XCTUnwrap(review!.find("[L303]"))
+    XCTAssertTrue(try review!.page(at: tail).text.hasPrefix("[L303]"))
     transcript = nil
+    XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+    review = nil
     XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
   }
   func testCancellationAndChangingSourceRejected() throws {

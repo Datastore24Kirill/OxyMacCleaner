@@ -89,6 +89,7 @@ struct ProjectDataView: View {
           "Выберите корень проекта. Проверяем известные папки, не исполняя код проекта и команды установки.",
           "Choose the project root. Known folders are inspected without executing project code or install commands."
         ))
+      ProjectDiscoveryView()
       HStack {
         Button(vm.t("Выбрать проект…", "Choose project…")) { vm.chooseDataProject() }
         Button(vm.t("Обновить список", "Refresh list")) { vm.readProjectData() }.disabled(

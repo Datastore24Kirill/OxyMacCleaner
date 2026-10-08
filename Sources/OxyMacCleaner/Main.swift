@@ -125,7 +125,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.3.1 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.0 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -377,6 +377,7 @@ struct RootView: View {
           .disabled(
             vm.selected.isEmpty || vm.busy)
       }
+      SpaceEstimateView()
       List(visibleFiles.prefix(2000), selection: $vm.selected) { f in
         HStack {
           Image(systemName: f.category == "Archive" ? "shippingbox" : "doc").foregroundStyle(.teal)
@@ -436,6 +437,7 @@ struct RootView: View {
           .disabled(
             vm.selected.isEmpty || vm.busy)
       }
+      SpaceEstimateView()
       List {
         ForEach(Array(vm.duplicates.enumerated()), id: \.offset) { _, group in
           Section("\(group.count) × \(size(group[0].bytes))") {
@@ -515,7 +517,7 @@ struct RootView: View {
               }
             }
           }
-          if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo"].contains(vm.agent) {
+          if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo", "aider"].contains(vm.agent) {
             SessionCatalogView()
             Button(vm.t("Открыть историю агента…", "Open agent history…")) {
               vm.importTranscript(native: true)
@@ -635,7 +637,7 @@ struct RootView: View {
       }
       List(
         vm.entries.filter {
-          ["quarantined", "prepared", "restoring", "attention"].contains($0.state)
+          ["quarantined", "prepared", "restoring", "attention", "restored-copy"].contains($0.state)
         }
       ) { e in
         VStack(alignment: .leading, spacing: 8) {
@@ -646,6 +648,7 @@ struct RootView: View {
           ).font(.caption).foregroundStyle(.secondary)
           Text(e.original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
           if let external = e.externalPayload { Text(external).font(.caption).textSelection(.enabled) }
+          QuarantineInspectionView(entry: e)
           HStack {
             Text(size(e.bytes))
             Text(e.date.formatted())
