@@ -362,7 +362,11 @@ struct RootView: View {
   }
   var files: some View {
     VStack(alignment: .leading) {
-      scanButtons
+      if vm.snapshotDate == nil { scanButtons }
+      else {
+        DisclosureGroup(vm.t("Диск и повторное сканирование", "Disk and rescan")) { scanButtons }
+          .font(.callout)
+      }
       if vm.page != "archives" {
       Picker(vm.t("Категория", "Category"), selection: $vm.categoryFilter) {
         Text(vm.t("Все категории", "All categories")).tag("all")
@@ -393,7 +397,6 @@ struct RootView: View {
         Text(vm.t("Файлы отсортированы по размеру", "Files sorted by size")).font(.caption)
           .foregroundStyle(.secondary)
         Spacer()
-        Text("\(vm.selected.count)")
         Button(vm.t("В карантин", "Quarantine")) { vm.quarantineSelected() }.oxyHelp(.quarantine)
           .disabled(
             vm.selected.isEmpty || vm.busy)
