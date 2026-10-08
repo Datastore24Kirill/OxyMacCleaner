@@ -48,6 +48,9 @@ struct EnginePanel: View {
                 Button(vm.t("Отменить загрузку", "Cancel download")) { vm.cancel() }
               }.padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
             }
+            if vm.engineReady && vm.models.isEmpty && !vm.engineChecking {
+              Text(vm.t("Ollama работает, но локальных моделей пока нет. Скачайте 7B или установите совместимую модель в Ollama и обновите состояние.", "Ollama is running, but no local models were found. Download 7B or install a compatible model in Ollama and refresh status.")).font(.callout)
+            }
             if !vm.models.isEmpty {
               Picker(vm.t("Выбранная модель", "Selected model"), selection: $vm.model) {
                 ForEach(vm.models, id: \.self) { Text($0).tag($0) }

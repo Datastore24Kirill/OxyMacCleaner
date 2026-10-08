@@ -48,6 +48,7 @@ extension AppModel {
     let token = cancellation
     task = Task {
       var messages: [String] = []
+      var removedDevicePaths: [String] = []
       var completed = 0
       var failures = 0
       for device in devices {
@@ -55,7 +56,7 @@ extension AppModel {
         status = t("Удаляем устройство: ", "Deleting device: ") + device.name
         do {
           let removed = try await Task.detached { try Simulators.removeDevice(device.id) }.value
-          if removed { completed += 1; selectedDevices.remove(device.id) }
+          if removed { completed += 1; selectedDevices.remove(device.id); removedDevicePaths.append(home.appendingPathComponent("Library/Developer/CoreSimulator/Devices/" + device.id).path) }
           messages.append(
             device.name + ": "
               + (removed
@@ -82,8 +83,13 @@ extension AppModel {
       developerResult = summary + "\n" + messages.joined(separator: "\n")
       if failures > 0 { self.error = summary + "\n\n" + messages.joined(separator: "\n") }
       log(developerResult)
-      do { simulatorInventory = try await Task.detached { try Simulators.inventory() }.value } catch
-      { self.error = error.localizedDescription }
+      do {
+        simulatorInventory = try await Task.detached { try Simulators.inventory() }.value
+        simulatorReadAt = Date(); simulatorReadIssue = nil
+        selectedDevices.formIntersection(simulatorInventory.devices.filter(\.removable).map(\.id))
+        selectedRuntimes.formIntersection(simulatorInventory.runtimes.map(\.id))
+      } catch { simulatorReadIssue = error.localizedDescription; self.error = error.localizedDescription }
+      await reconcileRemovedPaths(removedDevicePaths, invalidateOnly: completed > 0)
 
       status =
         token.cancelled
@@ -107,7 +113,7 @@ extension AppModel {
         derivedReadIssue = nil
       } catch { derivedReadIssue = error.localizedDescription; self.error = error.localizedDescription }
       busy = false
-      status = t("Проверка DerivedData завершена", "DerivedData inspection complete")
+      status = derivedReadIssue == nil ? t("Проверка DerivedData завершена", "DerivedData inspection complete") : t("Не удалось прочитать DerivedData. Обновите список после устранения причины.", "Could not read DerivedData. Resolve the issue and refresh.")
     }
   }
   func quarantineDerivedData() { cleanDerivedData(permanently: false) }
@@ -123,8 +129,8 @@ extension AppModel {
           : t("Перенести выбранные кэши в карантин?", "Quarantine selected caches?"),
         caches.map { $0.project + " · " + $0.category }.joined(separator: "\n") + "\n\n"
           + t(
-            "Xcode можно оставить открытым. Архивы, изменённые за последние 10 минут, пропускаются. Индекс и промежуточные файлы будут созданы заново. Следующая сборка займёт больше времени. Старые логи восстановить нельзя. Исходники, SourcePackages и готовые продукты не затрагиваются.",
-            "Xcode may remain open. Archives modified within 10 minutes are skipped. Indexes and intermediates will be rebuilt. The next build will take longer. Old logs cannot be recovered. Sources, SourcePackages and built products are excluded."
+            "Активные сборки и кэши, изменённые за последние 10 минут, защищены. Индекс и промежуточные файлы будут созданы заново. Следующая сборка займёт больше времени. Старые логи восстановить нельзя. Исходники, SourcePackages и готовые продукты не затрагиваются.",
+            "Active builds and caches modified within 10 minutes are protected. Indexes and intermediates will be rebuilt. The next build will take longer. Old logs cannot be recovered. Sources, SourcePackages and built products are excluded."
           )
           + "\n"
           + (permanently
@@ -140,6 +146,7 @@ extension AppModel {
     let excluded = exclusions
     task = Task {
       var messages: [String] = []
+      var removedPaths: [String] = []
       for cache in caches {
         if token.cancelled { break }
         status =
@@ -155,11 +162,13 @@ extension AppModel {
             }
           }.value
           derivedCaches.removeAll { $0.id == cache.id }
+          removedPaths.append(cache.path)
           messages.append(
             cache.project + " / " + cache.category + ": "
               + (permanently ? t("удалён", "deleted") : t("в карантине", "quarantined")))
         } catch { messages.append(cache.project + ": " + error.localizedDescription) }
       }
+      await reconcileRemovedPaths(removedPaths)
       developerResult = messages.joined(separator: "\n")
       log(developerResult)
       entries = store.entries()
@@ -203,6 +212,7 @@ extension AppModel {
     developerResult = ""
     task = Task {
       var messages: [String] = []
+      var removedPaths: [String] = []
       var completed = 0
       var failures = 0
       do {
@@ -333,6 +343,7 @@ extension AppModel {
             completed += 1
             archiveInventory.archives.removeAll { $0.path == preview.source.path }
             archiveSymbols.removeValue(forKey: preview.source.path)
+            removedPaths.append(preview.source.path)
             messages.append(
               preview.source.path + ": "
                 + (deleteImmediately ? t("удалён", "deleted") : t("в карантине", "quarantined"))
@@ -340,6 +351,7 @@ extension AppModel {
           } catch { failures += 1; messages.append(preview.source.path + ": " + error.localizedDescription) }
         }
       } catch { failures += 1; messages.append(error.localizedDescription) }
+      await reconcileRemovedPaths(removedPaths)
       status = t("Обновляем список архивов…", "Refreshing archives…")
       archiveInventory = await Task.detached {
         XcodeArchives.scan(root: root, cancellation: Cancellation())

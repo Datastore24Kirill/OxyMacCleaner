@@ -1,4 +1,4 @@
-# Implementation status — 0.4.4 Preview
+# Implementation status — 0.4.5 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -19,6 +19,10 @@ This is an implementation milestone, not completion of the version-one specifica
 ## Verification update — 0.4.4
 
 User marked VoiceOver verification complete on 2026-10-08. Owned APFS image tests cover disconnect during relocation/scan, offline restore refusal, a detach/restore race (restore completed first), and reconnect recovery. New quarantine entries retain original volume UUID; restoring to that path refuses a missing/replaced volume. Legacy entries lack this guard. Each agent now displays its import format and boundaries. See [spec readiness](READINESS-RU.md) and [first launch](FIRST-LAUNCH-RU.md).
+
+## Acceptance update — 0.4.5
+
+Confirmed cleanup now reconciles files, folder/category totals, disk index and the persisted dated snapshot; old resume checkpoints are invalidated. Context review has five signal filters and source navigation. Installer shell code is exercised for successful handshakes and early-exit rollback using disposable app fixtures (GUI launch is stubbed). See [five-part acceptance](ACCEPTANCE-0.4.5-RU.md). This is still a Preview, not a stability certification.
 
 ## Next work
 

@@ -25,9 +25,33 @@ public final class TranscriptReview: @unchecked Sendable {
     } else { let data = Data(transcript.numbered.utf8); memory = data; file = nil; total = data.count }
   }
   /// Bounded, local review index. Signals require human interpretation, never override decisions.
+  public enum Signal: String, CaseIterable, Sendable {
+    case requirement, changedDecision, restriction, pending, testEvidence
+    public func title(russian: Bool) -> String {
+      switch self {
+      case .requirement: return russian ? "Требования" : "Requirements"
+      case .changedDecision: return russian ? "Изменения решений" : "Changed decisions"
+      case .restriction: return russian ? "Запреты" : "Restrictions"
+      case .pending: return russian ? "Незавершённые задачи" : "Pending work"
+      case .testEvidence: return russian ? "Результаты тестов" : "Test evidence"
+      }
+    }
+  }
+  public static func signals(in text: String) -> [Signal] {
+    let value = text.lowercased()
+    func contains(_ words: [String]) -> Bool { words.contains { value.contains($0) } }
+    var result: [Signal] = []
+    if contains(["пользователь:", "user:", "message (user)", "требован", "requirement"]) { result.append(.requirement) }
+    if contains(["отменя", "отменить", "уточня", "вместо", "больше не", "изменил решение", "instead", "supersed", "changed my mind", "revoke"]) { result.append(.changedDecision) }
+    if contains(["не удал", "запрещ", "never delete", "do not delete", "don't delete", "must not"]) { result.append(.restriction) }
+    if contains(["следующий шаг", "не выполнен", "не проверен", "не опубликован", "next step", "not completed", "not verified", "pending", "todo"]) { result.append(.pending) }
+    if contains(["failed", "passed", "тест падает", "тест не прош", "тест прош"]) { result.append(.testEvidence) }
+    return result
+  }
   public struct Finding: Sendable, Identifiable {
     public let offset: Int
     public let excerpt: String
+    public let signals: [Signal]
     public var id: Int { offset }
   }
   public struct Findings: Sendable {
@@ -42,9 +66,10 @@ public final class TranscriptReview: @unchecked Sendable {
       if lineLength > 64_000 { shortened += 1 }
       // A capped prefix can end inside a UTF-8 codepoint; decoding replaces only that boundary.
       let text = String(decoding: prefix, as: UTF8.self)
-      if Self.hasReviewSignal(text) {
+      let signals = Self.signals(in: text)
+      if !signals.isEmpty {
         matches += 1
-        if items.count < 200 { items.append(Finding(offset: lineStart, excerpt: String(text.prefix(700)))) }
+        if items.count < 200 { items.append(Finding(offset: lineStart, excerpt: String(text.prefix(700)), signals: signals)) }
       }
       prefix.removeAll(keepingCapacity: true); lineLength = 0
     }
@@ -65,11 +90,6 @@ public final class TranscriptReview: @unchecked Sendable {
     try cancellation.check()
     if lineLength > 0 { finish() }
     return Findings(items: items, matches: matches, shortenedRecords: shortened)
-  }
-  private static func hasReviewSignal(_ text: String) -> Bool {
-    let value = text.lowercased()
-    let phrases = ["отменя", "отменить", "уточня", "вместо", "больше не", "не удал", "запрещ", "изменил решение", "never delete", "do not delete", "don't delete", "instead", "supersed", "changed my mind", "test failed", "tests failed", "tests passed"]
-    return phrases.contains { value.contains($0) }
   }
   private func bytes(at offset: Int, count: Int) throws -> Data {
     if let memory { return memory.subdata(in: offset..<min(total, offset + count)) }

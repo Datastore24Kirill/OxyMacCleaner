@@ -121,35 +121,9 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
     guard !russian else { return ErrorPresentation.message(status, russian: true) }
     let labels = ["Проверяем релизы…": "Checking releases…", "Установлена актуальная версия": "You are up to date", "Скачиваем обновление…": "Downloading update…", "Проверяем сборку…": "Verifying update…", "Перезапускаем. При сбое вернётся предыдущая версия.": "Restarting. The previous version will be restored if launch fails."]
     if status.hasPrefix("Доступна версия ") { return "Version available: " + status.dropFirst("Доступна версия ".count) }
-    return labels[status] ?? status
+    return labels[status] ?? ErrorPresentation.message(status, russian: false)
   }
-  static let script = #"""
-  set -eu
-  old_pid="$1"; app="$2"; next="$3"; stage="$4"
-  /bin/mkdir -p "$stage/rollback"
-  backup="$stage/rollback/OxyMac Cleaner.app"
-  n=0
-  while kill -0 "$old_pid" 2>/dev/null; do
-    n=$((n+1)); [ "$n" -lt 60 ] || exit 1
-    sleep 1
-  done
-  /bin/mv "$app" "$backup"
-  if ! /bin/mv "$next" "$app"; then /bin/mv "$backup" "$app"; /usr/bin/open "$app"; exit 1; fi
-  "$app/Contents/MacOS/OxyMacCleaner" --oxy-update-health "$stage/healthy" &
-  child=$!
-  n=0
-  while [ "$n" -lt 45 ]; do
-    if [ -f "$stage/healthy" ]; then echo 'Update launched successfully; rollback copy retained'; exit 0; fi
-    n=$((n+1)); sleep 1
-  done
-  echo 'No launch confirmation; restoring previous version'
-  kill -TERM "$child" 2>/dev/null || true
-  sleep 2
-  if kill -0 "$child" 2>/dev/null; then echo 'New app still running; manual recovery required. Backup retained.'; exit 1; fi
-  /bin/mv "$app" "$stage/failed-update"
-  /bin/mv "$backup" "$app"
-  /usr/bin/open "$app"
-  """#
+  static let script = UpdateInstaller.script
   static func markHealthy() {
     let args = ProcessInfo.processInfo.arguments
     guard let index = args.firstIndex(of: "--oxy-update-health"), args.indices.contains(index+1) else { return }
@@ -170,8 +144,12 @@ struct AppUpdateView: View {
       Toggle(vm.t("Проверять при запуске", "Check at launch"), isOn: $automatic)
       Text(updater.localizedStatus(russian: vm.language != "en"))
       if updater.busy {
-        ProgressView(value: updater.fraction)
-        Text("\(Int(updater.fraction * 100)) %").font(.caption.monospacedDigit())
+        if updater.status == "Скачиваем обновление…" && updater.fraction > 0 {
+          ProgressView(value: updater.fraction)
+          Text("\(Int(updater.fraction * 100)) %").font(.caption.monospacedDigit())
+        } else {
+          ProgressView().controlSize(.small)
+        }
       }
       Button(vm.t("Проверить обновления", "Check for updates")) { updater.check() }.disabled(updater.busy || vm.busy)
       if let release = updater.release {

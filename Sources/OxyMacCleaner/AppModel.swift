@@ -136,6 +136,7 @@ import UserNotifications
         }.value
         archiveInventory.archives.removeAll { $0.path == archive.path }
         archiveSymbols.removeValue(forKey: archive.path)
+        await reconcileRemovedPaths([archive.path])
         page = "quarantine"
         log("Quarantined Xcode archive: " + archive.path)
         status = t(
@@ -605,7 +606,7 @@ import UserNotifications
             source, expected: manifest, protectedPaths: protected, cancellation: token)
         }.value
         log("Quarantined directory: " + path)
-        // Keep the saved scan visibly dated; its entries are always revalidated before actions.
+        await reconcileRemovedPaths([path])
         status = t(
           "Папка в карантине. Обновите сканирование для актуальной карты.",
           "Folder quarantined. Rescan to refresh the map.")
@@ -671,14 +672,14 @@ import UserNotifications
         log(
           (failure == nil ? "Quarantined: " : "Skipped: ") + path
             + (failure.map { " · " + $0 } ?? ""))
-        if failure == nil { report.files.removeAll { $0.path == path } }
+
       }
+      await reconcileRemovedPaths(results.compactMap { $0.1 == nil ? $0.0 : nil })
       selected = []
       entries = store.entries()
       busy = false
       duplicates = []
       duplicatesReadAt = nil
-      report.folders = [:]
       if results.contains(where: { $0.1 != nil }) {
         error = results.compactMap { $0.1 }.joined(separator: "\n")
       }
@@ -704,9 +705,11 @@ import UserNotifications
         try await Task.detached { try store.restore(e, destination: destination, cancellation: token) }.value
         status = t("Восстановление завершено", "Restore complete")
         log("Restored: \(e.original)")
+        await reconcileRemovedPaths([], invalidateOnly: true)
       } catch { self.error = error is CancellationError ? t("Восстановление отменено до перемещения данных", "Restore cancelled before moving data") : error.localizedDescription }
       entries = store.entries()
       busy = false
+      refreshVolumes()
       scheduleReminder()
     }
   }

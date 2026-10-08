@@ -10,6 +10,7 @@ struct ContextComparisonView: View {
   @State private var query = ""
   @State private var message = ""
   @State private var findings: TranscriptReview.Findings?
+  @State private var signalFilter = "all"
   @State private var reviewProgress = 0.0
   @State private var loading = false
   @State private var operation: Task<Void, Never>?
@@ -43,10 +44,19 @@ struct ContextComparisonView: View {
           if let findings {
             DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches)) {
               Text(vm.t("Показаны первые 200 совпадений. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "First 200 matches shown. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
+              Picker(vm.t("Показать", "Show"), selection: $signalFilter) {
+                Text(vm.t("Все подсказки", "All signals")).tag("all")
+                ForEach(TranscriptReview.Signal.allCases, id: \.rawValue) { signal in
+                  Text(signal.title(russian: vm.language != "en")).tag(signal.rawValue)
+                }
+              }.pickerStyle(.menu)
+              if findings.items.filter({ signalFilter == "all" || $0.signals.contains(where: { $0.rawValue == signalFilter }) }).isEmpty {
+                Text(vm.t("В первых 200 совпадениях нет подсказок этого типа. Это не доказывает, что их нет в истории.", "No signals of this type in the first 200 matches. This does not prove absence from the history.")).font(.caption)
+              }
               ScrollView {
                 LazyVStack(alignment: .leading) {
-                  ForEach(findings.items) { item in
-                    Button { load(item.offset) } label: { Text(item.excerpt).font(.caption).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading) }
+                  ForEach(findings.items.filter { signalFilter == "all" || $0.signals.contains { $0.rawValue == signalFilter } }) { item in
+                    Button { load(item.offset) } label: { Text(item.signals.map { $0.title(russian: vm.language != "en") }.joined(separator: " · ") + "\n" + item.excerpt).font(.caption).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading) }
                       .disabled(loading).help(vm.t("Открыть эту строку в исходнике", "Open this source line"))
                   }
                 }
@@ -68,7 +78,7 @@ struct ContextComparisonView: View {
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
-    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0
+    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"
     operation = Task {
       defer { loading = false }
       do {

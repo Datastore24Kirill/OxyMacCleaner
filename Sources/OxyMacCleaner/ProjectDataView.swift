@@ -66,6 +66,7 @@ extension AppModel {
           try ProjectData.remove(plan, exclusions: excluded, cancellation: token)
         }.value
         projectData.removeAll { $0.id == item.id }
+        await reconcileRemovedPaths([item.id])
         projectDataDate = Date()
         log("Project cache removed: " + item.id)
         status = t("Кэш проекта очищен", "Project cache cleaned")
