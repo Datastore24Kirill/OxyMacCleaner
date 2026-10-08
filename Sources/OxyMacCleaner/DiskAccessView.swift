@@ -47,8 +47,8 @@ struct DiskAccessView: View {
         }
         Text(
           vm.t(
-            "После обновления проверяем доступ заново. Если галочка уже включена, но проверка показывает отказ: полностью закройте приложение и запустите эту копию. Если отказ остаётся — удалите только старую запись OxyMac Cleaner кнопкой «−», добавьте эту копию через «+» и снова запустите её.",
-            "Access is checked again after updates. If the toggle is enabled but access is denied, quit and reopen this copy. If access is still denied, remove only the old OxyMac Cleaner entry with “−”, add this copy with “+”, and reopen it."
+            "Доступ проверяется при каждом запуске, даже если эта версия уже проверялась. Если галочка уже включена, но проверка показывает отказ: полностью закройте приложение и запустите эту копию. Если отказ остаётся — удалите только старую запись OxyMac Cleaner кнопкой «−», добавьте эту копию через «+» и снова запустите её.",
+            "Access is checked at every launch, even if this version was reviewed before. If the toggle is enabled but access is denied, quit and reopen this copy. If access is still denied, remove only the old OxyMac Cleaner entry with “−”, add this copy with “+”, and reopen it."
           )
         )
         .font(.callout)

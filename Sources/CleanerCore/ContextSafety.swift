@@ -52,6 +52,7 @@ public enum ContextSafety {
         || lower.contains("ошиб") || lower.contains("не опубликован")
         || lower.contains("следующий шаг") || lower.contains("next step")
         || lower.contains("не выполнен") || lower.contains("not completed")
+        || !TranscriptReview.signals(in: line).isEmpty
       return !sourceReferences(line).isDisjoint(with: selected) || required
     }
     guard !kept.isEmpty else { throw CleanerError.message("No grounded facts selected") }

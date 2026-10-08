@@ -1,4 +1,4 @@
-# Implementation status — 0.4.5 Preview
+# Implementation status — 0.4.6 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -23,6 +23,10 @@ User marked VoiceOver verification complete on 2026-10-08. Owned APFS image test
 ## Acceptance update — 0.4.5
 
 Confirmed cleanup now reconciles files, folder/category totals, disk index and the persisted dated snapshot; old resume checkpoints are invalidated. Context review has five signal filters and source navigation. Installer shell code is exercised for successful handshakes and early-exit rollback using disposable app fixtures (GUI launch is stubbed). See [five-part acceptance](ACCEPTANCE-0.4.5-RU.md). This is still a Preview, not a stability certification.
+
+## Review/access hardening — 0.4.6
+
+Explicit unlabelled decision changes, restrictions and pending work survive model omission. Review highlights exact redacted fragments absent from the result; citation alone is insufficient. Access denial is surfaced at every process launch, not suppressed by a reviewed-build preference. Batch results distinguish failed/skipped and unstarted work. User-data cleanup awaits a concrete selection; only disposable fixtures are used. See [acceptance](ACCEPTANCE-0.4.6-RU.md).
 
 ## Next work
 

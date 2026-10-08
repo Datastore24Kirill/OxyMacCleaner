@@ -16,12 +16,15 @@ import UserNotifications
     diskAccess = DiskAccess.check()
     diskAccessCheckedAt = Date()
   }
+  private var startupAccessChecked = false
   func prepareDiskAccess() {
+    guard !startupAccessChecked else { return }
+    startupAccessChecked = true
     checkDiskAccess()
     if diskAccess?.state == .available {
       diskAccessAcknowledged = true
       UserDefaults.standard.set(permissionBuild, forKey: "permissionReviewedBuild")
-    } else if UserDefaults.standard.string(forKey: "permissionReviewedBuild") != permissionBuild {
+    } else {
       showDiskAccess = true
     }
   }
@@ -647,7 +650,9 @@ import UserNotifications
     let duplicateGroups = duplicates
     task = Task {
       let results = await Task.detached {
-        files.map { f -> (String, String?) in
+        var outcomes: [(String, String?)] = []
+        for f in files {
+          if token.cancelled { break }
           do {
             try token.check()
             if let group = duplicateGroups.first(where: {
@@ -664,9 +669,10 @@ import UserNotifications
               }
             }
             _ = try store.move(f, protectedPaths: protected)
-            return (f.path, nil)
-          } catch { return (f.path, error.localizedDescription) }
+            outcomes.append((f.path, nil))
+          } catch { outcomes.append((f.path, error.localizedDescription)) }
         }
+        return outcomes
       }.value
       for (path, failure) in results {
         log(
@@ -674,7 +680,10 @@ import UserNotifications
             + (failure.map { " · " + $0 } ?? ""))
 
       }
+      let summary = CleanupSummary(selected: files.count, completed: results.filter { $0.1 == nil }.count, attempted: results.count).text(russian: language != "en")
+      log(summary)
       await reconcileRemovedPaths(results.compactMap { $0.1 == nil ? $0.0 : nil })
+      status = summary
       selected = []
       entries = store.entries()
       busy = false

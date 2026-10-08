@@ -79,7 +79,7 @@ extension AppModel {
           )
         } catch { failures += 1; messages.append(runtime.version + ": " + error.localizedDescription) }
       }
-      let summary = t("Удалено: ", "Deleted: ") + "\(completed)/\(devices.count + runtimes.count)" + t(" · ошибок: ", " · errors: ") + "\(failures)"
+      let summary = CleanupSummary(selected: devices.count + runtimes.count, completed: completed, attempted: messages.count).text(russian: language != "en")
       developerResult = summary + "\n" + messages.joined(separator: "\n")
       if failures > 0 { self.error = summary + "\n\n" + messages.joined(separator: "\n") }
       log(developerResult)
@@ -169,14 +169,13 @@ extension AppModel {
         } catch { messages.append(cache.project + ": " + error.localizedDescription) }
       }
       await reconcileRemovedPaths(removedPaths)
-      developerResult = messages.joined(separator: "\n")
+      let summary = CleanupSummary(selected: caches.count, completed: removedPaths.count, attempted: messages.count).text(russian: language != "en")
+      developerResult = summary + "\n" + messages.joined(separator: "\n")
       log(developerResult)
       entries = store.entries()
       selectedDerived = []
       busy = false
-      status = t(
-        "Обработка DerivedData завершена. См. отчёт.",
-        "DerivedData processing complete. See report.")
+      status = summary
       if !permanently { scheduleReminder() }
     }
   }

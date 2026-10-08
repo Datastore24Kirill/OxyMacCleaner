@@ -11,6 +11,7 @@ struct ContextComparisonView: View {
   @State private var message = ""
   @State private var findings: TranscriptReview.Findings?
   @State private var signalFilter = "all"
+  @State private var onlyMissing = false
   @State private var reviewProgress = 0.0
   @State private var loading = false
   @State private var operation: Task<Void, Never>?
@@ -44,23 +45,35 @@ struct ContextComparisonView: View {
           if let findings {
             DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches)) {
               Text(vm.t("Показаны первые 200 совпадений. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "First 200 matches shown. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
+              Toggle(vm.t("Только фрагменты, не найденные в результате", "Only fragments not found in result"), isOn: $onlyMissing)
+              Text(vm.t("Текст не найден среди показанных фрагментов: ", "Displayed fragments not found: ") + String(findings.items.filter { !$0.fragmentPresent(in: vm.output) }.count))
+                .font(.caption).foregroundStyle(.orange)
+              Text(vm.t("Сравниваются точные фрагменты после скрытия секретов. Совпадение фрагмента не подтверждает полноту длинной записи или актуальность решения.", "Exact fragments are compared after secret redaction. A match does not confirm the full long record or that a decision is current.")).font(.caption)
               Picker(vm.t("Показать", "Show"), selection: $signalFilter) {
                 Text(vm.t("Все подсказки", "All signals")).tag("all")
                 ForEach(TranscriptReview.Signal.allCases, id: \.rawValue) { signal in
                   Text(signal.title(russian: vm.language != "en")).tag(signal.rawValue)
                 }
               }.pickerStyle(.menu)
-              if findings.items.filter({ signalFilter == "all" || $0.signals.contains(where: { $0.rawValue == signalFilter }) }).isEmpty {
+              if findings.items.filter({ matchesFilter($0) }).isEmpty {
                 Text(vm.t("В первых 200 совпадениях нет подсказок этого типа. Это не доказывает, что их нет в истории.", "No signals of this type in the first 200 matches. This does not prove absence from the history.")).font(.caption)
               }
               ScrollView {
                 LazyVStack(alignment: .leading) {
-                  ForEach(findings.items.filter { signalFilter == "all" || $0.signals.contains { $0.rawValue == signalFilter } }) { item in
-                    Button { load(item.offset) } label: { Text(item.signals.map { $0.title(russian: vm.language != "en") }.joined(separator: " · ") + "\n" + item.excerpt).font(.caption).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading) }
+                  ForEach(findings.items.filter { matchesFilter($0) }) { item in
+                    Button { load(item.offset) } label: {
+                      VStack(alignment: .leading, spacing: 4) {
+                        Text(item.signals.map { $0.title(russian: vm.language != "en") }.joined(separator: " · ")).bold()
+                        if !item.fragmentPresent(in: vm.output) {
+                          Label(vm.t("Фрагмент не найден в результате", "Fragment not found in result"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        }
+                        Text(item.excerpt).fixedSize(horizontal: false, vertical: true)
+                      }.font(.caption).frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                    }.buttonStyle(.plain)
                       .disabled(loading).help(vm.t("Открыть эту строку в исходнике", "Open this source line"))
                   }
                 }
-              }.frame(maxHeight: 120)
+              }.frame(height: 145)
             }
           }
           HStack(alignment: .top) {
@@ -73,12 +86,16 @@ struct ContextComparisonView: View {
             }
           }
           Button(vm.t("Закрыть", "Close")) { showing = false }.keyboardShortcut(.cancelAction)
-        }.padding(20).frame(width: 960, height: 700)
+        }.padding(20).frame(width: 960, height: 760)
       }
+  }
+  private func matchesFilter(_ item: TranscriptReview.Finding) -> Bool {
+    (signalFilter == "all" || item.signals.contains { $0.rawValue == signalFilter })
+      && (!onlyMissing || !item.fragmentPresent(in: vm.output))
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
-    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"
+    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"; onlyMissing = false
     operation = Task {
       defer { loading = false }
       do {

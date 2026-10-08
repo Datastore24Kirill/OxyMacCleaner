@@ -89,10 +89,11 @@ struct TestSimulatorView: View {
           let removed = try await Task.detached { try TestSimulators.remove(id) }.value
           messages.append(id + (removed ? vm.t(": удалено", ": deleted") : vm.t(": осталось в списке", ": still present")))
           if removed { removedPaths.append(TestSimulators.root.appendingPathComponent(id).path); vm.testDevices.removeAll { $0.id == id }; selected.remove(id); vm.testDeviceSizes.removeValue(forKey: id) }
-        } catch { messages.append(error.localizedDescription); break }
+        } catch { messages.append(id + ": " + error.localizedDescription); break }
       }
       await vm.reconcileRemovedPaths(removedPaths)
-      report = messages.joined(separator: "\n")
+      report = CleanupSummary(selected: ids.count, completed: removedPaths.count, attempted: messages.count).text(russian: vm.language != "en") + "\n" + messages.joined(separator: "\n")
+      vm.status = report.components(separatedBy: "\n")[0]
       vm.log(report)
     }
   }

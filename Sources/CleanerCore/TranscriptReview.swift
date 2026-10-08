@@ -42,7 +42,7 @@ public final class TranscriptReview: @unchecked Sendable {
     func contains(_ words: [String]) -> Bool { words.contains { value.contains($0) } }
     var result: [Signal] = []
     if contains(["пользователь:", "user:", "message (user)", "требован", "requirement"]) { result.append(.requirement) }
-    if contains(["отменя", "отменить", "уточня", "вместо", "больше не", "изменил решение", "instead", "supersed", "changed my mind", "revoke"]) { result.append(.changedDecision) }
+    if contains(["отменя", "отменить", "отменён", "отменен", "отмена", "cancel the", "cancel my", "withdraw", "уточня", "вместо", "больше не", "изменил решение", "instead", "supersed", "changed my mind", "revoke"]) { result.append(.changedDecision) }
     if contains(["не удал", "запрещ", "never delete", "do not delete", "don't delete", "must not"]) { result.append(.restriction) }
     if contains(["следующий шаг", "не выполнен", "не проверен", "не опубликован", "next step", "not completed", "not verified", "pending", "todo"]) { result.append(.pending) }
     if contains(["failed", "passed", "тест падает", "тест не прош", "тест прош"]) { result.append(.testEvidence) }
@@ -53,6 +53,11 @@ public final class TranscriptReview: @unchecked Sendable {
     public let excerpt: String
     public let signals: [Signal]
     public var id: Int { offset }
+    /// A citation alone is not evidence that the text survived editing or selection.
+    /// Only this displayed, possibly shortened fragment is checked, not the entire record.
+    public func fragmentPresent(in result: String) -> Bool {
+      result.contains(ContextSafety.redact(excerpt))
+    }
   }
   public struct Findings: Sendable {
     public let items: [Finding]
