@@ -11,6 +11,9 @@ import UserNotifications
       RootView().environmentObject(vm).environmentObject(updater)
         .preferredColorScheme(vm.theme == "light" ? .light : vm.theme == "dark" ? .dark : nil)
         .frame(minWidth: 1000, minHeight: 700)
+        .onChange(of: vm.language) { _, _ in
+          if !vm.busy { vm.status = vm.t("Язык интерфейса изменён", "Interface language changed") }
+        }
         .onAppear {
           updater.checkOnLaunch()
           AppUpdater.markHealthy()
@@ -134,7 +137,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.8 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.9 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {

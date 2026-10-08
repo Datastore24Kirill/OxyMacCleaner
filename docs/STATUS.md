@@ -1,4 +1,4 @@
-# Implementation status — 0.4.8 Preview
+# Implementation status — 0.4.9 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -261,3 +261,7 @@ Final packaged 0.3.1 installed locally. Live UI automatically detected running O
 ## 0.4.8: атрибуция и последствия очистки
 
 [Приёмка 0.4.8](ACCEPTANCE-0.4.8-RU.md): явные метки автора/проекта, неизвестная принадлежность, единый блок последствий и восстановления, проверка конфликтного восстановления. Это продолжение ТЗ; реальные выбранные данные и аппаратная матрица остаются открыты.
+
+## Приёмка 0.4.9
+
+[Результаты](ACCEPTANCE-0.4.9-RU.md): реальная история Cursor выявила служебные turn_ended, импорт исправлен. Содержание остаётся локально. [Конечные критерии 1.0](RELEASE-GATES-RU.md) разделяют выполненное, пользовательскую очистку и аппаратную матрицу.

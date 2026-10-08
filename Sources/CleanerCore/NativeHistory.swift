@@ -35,6 +35,13 @@ public enum NativeHistory {
           message = ["role": type == "user" ? "user" : "assistant"]
         }
       } else if agent == "cursor" {
+        if type == "turn_ended" {
+          guard value["role"] == nil, let status = value["status"] as? String, !status.isEmpty else {
+            throw CleanerError.message("Unsupported Cursor turn metadata at line \(index + 1)")
+          }
+          retained += 1
+          return "[L\(index + 1)] RECORD (turn_ended): \(raw)"
+        }
         guard let role = value["role"] as? String, ["user", "assistant"].contains(role),
           let body = value["message"] as? [String: Any], body["content"] is [Any] else {
           throw CleanerError.message("Unsupported Cursor transcript record at line \(index + 1)")
