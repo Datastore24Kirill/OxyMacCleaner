@@ -12,6 +12,8 @@ struct ContextComparisonView: View {
   @State private var findings: TranscriptReview.Findings?
   @State private var signalFilter = "all"
   @State private var onlyMissing = false
+  @State private var signalsExpanded = false
+  @State private var pairsExpanded = false
   @State private var reviewProgress = 0.0
   @State private var loading = false
   @State private var operation: Task<Void, Never>?
@@ -43,7 +45,7 @@ struct ContextComparisonView: View {
             if loading && reviewProgress > 0 { ProgressView(value: reviewProgress).frame(width: 100) }
           }
           if let findings {
-            DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches)) {
+            DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches), isExpanded: $signalsExpanded) {
               Text(vm.t("Показаны первые 200 совпадений. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "First 200 matches shown. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
               Toggle(vm.t("Только фрагменты, не найденные в результате", "Only fragments not found in result"), isOn: $onlyMissing)
               Text(vm.t("Текст не найден среди показанных фрагментов: ", "Displayed fragments not found: ") + String(findings.items.filter { !$0.fragmentPresent(in: vm.output) }.count))
@@ -78,7 +80,7 @@ struct ContextComparisonView: View {
           }
           if let findings {
             let pairs = TranscriptReview.decisionPairs(in: findings.items)
-            DisclosureGroup(vm.t("Связанные решения для сверки: ", "Related decisions to compare: ") + String(pairs.count)) {
+            DisclosureGroup(vm.t("Связанные решения для сверки: ", "Related decisions to compare: ") + String(pairs.count), isExpanded: $pairsExpanded) {
               Text(vm.t("Совпадение слов в первых 200 подсказках, до 50 пар. Это не доказательство противоречия: проверьте проект, автора и смысл. Более поздняя строка не становится автоматически действующей.", "Shared words in the first 200 signals, up to 50 pairs. This does not prove a conflict: check the project, author and meaning. A later line is not automatically authoritative.")).font(.caption)
               ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
@@ -108,6 +110,8 @@ struct ContextComparisonView: View {
           }
           Button(vm.t("Закрыть", "Close")) { showing = false }.keyboardShortcut(.cancelAction)
         }.padding(20).frame(width: 960, height: 760)
+          .onChange(of: signalsExpanded) { _, expanded in if expanded { pairsExpanded = false } }
+          .onChange(of: pairsExpanded) { _, expanded in if expanded { signalsExpanded = false } }
       }
   }
   private func matchesFilter(_ item: TranscriptReview.Finding) -> Bool {
@@ -116,7 +120,7 @@ struct ContextComparisonView: View {
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
-    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"; onlyMissing = false
+    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"; onlyMissing = false; signalsExpanded = false; pairsExpanded = false
     operation = Task {
       defer { loading = false }
       do {
