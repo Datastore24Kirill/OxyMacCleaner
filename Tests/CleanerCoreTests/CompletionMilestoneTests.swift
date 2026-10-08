@@ -28,6 +28,26 @@ final class CompletionMilestoneTests: XCTestCase {
     XCTAssertTrue(try reader.page(at: found).reviewLines.contains { $0.contains("FAILED") })
     let token = Cancellation(); token.cancel(); XCTAssertThrowsError(try reader.find("absent", cancellation: token))
   }
+  func testReviewIndexFindsLaterChangesAndPreservesSourceOffsets() throws {
+    let text = String(repeating: "Обычная строка 👩‍💻\n", count: 9000) + "Теперь вместо удаления оставляем копию\nTests passed\n"
+    let reader = try TranscriptReview(Transcript(source: URL(fileURLWithPath: "/fixture.md"), agent: "test", text: text, digest: "test"))
+    let index = try reader.reviewIndex()
+    XCTAssertEqual(index.matches, 2)
+    XCTAssertEqual(index.shortenedRecords, 0)
+    let first = try XCTUnwrap(index.items.first)
+    XCTAssertGreaterThan(first.offset, 128_000)
+    XCTAssertTrue(try reader.page(at: first.offset).text.hasPrefix("[L9001] Теперь вместо"))
+    let token = Cancellation(); token.cancel()
+    XCTAssertThrowsError(try reader.reviewIndex(cancellation: token))
+  }
+  func testReviewIndexBoundsResultsAndReportsLongRecordLimit() throws {
+    let text = String(repeating: "Do not delete originals\n", count: 250) + String(repeating: "x", count: 200_000) + "\nOrdinary prose\n"
+    let reader = try TranscriptReview(Transcript(source: URL(fileURLWithPath: "/fixture.md"), agent: "test", text: text, digest: "test"))
+    let index = try reader.reviewIndex()
+    XCTAssertEqual(index.matches, 250)
+    XCTAssertEqual(index.items.count, 200)
+    XCTAssertEqual(index.shortenedRecords, 1)
+  }
   func testSpaceAccountingAndNestedPaths() throws {
     let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
     let a = root.appendingPathComponent("a"); try Data(repeating: 0, count: 200).write(to: a)

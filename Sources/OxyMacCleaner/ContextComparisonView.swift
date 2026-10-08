@@ -9,6 +9,8 @@ struct ContextComparisonView: View {
   @State private var offsets: [Int] = []
   @State private var query = ""
   @State private var message = ""
+  @State private var findings: TranscriptReview.Findings?
+  @State private var reviewProgress = 0.0
   @State private var loading = false
   @State private var operation: Task<Void, Never>?
   @State private var token = Cancellation()
@@ -33,6 +35,24 @@ struct ContextComparisonView: View {
             if loading { ProgressView().controlSize(.small); Button(vm.t("Отмена", "Cancel")) { token.cancel(); operation?.cancel() } }
           }
           if !message.isEmpty { Text(message).font(.caption) }
+          HStack {
+            Button(vm.t("Проверить изменения во всей истории", "Review changes throughout history")) { review() }.disabled(loading)
+              .help(vm.t("Локальный поиск явных изменений требований и результатов тестов. Не определяет, какое решение правильное.", "Locally finds explicit requirement changes and test outcomes. Does not decide which decision is correct."))
+            if loading && reviewProgress > 0 { ProgressView(value: reviewProgress).frame(width: 100) }
+          }
+          if let findings {
+            DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches)) {
+              Text(vm.t("Показаны первые 200 совпадений. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "First 200 matches shown. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
+              ScrollView {
+                LazyVStack(alignment: .leading) {
+                  ForEach(findings.items) { item in
+                    Button { load(item.offset) } label: { Text(item.excerpt).font(.caption).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading) }
+                      .disabled(loading).help(vm.t("Открыть эту строку в исходнике", "Open this source line"))
+                  }
+                }
+              }.frame(maxHeight: 120)
+            }
+          }
           HStack(alignment: .top) {
             pane(vm.t("Исходник", "Source"), text: page?.text ?? "")
             pane(vm.t("Результат", "Result"), text: vm.output)
@@ -48,7 +68,7 @@ struct ContextComparisonView: View {
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
-    loading = true; offsets = []; query = ""; message = ""
+    loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0
     operation = Task {
       defer { loading = false }
       do {
@@ -56,6 +76,25 @@ struct ContextComparisonView: View {
         let first = try await Task.detached { try value.page() }.value
         reader = value; page = first; showing = true
       } catch { vm.error = error.localizedDescription }
+    }
+  }
+  private func review() {
+    guard let reader, !loading else { return }
+    loading = true; findings = nil; reviewProgress = 0
+    token = Cancellation(); let cancellation = token
+    operation = Task {
+      defer { loading = false; reviewProgress = 0 }
+      do {
+        let value = try await Task.detached {
+          try reader.reviewIndex(cancellation: cancellation) { done, total in
+            Task { @MainActor in
+              guard loading, token === cancellation, !cancellation.cancelled else { return }
+              reviewProgress = Double(done) / Double(max(total, 1))
+            }
+          }
+        }.value
+        try cancellation.check(); findings = value; message = ""
+      } catch { message = cancellation.cancelled ? vm.t("Проверка остановлена", "Review stopped") : error.localizedDescription }
     }
   }
   private func load(_ offset: Int, remember: Bool = true) {

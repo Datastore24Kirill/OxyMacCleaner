@@ -1,4 +1,4 @@
-# Implementation status — 0.4.0 Preview
+# Implementation status — 0.4.1 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -18,7 +18,7 @@ This is an implementation milestone, not completion of the version-one specifica
 
 ## Next work
 
-1. Broader semantic conflict detection and real-history quality cases. Current review markers only flag selected words on the visible page; they do not resolve contradictory requirements.
+1. Broader semantic conflict detection and real-history quality cases. Full-history review now indexes explicit change/test phrases with source offsets, progress and cancellation. It does not resolve contradictory requirements; long records are inspected only through a bounded prefix and reported.
 2. Full real VoiceOver, keyboard-focus and RU/EN failure-message audit; current additions have accessible labels and cancellation.
 3. More native agent formats, exact traversal resume and broader disk/failure benchmarks. APFS shared-block ownership remains unknown.
 4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.

@@ -24,6 +24,53 @@ public final class TranscriptReview: @unchecked Sendable {
       total = (try FileManager.default.attributesOfItem(atPath: streaming.numbered.path)[.size] as? NSNumber)?.intValue ?? 0
     } else { let data = Data(transcript.numbered.utf8); memory = data; file = nil; total = data.count }
   }
+  /// Bounded, local review index. Signals require human interpretation, never override decisions.
+  public struct Finding: Sendable, Identifiable {
+    public let offset: Int
+    public let excerpt: String
+    public var id: Int { offset }
+  }
+  public struct Findings: Sendable {
+    public let items: [Finding]
+    public let matches: Int
+    public let shortenedRecords: Int
+  }
+  public func reviewIndex(cancellation: Cancellation = Cancellation(), progress: @Sendable (Int, Int) -> Void = { _, _ in }) throws -> Findings {
+    var items: [Finding] = []; var matches = 0; var shortened = 0
+    var prefix = Data(); var lineStart = 0; var lineLength = 0; var offset = 0
+    func finish() {
+      if lineLength > 64_000 { shortened += 1 }
+      // A capped prefix can end inside a UTF-8 codepoint; decoding replaces only that boundary.
+      let text = String(decoding: prefix, as: UTF8.self)
+      if Self.hasReviewSignal(text) {
+        matches += 1
+        if items.count < 200 { items.append(Finding(offset: lineStart, excerpt: String(text.prefix(700)))) }
+      }
+      prefix.removeAll(keepingCapacity: true); lineLength = 0
+    }
+    while offset < total {
+      try cancellation.check()
+      let chunk = try bytes(at: offset, count: 128_000)
+      guard !chunk.isEmpty else { throw CleanerError.message("History snapshot ended unexpectedly") }
+      var begin = chunk.startIndex
+      for index in chunk.indices where chunk[index] == 10 {
+        let length = index - begin
+        prefix.append(chunk[begin..<min(index, begin + max(0, 64_000 - prefix.count))])
+        lineLength += length; finish(); lineStart = offset + index + 1; begin = index + 1
+      }
+      prefix.append(chunk[begin..<min(chunk.endIndex, begin + max(0, 64_000 - prefix.count))])
+      lineLength += chunk.endIndex - begin
+      offset += chunk.count; progress(offset, total)
+    }
+    try cancellation.check()
+    if lineLength > 0 { finish() }
+    return Findings(items: items, matches: matches, shortenedRecords: shortened)
+  }
+  private static func hasReviewSignal(_ text: String) -> Bool {
+    let value = text.lowercased()
+    let phrases = ["отменя", "отменить", "уточня", "вместо", "больше не", "не удал", "запрещ", "изменил решение", "never delete", "do not delete", "don't delete", "instead", "supersed", "changed my mind", "test failed", "tests failed", "tests passed"]
+    return phrases.contains { value.contains($0) }
+  }
   private func bytes(at offset: Int, count: Int) throws -> Data {
     if let memory { return memory.subdata(in: offset..<min(total, offset + count)) }
     let handle = try FileHandle(forReadingFrom: file!); defer { try? handle.close() }
