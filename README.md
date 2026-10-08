@@ -6,9 +6,9 @@ Native, local-first Mac cleanup and developer workspace inspection. **Free and o
 
 [Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.4.7 Preview — implemented
+## 0.4.8 Preview — implemented
 
-New in 0.4.7: related decision pairs for source review, a broader review-only project catalog, and actionable permission/activity errors in both languages. [Release details](docs/release-0.4.7.md).
+New in 0.4.8: explicit author/project checks for decision pairs, consistent cleanup consequences and recovery details, and additional restore collision tests. [Release details](docs/release-0.4.8.md).
 
 Previous milestone 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
 
@@ -45,7 +45,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.4.7-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.4.8-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 

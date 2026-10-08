@@ -1,4 +1,4 @@
-# Implementation status — 0.4.7 Preview
+# Implementation status — 0.4.8 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -257,3 +257,7 @@ Updater copies now preserve the application filename under rollback/OxyMac Clean
 147 core tests passed, including pull progress/error/incomplete stream and old/new backup layouts. Real helper tests passed successful launch and failed-launch rollback on disposable shell app stubs. Follow-up from the UX specification: translated update statuses and clean-context template into English. Complete VoiceOver coverage and all historical diagnostic strings remain unfinished.
 
 Final packaged 0.3.1 installed locally. Live UI automatically detected running Ollama and both installed models; install/launch/download buttons were absent. Switching 7B→3B→7B selected instantly without download or confirmation. Left 7B selected. Existing scan restored; validated legacy backup directories migrated with original bundle names. Full Disk Access probe still reports denial after replacing the ad-hoc binary; no permissions were reset. Byte-progress and incomplete-stream logic were tested with synthetic protocol responses; no model was removed or needlessly downloaded for UI testing.
+
+## 0.4.8: атрибуция и последствия очистки
+
+[Приёмка 0.4.8](ACCEPTANCE-0.4.8-RU.md): явные метки автора/проекта, неизвестная принадлежность, единый блок последствий и восстановления, проверка конфликтного восстановления. Это продолжение ТЗ; реальные выбранные данные и аппаратная матрица остаются открыты.

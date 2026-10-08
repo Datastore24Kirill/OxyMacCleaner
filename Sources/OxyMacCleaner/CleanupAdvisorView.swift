@@ -113,6 +113,7 @@ struct CleanupAdvisorView: View {
                 Text(candidate.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                   .truncationMode(.middle).help(candidate.file.path)
                 Text(reason(candidate)).font(.callout)
+                CleanupExplanationView(section: "personal")
                 Text(
                   vm.t("Не изменялся: ", "Last modified: ")
                     + candidate.file.modified.formatted(date: .abbreviated, time: .omitted)

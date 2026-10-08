@@ -85,6 +85,11 @@ struct ContextComparisonView: View {
               ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                   ForEach(pairs) { pair in
+                    VStack(alignment: .leading, spacing: 4) {
+                      Text(pair.attributionKnown
+                        ? vm.t("Одинаковые явные метки пользователя и проекта", "Matching explicit user and project labels")
+                        : vm.t("Автор или проект не определён — проверьте принадлежность", "Author or project unknown — verify attribution"))
+                        .font(.caption).foregroundStyle(.secondary)
                     HStack(alignment: .top) {
                       Button { load(pair.earlier.offset) } label: {
                         VStack(alignment: .leading) { Text(vm.t("Ранее", "Earlier")).bold(); Text(pair.earlier.excerpt) }
@@ -94,6 +99,7 @@ struct ContextComparisonView: View {
                       }
                     }.buttonStyle(.plain).font(.caption).disabled(loading)
                       .help(vm.t("Открыть выбранную строку исходника; решение принимаете вы.", "Open the selected source line; you decide which applies."))
+                    }
                   }
                 }
               }.frame(height: 100)

@@ -140,6 +140,7 @@ struct OpportunityCards: View {
       Text(result).font(.title3.bold())
       Text(explanation).font(.callout)
       Text(limitation).font(.caption).foregroundStyle(.secondary)
+      CleanupExplanationView(section: section)
       Spacer(minLength: 0)
       HStack {
         Text(stamp(date)).font(.caption2).foregroundStyle(.secondary)

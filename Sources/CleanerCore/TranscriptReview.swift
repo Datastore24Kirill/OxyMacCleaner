@@ -59,27 +59,63 @@ public final class TranscriptReview: @unchecked Sendable {
       result.contains(ContextSafety.redact(excerpt))
     }
   }
+  public struct Attribution: Sendable {
+    public let author: String?
+    public let project: String?
+    public let body: String
+  }
+  /// Only explicit leading labels; quoted role words inside content do not identify its author.
+  public static func attribution(_ excerpt: String) -> Attribution {
+    var body = excerpt.replacingOccurrences(of: #"^\[L[0-9]+\]\s*"#, with: "", options: .regularExpression)
+    var author: String?
+    for (label, role) in [("MESSAGE (user):", "user"), ("MESSAGE (assistant):", "assistant"), ("User:", "user"), ("Пользователь:", "user"), ("Assistant:", "assistant"), ("Ассистент:", "assistant"), ("Tool:", "tool")] {
+      if body.lowercased().hasPrefix(label.lowercased()) {
+        author = role; body = String(body.dropFirst(label.count)).trimmingCharacters(in: .whitespaces); break
+      }
+    }
+    if body.hasPrefix("RECORD (") { author = "record" }
+    var project: String?
+    // Optional explicit export label. Do not infer project ownership from arbitrary paths in prose.
+    if body.hasPrefix("[project="), let end = body.firstIndex(of: "]") {
+      let value = String(body[body.index(body.startIndex, offsetBy: 9)..<end])
+      if !value.isEmpty { project = value }
+      body = String(body[body.index(after: end)...]).trimmingCharacters(in: .whitespaces)
+    } else if let data = body.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let cwd = object["cwd"] as? String, !cwd.isEmpty {
+      project = cwd
+    }
+    return Attribution(author: author, project: project, body: body)
+  }
   /// Candidate pairs, not semantic verdicts. Matching uses shared literal identifiers.
   public struct DecisionPair: Sendable, Identifiable {
     public let earlier: Finding
     public let later: Finding
     public let sharedTerms: [String]
     public var id: String { "\(earlier.offset):\(later.offset)" }
+    public var attributionKnown: Bool {
+      let a = TranscriptReview.attribution(earlier.excerpt)
+      let b = TranscriptReview.attribution(later.excerpt)
+      return a.author == "user" && b.author == "user" && a.project != nil && a.project == b.project
+    }
   }
   public static func decisionPairs(in items: [Finding]) -> [DecisionPair] {
-    let stop: Set<String> = ["user", "пользователь", "requirement", "требование", "delete", "удалить", "удаление", "never", "instead", "только", "вместо", "отменяю", "следующий", "проверить", "please", "нужно", "будет", "теперь", "после", "before", "after", "with", "this", "that", "must", "request", "earlier", "cancel"]
+    let stop: Set<String> = ["user", "пользователь", "requirement", "требование", "delete", "удалить", "удаление", "never", "instead", "только", "вместо", "отменяю", "следующий", "проверить", "please", "нужно", "будет", "теперь", "после", "before", "after", "with", "this", "that", "must", "request", "earlier", "cancel", "content", "message", "input", "output", "text", "type", "payload", "assistant", "role", "project", "session", "timestamp"]
     func terms(_ text: String) -> Set<String> {
       // Drop the source citation so different lines cannot match through L123.
-      let body = text.replacingOccurrences(of: #"^\[L[0-9]+\]\s*"#, with: "", options: .regularExpression)
+      let body = attribution(text).body
       return Set(body.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
         .filter { $0.count >= 4 && !stop.contains($0) && $0.rangeOfCharacter(from: .letters) != nil })
     }
     let ordered = items.sorted { $0.offset < $1.offset }
     var result: [DecisionPair] = []
     for (index, later) in ordered.enumerated() where later.signals.contains(.changedDecision) || later.signals.contains(.restriction) {
+      let laterContext = attribution(later.excerpt)
+      guard laterContext.author == nil || laterContext.author == "user" else { continue }
       let laterTerms = terms(later.excerpt)
       for earlier in ordered[..<index].reversed() {
         guard earlier.signals.contains(.requirement) || earlier.signals.contains(.changedDecision) || earlier.signals.contains(.restriction) else { continue }
+        let earlierContext = attribution(earlier.excerpt)
+        guard earlierContext.author == nil || earlierContext.author == "user" else { continue }
+        if let a = earlierContext.project, let b = laterContext.project, a != b { continue }
         let shared = terms(earlier.excerpt).intersection(laterTerms).sorted()
         guard !shared.isEmpty else { continue }
         result.append(DecisionPair(earlier: earlier, later: later, sharedTerms: shared))
