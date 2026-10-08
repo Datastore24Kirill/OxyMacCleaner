@@ -43,6 +43,28 @@ final class ResilienceMilestoneTests: XCTestCase {
     try FileManager.default.moveItem(at: offline, to: payload)
     try store.restore(entry); XCTAssertEqual(try String(contentsOf: source), "original")
   }
+  func testCrashJournalOrdersFilesBeforeCompletedFoldersAndDropsTornTail() throws {
+    let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+    let files = root.appendingPathComponent("files"); try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+    let file = files.appendingPathComponent("a"); try Data("123".utf8).write(to: file)
+    let journal = try ScanJournal(url: root.appendingPathComponent("journal"), roots: [files], volumeID: "test", excluded: [])
+    try journal.append(FileRecord.read(file)); try journal.appendIssue("fixture permission denied"); try journal.completeDirectory(files.path); try journal.flush()
+    let recovered = try XCTUnwrap(ScanJournal.recover(journal.url))
+    XCTAssertEqual(recovered.report.files.count, 1)
+    XCTAssertTrue(recovered.report.issues.contains("fixture permission denied"))
+    XCTAssertEqual(recovered.report.checkpoint?.completedDirectories, [files.path])
+    XCTAssertTrue(Scanner.canResume(recovered.report, roots: [files], excluded: []))
+    let resumed = Scanner.scan(roots: [files], excluded: [], cancellation: Cancellation(), resuming: recovered.report)
+    XCTAssertTrue(resumed.complete); XCTAssertEqual(resumed.total, 3)
+    let complete = try Data(contentsOf: journal.url)
+    let lines = complete.split(separator: 10)
+    var torn = Data(); for line in lines.dropLast() { torn.append(contentsOf: line); torn.append(10) }; torn.append(contentsOf: lines.last!.prefix(12))
+    let partialURL = root.appendingPathComponent("torn"); try torn.write(to: partialURL)
+    let partial = try XCTUnwrap(ScanJournal.recover(partialURL))
+    XCTAssertEqual(partial.report.files.count, 1); XCTAssertEqual(partial.report.checkpoint?.completedDirectories.count, 0)
+    let retry = Scanner.scan(roots: [files], excluded: [], cancellation: Cancellation(), resuming: partial.report)
+    XCTAssertEqual(retry.files.count, 1); XCTAssertEqual(retry.total, 3)
+  }
   func testCopySpaceAndActionableErrors() throws {
     XCTAssertThrowsError(try QuarantineStore.validateCopySpace(required: 100, available: 0))
     XCTAssertThrowsError(try QuarantineStore.validateCopySpace(required: Int64.max, available: Int64.max))

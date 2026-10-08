@@ -102,6 +102,8 @@ public enum Scanner {
     roots: [URL], excluded: [String], cancellation: Cancellation,
     record: ((FileRecord) throws -> Void)? = nil,
     resuming previous: ScanReport? = nil,
+    completedDirectory: ((String) throws -> Void)? = nil,
+    issue: ((String) throws -> Void)? = nil,
     progress: @escaping (ScanProgress) -> Void = { _ in }
   ) -> ScanReport {
     var result = ScanReport()
@@ -120,6 +122,12 @@ public enum Scanner {
     struct Identity: Hashable { let device: UInt64; let inode: UInt64 }
     var seen = Set<Identity>()
     var journalFailed = false
+    func addIssue(_ message: String) {
+      result.issues.append(message)
+      if !journalFailed, let issue {
+        do { try issue(message) } catch { journalFailed = true; result.issues.append("Recovery journal unavailable: " + error.localizedDescription) }
+      }
+    }
     let normalized = roots.map { $0.standardizedFileURL.resolvingSymlinksInPath() }
     let unique = normalized.filter { root in
       !normalized.contains { $0 != root && inside(root.path, $0.path) }
@@ -147,20 +155,24 @@ public enum Scanner {
         }
         if let record { do { try record(file) } catch { journalFailed = true } }
       }
-      result.issues = previous.issues
-      result.issues.append("Resumed snapshot: completed folders retain earlier observations. Run a new scan for current totals.")
+      for message in previous.issues { addIssue(message) }
+      addIssue("Resumed snapshot: completed folders retain earlier observations. Run a new scan for current totals.")
+      if !journalFailed, let completedDirectory {
+        do { for path in closed.sorted() { try completedDirectory(path) } }
+        catch { journalFailed = true; addIssue("Recovery journal unavailable: " + error.localizedDescription) }
+      }
       snapshot.directories = closed.count
     } else if previous != nil {
       result = previous!
-      result.issues.append("Resume checkpoint does not match disk or exclusions. Run a new scan.")
+      addIssue("Resume checkpoint does not match disk or exclusions. Run a new scan.")
       return result
     }
     for root in Set(unique) {
       guard !cancellation.cancelled else { break }
-      guard let name = strdup(root.path) else { result.issues.append(root.path); continue }
+      guard let name = strdup(root.path) else { addIssue(root.path); continue }
       var paths: [UnsafeMutablePointer<CChar>?] = [name, nil]
       let tree = paths.withUnsafeMutableBufferPointer { fts_open($0.baseAddress, FTS_PHYSICAL | FTS_NOCHDIR, nil) }
-      guard let tree else { free(name); result.issues.append(root.path); continue }
+      guard let tree else { free(name); addIssue(root.path); continue }
       errno = 0
       while let entry = fts_read(tree) {
         if cancellation.cancelled { break }
@@ -172,15 +184,22 @@ public enum Scanner {
             if kind == FTS_D { fts_set(tree, entry, FTS_SKIP) }; return
           }
           if kind == FTS_ERR || kind == FTS_DNR || kind == FTS_NS {
-            result.issues.append(path + ": " + String(cString: strerror(item.fts_errno))); return
+            addIssue(path + ": " + String(cString: strerror(item.fts_errno))); return
           }
           guard let stat = item.fts_statp else { return }
           // Dataless file-provider placeholders must not be hydrated by a cleanup scan.
           if stat.pointee.st_flags & UInt32(SF_DATALESS) != 0 {
             if kind == FTS_D { fts_set(tree, entry, FTS_SKIP) }
-            result.issues.append("Cloud-only: " + path); return
+            addIssue("Cloud-only: " + path); return
           }
-          if kind == FTS_DP { closed.insert(path); return }
+          if kind == FTS_DP {
+            closed.insert(path)
+            if !journalFailed, let completedDirectory {
+              do { try completedDirectory(path) }
+              catch { journalFailed = true; addIssue("Recovery journal unavailable: " + error.localizedDescription) }
+            }
+            return
+          }
           if kind == FTS_D {
             if closed.contains(path) { fts_set(tree, entry, FTS_SKIP) }
             else { snapshot.directories += 1 }
@@ -195,7 +214,7 @@ public enum Scanner {
             inode: UInt64(info.st_ino), device: UInt64(UInt32(bitPattern: info.st_dev)), links: UInt64(info.st_nlink))
           if f.links > 1, !seen.insert(Identity(device: f.device, inode: f.inode)).inserted { return }
           if !journalFailed, let record {
-            do { try record(f) } catch { journalFailed = true; result.issues.append("Recovery journal unavailable: " + error.localizedDescription) }
+            do { try record(f) } catch { journalFailed = true; addIssue("Recovery journal unavailable: " + error.localizedDescription) }
           }
           result.files.append(f); snapshot.files += 1; snapshot.bytes += f.bytes
           snapshot.categories[f.category, default: 0] += f.bytes
@@ -207,7 +226,7 @@ public enum Scanner {
         }
         errno = 0
       }
-      if !cancellation.cancelled, errno != 0 { result.issues.append(root.path + ": " + String(cString: strerror(errno))) }
+      if !cancellation.cancelled, errno != 0 { addIssue(root.path + ": " + String(cString: strerror(errno))) }
       fts_close(tree); free(name)
     }
     result.checkpoint = ScanCheckpoint(roots: rootPaths, exclusions: excluded.sorted(), identities: rootIdentities(unique), completedDirectories: closed.sorted())
@@ -228,6 +247,11 @@ public enum Scanner {
     }), report.files.allSatisfy({ file in unique.contains { inside(file.path, $0.path) } }) else { return false }
     let identities = rootIdentities(unique)
     return !identities.isEmpty && checkpoint.identities == identities && checkpoint.roots == Array(Set(unique.map(\.path))).sorted() && checkpoint.exclusions == excluded.sorted()
+  }
+  public static func resumeMetadata(roots: [URL], excluded: [String]) -> ScanCheckpoint {
+    let normalized = roots.map { $0.standardizedFileURL.resolvingSymlinksInPath() }
+    let unique = normalized.filter { root in !normalized.contains { $0 != root && inside(root.path, $0.path) } }
+    return ScanCheckpoint(roots: Array(Set(unique.map(\.path))).sorted(), exclusions: excluded.sorted(), identities: rootIdentities(unique), completedDirectories: [])
   }
   private static func rootIdentities(_ roots: [URL]) -> [String: String] {
     var result: [String: String] = [:]

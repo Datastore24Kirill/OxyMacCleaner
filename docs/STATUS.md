@@ -1,11 +1,11 @@
-# Implementation status — 0.4.2 Preview
+# Implementation status — 0.4.3 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
 | Area | Implemented | Remaining |
 |---|---|---|
 | UI | RU/EN interface, themes, contextual hints | Complete accessibility and error localization audit |
-| Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, partial crash recovery, persisted completed-subtree resume, map/categories; 100k/1M fixtures | Crash-time traversal checkpoint; completed-subtree resume now works after a saved stop |
+| Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, crash recovery with committed subtree checkpoints and diagnostics, persisted completed-subtree resume, map/categories; 100k/1M fixtures | Broader power-loss and external-volume fault tests; unfinished subtrees are rescanned |
 | Duplicates | Hash + byte comparison, keeper validation, unique-inode logical/allocated estimates | Exact APFS reclaim is unknown; performance |
 | Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics | Broader race/failure verification |
 | DerivedData / projects | Bounded project discovery, project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project-marker and dependency-manager coverage |
@@ -20,7 +20,7 @@ This is an implementation milestone, not completion of the version-one specifica
 
 1. Broader semantic conflict detection and real-history quality cases. Full-history review now indexes explicit change/test phrases with source offsets, progress and cancellation. It does not resolve contradictory requirements; long records are inspected only through a bounded prefix and reported.
 2. Broader assistive-technology testing; all sections have keyboard commands, selected-state labels and VoiceOver heading focus. Cancellation/destination/disk-space errors have RU/EN guidance.
-3. More native agent formats and crash-time traversal checkpoints. Saved-stop resume reuses completed subtrees; an unfinished subtree is rescanned. APFS shared-block ownership remains unknown.
+3. More native agent formats and broader disk failure tests. Both saved-stop and crash-journal resume reuse committed subtrees; an unfinished subtree is rescanned. APFS shared-block ownership remains unknown.
 4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.
 
 ## Agent capability matrix

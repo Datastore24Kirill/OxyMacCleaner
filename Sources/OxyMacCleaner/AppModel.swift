@@ -447,8 +447,8 @@ import UserNotifications
     task = Task {
       let (result, finalSnapshot) = await Task.detached {
         var latest = ScanProgress()
-        let journal = try? ScanJournal(url: journalURL, roots: chosen, volumeID: selectedVolume)
-        var report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token, record: { file in try journal?.append(file) }, resuming: prior) {
+        let journal = try? ScanJournal(url: journalURL, roots: chosen, volumeID: selectedVolume, excluded: excluded)
+        var report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token, record: { file in try journal?.append(file) }, resuming: prior, completedDirectory: { path in try journal?.completeDirectory(path) }, issue: { try journal?.appendIssue($0) }) {
           snapshot in
           latest = snapshot
           Task { @MainActor in
