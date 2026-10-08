@@ -72,6 +72,8 @@ public final class QuarantineStore: @unchecked Sendable {
     try checkPayloadPath(source)
     guard try payloadHash(entry, source) == entry.hash else { throw CleanerError.message("Integrity check failed; source retained") }
     try cancellation.check()
+    let space = try destination.deletingLastPathComponent().resourceValues(forKeys: [.volumeAvailableCapacityKey]).volumeAvailableCapacity
+    try Self.validateCopySpace(required: entry.bytes, available: space.map(Int64.init))
     try FileManager.default.copyItem(at: source, to: destination)
     try cancellation.check()
     if entry.kind == "directory" {
@@ -80,6 +82,11 @@ public final class QuarantineStore: @unchecked Sendable {
       guard try Scanner.hash(destination, cancellation: cancellation) == entry.hash else { throw CleanerError.message("Copied file differs; source retained") }
     }
     guard try payloadHash(entry, source) == entry.hash else { throw CleanerError.message("Source changed during copy; source retained") }
+  }
+  public static func validateCopySpace(required: Int64, available: Int64?) throws {
+    guard required >= 0, let available, available >= 0 else { throw CleanerError.message("Cannot determine destination free space; source retained") }
+    let (budget, overflow) = required.addingReportingOverflow(10_000_000)
+    guard !overflow, available >= budget else { throw CleanerError.message("Insufficient space on destination; source retained") }
   }
   private func save(_ e: QuarantineEntry) throws {
     try JSONEncoder().encode(e).write(
@@ -419,9 +426,10 @@ public final class QuarantineStore: @unchecked Sendable {
       }
     }
   }
-  public func restore(_ entry: QuarantineEntry, destination: URL? = nil) throws {
+  public func restore(_ entry: QuarantineEntry, destination: URL? = nil, cancellation: Cancellation = Cancellation()) throws {
     lock.lock()
     defer { lock.unlock() }
+    try cancellation.check()
     let dest = destination ?? URL(fileURLWithPath: entry.original)
     let payload = payloadURL(entry)
     guard !FileManager.default.fileExists(atPath: dest.path) else {
@@ -431,7 +439,7 @@ public final class QuarantineStore: @unchecked Sendable {
       dest.deletingLastPathComponent().resolvingSymlinksInPath()
         == dest.deletingLastPathComponent().standardizedFileURL
     else { throw CleanerError.message("Destination parent contains symbolic links") }
-    guard try payloadHash(entry, payload) == entry.hash else {
+    guard try payloadHash(entry, payload, cancellation: cancellation) == entry.hash else {
       throw CleanerError.message("Integrity check failed; quarantine retained")
     }
     guard FileManager.default.fileExists(atPath: dest.deletingLastPathComponent().path) else {
@@ -446,7 +454,8 @@ public final class QuarantineStore: @unchecked Sendable {
     if sourceDevice != destinationDevice {
       let stage = dest.deletingLastPathComponent().appendingPathComponent(".oxy-restore-" + UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: stage) }
-      try verifiedCopy(entry, from: payload, to: stage)
+      try verifiedCopy(entry, from: payload, to: stage, cancellation: cancellation)
+      try cancellation.check()
       var saved = entry; saved.state = "restoring"; saved.restoreDestination = dest.path
       saved.restoreDigest = try payloadHash(entry, stage)
       try save(saved)
@@ -459,6 +468,7 @@ public final class QuarantineStore: @unchecked Sendable {
       catch { saved.state = "restored-copy"; try save(saved); throw CleanerError.message("Restored successfully; old quarantine payload remains: " + payload.path) }
       return
     }
+    try cancellation.check()
     var saved = entry
     saved.state = "restoring"
     saved.restoreDestination = dest.path

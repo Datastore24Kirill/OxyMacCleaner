@@ -1,7 +1,15 @@
 import Foundation
 
-enum ErrorPresentation {
-  static func message(_ raw: String, russian: Bool) -> String {
+public enum ErrorPresentation {
+  public static func message(_ raw: String, russian: Bool) -> String {
+    let text = raw.lowercased()
+    let common: (String, String)?
+    if text.contains("cancel") { common = ("Операция остановлена. Проверьте её результат в истории операций.", "Operation stopped. Check its result in operation history.") }
+    else if text.contains("destination") && (text.contains("exists") || text.contains("changed")) { common = ("По выбранному пути уже есть данные или назначение изменилось. Выберите другую папку либо имя.", "The destination exists or has changed. Choose another folder or name.") }
+    else if text.contains("no space") || text.contains("insufficient space") { common = ("Не хватает места на целевом диске. Исходные копии не удаляйте; освободите место и повторите операцию.", "The destination disk has insufficient space. Keep the source copies, free space and retry.") }
+    else if text.contains("no such file") || text.contains("disconnected") || text.contains("offline") { common = ("Объект или диск недоступен. Подключите диск и обновите список.", "The item or disk is unavailable. Reconnect the disk and refresh the list.") }
+    else { common = nil }
+    if let common { return (russian ? common.0 + "\n\nПодробности: " : common.1 + "\n\nDetails: ") + raw }
     guard russian else { return raw }
     let value = raw.lowercased()
     let hint: String

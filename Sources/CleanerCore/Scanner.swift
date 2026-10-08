@@ -67,7 +67,14 @@ public struct FileRecord: Identifiable, Codable, Hashable, Sendable {
     else { throw CleanerError.message("File changed since scanning: \(name). Scan again.") }
   }
 }
+public struct ScanCheckpoint: Codable, Sendable {
+  public let roots: [String]
+  public let exclusions: [String]
+  public let identities: [String: String]
+  public var completedDirectories: [String]
+}
 public struct ScanReport: Codable, Sendable {
+  public var checkpoint: ScanCheckpoint? = nil
   public var files: [FileRecord] = []
   public var issues: [String] = []
   public var folders: [String: Int64] = [:]
@@ -94,6 +101,7 @@ public enum Scanner {
   public static func scan(
     roots: [URL], excluded: [String], cancellation: Cancellation,
     record: ((FileRecord) throws -> Void)? = nil,
+    resuming previous: ScanReport? = nil,
     progress: @escaping (ScanProgress) -> Void = { _ in }
   ) -> ScanReport {
     var result = ScanReport()
@@ -115,6 +123,37 @@ public enum Scanner {
     let normalized = roots.map { $0.standardizedFileURL.resolvingSymlinksInPath() }
     let unique = normalized.filter { root in
       !normalized.contains { $0 != root && inside(root.path, $0.path) }
+    }
+    let rootPaths = Array(Set(unique.map(\.path))).sorted()
+    var closed = Set<String>()
+    if let previous, let checkpoint = previous.checkpoint,
+      canResume(previous, roots: unique, excluded: excluded) {
+      closed = Set(checkpoint.completedDirectories)
+      func retained(_ path: String) -> Bool {
+        var parent = (path as NSString).deletingLastPathComponent
+        while true {
+          if closed.contains(parent) { return true }
+          if parent == "/" { return false }; parent = (parent as NSString).deletingLastPathComponent
+        }
+      }
+      for file in previous.files where retained(file.path) {
+        result.files.append(file); snapshot.files += 1; snapshot.bytes += file.bytes
+        snapshot.categories[file.category, default: 0] += file.bytes
+        if file.links > 1 { seen.insert(Identity(device: file.device, inode: file.inode)) }
+        var parent = (file.path as NSString).deletingLastPathComponent
+        while rootPaths.contains(where: { inside(parent, $0) }) {
+          result.folders[parent, default: 0] += file.bytes
+          if parent == "/" { break }; parent = (parent as NSString).deletingLastPathComponent
+        }
+        if let record { do { try record(file) } catch { journalFailed = true } }
+      }
+      result.issues = previous.issues
+      result.issues.append("Resumed snapshot: completed folders retain earlier observations. Run a new scan for current totals.")
+      snapshot.directories = closed.count
+    } else if previous != nil {
+      result = previous!
+      result.issues.append("Resume checkpoint does not match disk or exclusions. Run a new scan.")
+      return result
     }
     for root in Set(unique) {
       guard !cancellation.cancelled else { break }
@@ -141,7 +180,12 @@ public enum Scanner {
             if kind == FTS_D { fts_set(tree, entry, FTS_SKIP) }
             result.issues.append("Cloud-only: " + path); return
           }
-          if kind == FTS_D { snapshot.directories += 1; return }
+          if kind == FTS_DP { closed.insert(path); return }
+          if kind == FTS_D {
+            if closed.contains(path) { fts_set(tree, entry, FTS_SKIP) }
+            else { snapshot.directories += 1 }
+            return
+          }
           guard kind == FTS_F else { return }
           snapshot.currentPath = (path as NSString).deletingLastPathComponent
           emit()
@@ -166,12 +210,32 @@ public enum Scanner {
       if !cancellation.cancelled, errno != 0 { result.issues.append(root.path + ": " + String(cString: strerror(errno))) }
       fts_close(tree); free(name)
     }
+    result.checkpoint = ScanCheckpoint(roots: rootPaths, exclusions: excluded.sorted(), identities: rootIdentities(unique), completedDirectories: closed.sorted())
     result.complete = !cancellation.cancelled
     snapshot.phase = .sorting
     emit(true)
     result.files.sort { $0.bytes > $1.bytes }
     snapshot.phase = result.complete ? .finished : .cancelled
     emit(true)
+    return result
+  }
+  public static func canResume(_ report: ScanReport, roots: [URL], excluded: [String]) -> Bool {
+    let normalized = roots.map { $0.standardizedFileURL.resolvingSymlinksInPath() }
+    let unique = normalized.filter { root in !normalized.contains { $0 != root && inside(root.path, $0.path) } }
+    guard !report.complete, let checkpoint = report.checkpoint else { return false }
+    guard checkpoint.completedDirectories.allSatisfy({ path in
+      path == URL(fileURLWithPath: path).standardizedFileURL.path && unique.contains { inside(path, $0.path) }
+    }), report.files.allSatisfy({ file in unique.contains { inside(file.path, $0.path) } }) else { return false }
+    let identities = rootIdentities(unique)
+    return !identities.isEmpty && checkpoint.identities == identities && checkpoint.roots == Array(Set(unique.map(\.path))).sorted() && checkpoint.exclusions == excluded.sorted()
+  }
+  private static func rootIdentities(_ roots: [URL]) -> [String: String] {
+    var result: [String: String] = [:]
+    for root in roots {
+      var info = stat()
+      guard lstat(root.path, &info) == 0 else { return [:] }
+      result[root.path] = "\(info.st_dev):\(info.st_ino)"
+    }
     return result
   }
   public static func hash(_ url: URL, cancellation: Cancellation = Cancellation()) throws -> String

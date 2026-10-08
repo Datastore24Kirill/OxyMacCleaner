@@ -28,6 +28,14 @@ import UserNotifications
           Button(vm.t("Xcode и проекты", "Xcode and projects")) { vm.page = "developer" }.keyboardShortcut("3").disabled(updater.installing)
           Button(vm.t("Агенты и контекст", "Agents and context")) { vm.page = "agents" }.keyboardShortcut("4").disabled(updater.installing)
           Button(vm.t("Карантин", "Quarantine")) { vm.page = "quarantine" }.keyboardShortcut("5").disabled(updater.installing)
+          Button(vm.t("Файлы и папки", "Files and folders")) { vm.page = "files" }.keyboardShortcut("6").disabled(updater.installing)
+          Button(vm.t("Дубликаты", "Duplicates")) { vm.page = "duplicates" }.keyboardShortcut("7").disabled(updater.installing)
+          Button(vm.t("Возможности очистки", "Cleanup opportunities")) { vm.page = "advisor" }.keyboardShortcut("8").disabled(updater.installing)
+          Button(vm.t("Локальный движок", "Local engine")) { vm.page = "engine" }.keyboardShortcut("9").disabled(updater.installing)
+          Button(vm.t("История операций", "Operation history")) { vm.page = "history" }.keyboardShortcut("0").disabled(updater.installing)
+          Button(vm.t("Архивы и загрузки", "Archives and downloads")) { vm.page = "archives" }.keyboardShortcut("1", modifiers: [.command, .shift]).disabled(updater.installing)
+          Divider()
+          Button(vm.t("Остановить операцию", "Stop operation")) { vm.cancel() }.keyboardShortcut(".").disabled(!vm.busy || updater.installing)
           Button(vm.t("Настройки", "Settings")) { vm.page = "settings" }.keyboardShortcut(",").disabled(updater.installing)
         }
       }
@@ -70,6 +78,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
   }
 }
 struct RootView: View {
+  @AccessibilityFocusState(for: .voiceOver) private var headingFocused: Bool
   @EnvironmentObject var updater: AppUpdater
   @State private var showHelp = false
   @EnvironmentObject var vm: AppModel
@@ -116,7 +125,7 @@ struct RootView: View {
                 .padding(11).background(
                   vm.page == p.0 ? Color.mint.opacity(0.18) : .clear,
                   in: RoundedRectangle(cornerRadius: 10))
-              }.help(vm.t("Открыть раздел: ", "Open section: ") + vm.t(p.1, p.2)).buttonStyle(
+              }.accessibilityValue(vm.page == p.0 ? vm.t("Выбран", "Selected") : "").help(vm.t("Открыть раздел: ", "Open section: ") + vm.t(p.1, p.2)).buttonStyle(
                 .plain)
             }
           }
@@ -125,12 +134,13 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.1 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.2 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
           Text(pages.first { $0.0 == vm.page }.map { vm.t($0.1, $0.2) } ?? "").font(
-            .largeTitle.bold())
+            .largeTitle.bold()).accessibilityAddTraits(.isHeader).accessibilityFocused($headingFocused)
+            .onChange(of: vm.page) { _, _ in headingFocused = true }
           Spacer()
           Button {
             showHelp = true
@@ -248,6 +258,10 @@ struct RootView: View {
           Image(systemName: "arrow.clockwise")
         }.oxyHelp(.refreshVolumes)
         Spacer()
+        if !vm.report.complete, vm.report.checkpoint != nil {
+          Button(vm.t("Продолжить обход", "Resume scan")) { vm.scan(resume: true) }
+            .help(vm.t("Завершённые папки сохранят прежние результаты, незавершённые будут проверены заново. Для полностью свежих данных запустите новый скан.", "Completed folders retain previous observations; unfinished folders are rescanned. Start a new scan for fresh data."))
+        }
         Button(
           vm.t(
             vm.volumeID == "custom" ? "Сканировать папку" : "Сканировать диск",
@@ -517,8 +531,9 @@ struct RootView: View {
               }
             }
           }
-          if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo", "aider"].contains(vm.agent) {
-            SessionCatalogView()
+          if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo", "aider", "opencode"].contains(vm.agent) {
+            if vm.agent != "opencode" { SessionCatalogView() }
+            else { Text(vm.t("Выберите JSON, созданный командой opencode export для одной сессии. База данных не читается.", "Choose JSON from opencode export for one session. The database is not read.")).font(.caption) }
             Button(vm.t("Открыть историю агента…", "Open agent history…")) {
               vm.importTranscript(native: true)
             }.disabled(vm.busy).help(vm.t(

@@ -391,7 +391,8 @@ import UserNotifications
   func reveal(_ path: String) {
     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
   }
-  func scan(_ explicit: [URL]? = nil) {
+  func scan(_ explicit: [URL]? = nil, resume: Bool = false) {
+    let prior = resume ? report : nil
     guard !busy else { return }
     if explicit == nil && volumeID != "custom" {
       checkDiskAccess()
@@ -414,6 +415,14 @@ import UserNotifications
       chooseRoots()
       return
     }
+    let mounted =
+      FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? []
+    let excluded =
+      exclusions + [support.path] + chosen.flatMap { Volumes.exclusions(for: $0, mounted: mounted) }
+    if let prior, !Scanner.canResume(prior, roots: chosen, excluded: excluded) {
+      error = t("Диск, папка или исключения изменились. Запустите новый скан; прежний результат сохранён.", "Disk, folder or exclusions changed. Start a new scan; previous results are retained.")
+      return
+    }
     roots = chosen
     busy = true
     isScanning = true
@@ -432,10 +441,6 @@ import UserNotifications
     mapPath = chosen.first?.path ?? "/"
     cancellation = Cancellation()
     let token = cancellation
-    let mounted =
-      FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? []
-    let excluded =
-      exclusions + [support.path] + chosen.flatMap { Volumes.exclusions(for: $0, mounted: mounted) }
     status = t("Сканирование…", "Scanning…")
     let journalURL = scanJournalURL
     let selectedVolume = volumeID
@@ -443,7 +448,7 @@ import UserNotifications
       let (result, finalSnapshot) = await Task.detached {
         var latest = ScanProgress()
         let journal = try? ScanJournal(url: journalURL, roots: chosen, volumeID: selectedVolume)
-        var report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token, record: { file in try journal?.append(file) }) {
+        var report = Scanner.scan(roots: chosen, excluded: excluded, cancellation: token, record: { file in try journal?.append(file) }, resuming: prior) {
           snapshot in
           latest = snapshot
           Task { @MainActor in
@@ -690,13 +695,16 @@ import UserNotifications
     }
     guard !busy else { return }
     busy = true
+    cancellation = Cancellation(); let token = cancellation
+    status = t("Проверяем и восстанавливаем копию…", "Verifying and restoring copy…")
     let store = quarantine
     let destination = dest
     task = Task {
       do {
-        try await Task.detached { try store.restore(e, destination: destination) }.value
+        try await Task.detached { try store.restore(e, destination: destination, cancellation: token) }.value
+        status = t("Восстановление завершено", "Restore complete")
         log("Restored: \(e.original)")
-      } catch { self.error = error.localizedDescription }
+      } catch { self.error = error is CancellationError ? t("Восстановление отменено до перемещения данных", "Restore cancelled before moving data") : error.localizedDescription }
       entries = store.entries()
       busy = false
       scheduleReminder()

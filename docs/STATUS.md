@@ -1,17 +1,17 @@
-# Implementation status — 0.4.1 Preview
+# Implementation status — 0.4.2 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
 | Area | Implemented | Remaining |
 |---|---|---|
 | UI | RU/EN interface, themes, contextual hints | Complete accessibility and error localization audit |
-| Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, partial crash recovery, map/categories; 1M-file fixture | Exact traversal resume, broader disk benchmarks |
+| Disk analysis | Disk/folder scans, cancellation, exclusions, streamed snapshots, partial crash recovery, persisted completed-subtree resume, map/categories; 100k/1M fixtures | Crash-time traversal checkpoint; completed-subtree resume now works after a saved stop |
 | Duplicates | Hash + byte comparison, keeper validation, unique-inode logical/allocated estimates | Exact APFS reclaim is unknown; performance |
 | Xcode archives | Retention, pins, optional backup/quarantine, direct delete, dSYM diagnostics | Broader race/failure verification |
 | DerivedData / projects | Bounded project discovery, project mapping, cache allowlist, dependencies inventory, guarded worktree cleanup | Broader project-marker and dependency-manager coverage |
 | Simulators | Standard/test devices, runtimes, activity guards, select available Shutdown devices matching search | Broader runtime-version QA |
 | Quarantine | Same-volume initial quarantine, verified cross-volume relocation/restore, journal recovery, retained-copy inspection/revalidation, five-day reminder | Broader fault injection; old relocation copies require manual review |
-| Agents | 11 discovery hints; exports; eight native file adapters and catalogs; two handoff actions | Other versioned native adapters; new chat remains manual |
+| Agents | 11 discovery hints; exports; nine native file/export adapters and catalogs; two handoff actions | Other versioned native adapters; new chat remains manual |
 | Context | Local 7B available; full-history paging/search, review markers, secret-pattern filtering, cited source excerpts; original and verified backup retained | Broader semantic benchmarks, cross-chunk conflict resolution; no lossless-summary claim |
 | Updates | Download/progress, integrity checks, install, launch handshake and rollback | Developer ID, permission continuity, full permission continuity; older backups are managed explicitly |
 | Permissions | In-process diagnostics, ad-hoc builds | Stable Developer ID signing deferred |
@@ -19,8 +19,8 @@ This is an implementation milestone, not completion of the version-one specifica
 ## Next work
 
 1. Broader semantic conflict detection and real-history quality cases. Full-history review now indexes explicit change/test phrases with source offsets, progress and cancellation. It does not resolve contradictory requirements; long records are inspected only through a bounded prefix and reported.
-2. Full real VoiceOver, keyboard-focus and RU/EN failure-message audit; current additions have accessible labels and cancellation.
-3. More native agent formats, exact traversal resume and broader disk/failure benchmarks. APFS shared-block ownership remains unknown.
+2. Broader assistive-technology testing; all sections have keyboard commands, selected-state labels and VoiceOver heading focus. Cancellation/destination/disk-space errors have RU/EN guidance.
+3. More native agent formats and crash-time traversal checkpoints. Saved-stop resume reuses completed subtrees; an unfinished subtree is rescanned. APFS shared-block ownership remains unknown.
 4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.
 
 ## Agent capability matrix
@@ -221,7 +221,7 @@ Implemented FTS metadata traversal, batched atomic scan snapshots with legacy bi
 
 Measured on this Mac using disposable synthetic fixtures: 1,000,000 physical files scanned in 159.09 s, peak process RSS 869,072,896 bytes, compared with 248.14 s / 5,671,190,528 bytes before the traversal change. Both include synthetic 100 MB history import/backup in the same process; fixture creation is excluded from scan duration. Different filesystem cache states make this a local comparison, not a universal speed guarantee. Separate million-record metadata test: save 2.80 s, load+index 22.42 s, peak RSS 1,303,625,728 bytes while retaining original and restored reports. This does not measure the full live UI scan pipeline.
 
-Added Gemini CLI, Continue, Cline and Roo Code readers with structure validation and retained unknown fields; eight native file adapters total. Added bounded source/output comparison and reference-only local-model selection. Short and five-part synthetic 7B cases passed; manual semantic review remains required.
+Added Gemini CLI, Continue, Cline and Roo Code readers with structure validation and retained unknown fields; nine native file/export adapters total. Added bounded source/output comparison and reference-only local-model selection. Short and five-part synthetic 7B cases passed; manual semantic review remains required.
 
 Added verified relocation of existing quarantine payloads to another volume, conflict-safe restoration, and explicit management of completed updater backups with newest protected. Real APFS image cross-volume copy/restore passed using only an owned fixture. Interrupted copy may leave extra copies; no automated pruning of uncertain leftovers. Initial quarantine still requires same-volume placement.
 

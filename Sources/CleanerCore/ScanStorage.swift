@@ -33,7 +33,7 @@ public struct ScanStore: Sendable {
   }
   private struct Folder: Codable { let path: String; let bytes: Int64 }
   private enum Batch: Codable {
-    case metadata(Metadata), files([FileRecord]), folders([Folder]), issues([String]), end
+    case metadata(Metadata), files([FileRecord]), folders([Folder]), issues([String]), checkpoint(ScanCheckpoint), completedDirectories([String]), end
   }
   public func save(_ snapshot: SavedScan) throws {
     let fm = FileManager.default
@@ -45,7 +45,7 @@ public struct ScanStore: Sendable {
     func write(_ batch: Batch) throws {
       try autoreleasepool { var data = try JSONEncoder().encode(batch); data.append(10); try handle.write(contentsOf: data) }
     }
-    try write(.metadata(Metadata(version: 2, date: snapshot.date, roots: snapshot.roots, volumeID: snapshot.volumeID, complete: snapshot.report.complete, progress: snapshot.progress, fileCount: snapshot.report.files.count)))
+    try write(.metadata(Metadata(version: 3, date: snapshot.date, roots: snapshot.roots, volumeID: snapshot.volumeID, complete: snapshot.report.complete, progress: snapshot.progress, fileCount: snapshot.report.files.count)))
     for start in stride(from: 0, to: snapshot.report.files.count, by: 256) {
       try write(.files(Array(snapshot.report.files[start..<min(start+256, snapshot.report.files.count)])))
     }
@@ -57,6 +57,13 @@ public struct ScanStore: Sendable {
     if !folders.isEmpty { try write(.folders(folders)) }
     for start in stride(from: 0, to: snapshot.report.issues.count, by: 256) {
       try write(.issues(Array(snapshot.report.issues[start..<min(start+256, snapshot.report.issues.count)])))
+    }
+    if let checkpoint = snapshot.report.checkpoint {
+      var header = checkpoint; header.completedDirectories = []
+      try write(.checkpoint(header))
+      for start in stride(from: 0, to: checkpoint.completedDirectories.count, by: 256) {
+        try write(.completedDirectories(Array(checkpoint.completedDirectories[start..<min(start + 256, checkpoint.completedDirectories.count)])))
+      }
     }
     try write(.end); try handle.synchronize()
     guard rename(temporary.path, url.path) == 0 else { throw CleanerError.message("Cannot finish scan snapshot; previous result retained") }
@@ -83,11 +90,15 @@ public struct ScanStore: Sendable {
           let batch = try JSONDecoder().decode(Batch.self, from: line)
           switch batch {
           case .metadata(let value):
-            guard metadata == nil, value.version == 2, value.fileCount >= 0 else { throw CleanerError.message("Invalid scan snapshot header") }
+            guard metadata == nil, [2, 3].contains(value.version), value.fileCount >= 0 else { throw CleanerError.message("Invalid scan snapshot header") }
             metadata = value
           case .files(let files): report.files.append(contentsOf: files)
           case .folders(let folders): for folder in folders { report.folders[folder.path] = folder.bytes }
           case .issues(let issues): report.issues.append(contentsOf: issues)
+          case .checkpoint(let checkpoint): report.checkpoint = checkpoint
+          case .completedDirectories(let paths):
+            guard report.checkpoint != nil else { throw CleanerError.message("Invalid resume checkpoint") }
+            report.checkpoint?.completedDirectories.append(contentsOf: paths)
           case .end: ended = true
           }
         }
