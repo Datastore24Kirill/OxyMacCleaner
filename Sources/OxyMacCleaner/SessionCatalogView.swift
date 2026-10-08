@@ -70,6 +70,8 @@ struct SessionCatalogView: View {
             HStack {
               Text(file.modified.formatted() + " · " + ByteCountFormatter.string(fromByteCount: file.bytes, countStyle: .file)).font(.caption)
               Spacer()
+              Button(vm.t("В Finder", "Reveal")) { vm.reveal(file.id) }
+              Button(vm.t("Копировать путь", "Copy path")) { vm.copyPath(file.id) }
               Button(vm.t("Открыть", "Open")) { vm.openAgentSession(file.url) }
                 .disabled(vm.busy || !file.importable)
                 .help(vm.t("Загружает одну историю и проверяет агента и ID сессии. Исходник не меняется.", "Loads one history and validates agent and session ID. Original is unchanged."))

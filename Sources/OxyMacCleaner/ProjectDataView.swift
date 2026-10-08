@@ -148,6 +148,7 @@ struct ProjectDataView: View {
       HStack {
         Button(vm.t("Показать в Finder", "Reveal in Finder")) { vm.reveal(item.id) }.oxyHelp(
           .finder)
+        Button(vm.t("Копировать путь", "Copy path")) { vm.copyPath(item.id) }
         Button(vm.t("Проверить и очистить…", "Check & clean…")) { vm.cleanProjectData(item) }
           .disabled(vm.busy || !item.cleanable || item.issues > 0)
           .help(

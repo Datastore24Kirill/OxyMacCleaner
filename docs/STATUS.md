@@ -1,4 +1,4 @@
-# Implementation status — 0.4.9 Preview
+# Implementation status — 0.4.11 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -265,3 +265,7 @@ Final packaged 0.3.1 installed locally. Live UI automatically detected running O
 ## Приёмка 0.4.9
 
 [Результаты](ACCEPTANCE-0.4.9-RU.md): реальная история Cursor выявила служебные turn_ended, импорт исправлен. Содержание остаётся локально. [Конечные критерии 1.0](RELEASE-GATES-RU.md) разделяют выполненное, пользовательскую очистку и аппаратную матрицу.
+
+## Usability review — 0.4.11
+
+Explicit file/archive selection, filtered batch actions, quarantine restore/delete selection and visible file menus. Selection is cleared when switching file sections or filters. See [section-by-section audit](UX-AUDIT-0.4.11-RU.md). Safety eligibility and dedicated cleanup operations remain in force.

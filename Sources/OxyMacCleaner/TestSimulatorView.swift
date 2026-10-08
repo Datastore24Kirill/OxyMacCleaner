@@ -3,6 +3,8 @@ import CleanerCore
 
 struct TestSimulatorView: View {
   @EnvironmentObject var vm: AppModel
+  @State private var query = ""
+  private var filtered: [SimulatorDevice] { vm.testDevices.filter { query.isEmpty || ($0.name + $0.runtime + $0.id).localizedCaseInsensitiveContains(query) } }
   @State private var selected: Set<String> = []
   @State private var report = ""
   @State private var confirming = false
@@ -27,7 +29,13 @@ struct TestSimulatorView: View {
         Text(vm.t("Тестовых симуляторов пока нет. Xcode создаст их при необходимости.", "No test simulators yet. Xcode creates them when needed."))
       }
       Text(report).font(.caption).textSelection(.enabled)
-      ForEach(vm.testDevices) { device in
+      TextField(vm.t("Поиск имени или версии ОС", "Search name or OS version"), text: $query)
+        .onChange(of: query) { _, _ in selected = [] }
+      SelectionControls(count: selected.count,
+        bytes: selected.allSatisfy { vm.testDeviceSizes[$0] != nil } ? selected.reduce(0) { $0 + (vm.testDeviceSizes[$1] ?? 0) } : nil,
+        canSelect: filtered.contains( where: { $0.removable }),
+        select: { selected = Set(filtered.filter(\.removable).map(\.id)) }, clear: { selected = [] })
+      ForEach(filtered) { device in
         HStack {
           Toggle(isOn: Binding(get: { selected.contains(device.id) }, set: { if $0 { selected.insert(device.id) } else { selected.remove(device.id) } })) {
             VStack(alignment: .leading) {
@@ -35,7 +43,7 @@ struct TestSimulatorView: View {
               Text(device.runtime + " · " + device.state).font(.caption).foregroundStyle(.secondary)
               Text(device.id).font(.caption2).foregroundStyle(.secondary)
             }
-          }.disabled(vm.busy || !device.removable)
+          }.toggleStyle(.checkbox).disabled(vm.busy || !device.removable)
           Spacer()
           Text(vm.testDeviceSizes[device.id].map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—")
         }

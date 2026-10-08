@@ -135,7 +135,7 @@ import UserNotifications
         : t("Обход архивов неполный. См. ошибки.", "Archive inventory incomplete. See issues.")
     }
   }
-  @Published var page = "overview"
+  @Published var page = "overview" { didSet { if oldValue != page { selected = [] } } }
   @Published var developerSection = "archives"
   @Published var worktreeRepository: URL? = UserDefaults.standard.string(forKey: "worktreeRepository").map { URL(fileURLWithPath: $0) }
   @Published var worktreeReviews: [WorktreeReview] = []
@@ -552,10 +552,11 @@ import UserNotifications
       scheduleReminder()
     }
   }
-  func quarantineSelected() {
-    let files = report.files.filter { selected.contains($0.path) }
+  func quarantineSelected(paths: Set<String>? = nil) {
+    let chosen = paths ?? selected
+    let files = report.files.filter { chosen.contains($0.path) }
     guard !files.isEmpty && !busy else { return }
-    for group in duplicates where group.allSatisfy({ selected.contains($0.path) }) {
+    for group in duplicates where group.allSatisfy({ chosen.contains($0.path) }) {
       error = t(
         "Оставьте хотя бы одну копию: \(group[0].name)", "Keep at least one copy: \(group[0].name)")
       return

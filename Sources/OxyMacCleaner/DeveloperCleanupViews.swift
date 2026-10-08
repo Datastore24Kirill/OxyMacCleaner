@@ -107,6 +107,7 @@ struct SimulatorCleanupView: View {
           }
         }.oxyHelp(.selectDevice).toggleStyle(.checkbox).disabled(vm.busy || !device.removable)
       }
+      Text(vm.t("Размер данных устройств здесь не измерен. Для тестовых устройств используйте «Посчитать размеры» в соседнем разделе.", "Device data sizes are not measured here. For test devices, use Measure sizes in their section.")).font(.caption).foregroundStyle(.secondary)
       Divider()
       Text(vm.t("Runtimes — версии ОС", "Runtimes — OS versions")).font(.headline)
       Button(vm.t("Отметить неиспользуемые 90+ дней", "Select unused for 90+ days")) {
@@ -140,7 +141,7 @@ struct SimulatorCleanupView: View {
             let runtimeName = runtime.runtimeIdentifier.components(separatedBy: ".").last ?? "Runtime"
             let runtimeTitle: String = "\(runtimeName) · \(runtime.version) (\(runtime.build))"
             Text(runtimeTitle)
-            let size = runtime.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?"
+            let size = runtime.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? vm.t("Размер не измерен", "Size not measured")
             let deviceCount = vm.simulatorInventory.devices.filter { $0.runtime == runtime.runtimeIdentifier }.count
             let devicesLabel = vm.t("Устройств: ", "Devices: ") + String(deviceCount)
             Text([size, runtime.state, devicesLabel].joined(separator: " · ")).font(.caption)
@@ -169,13 +170,15 @@ struct SimulatorCleanupView: View {
       InventoryLoading(
         isLoaded: !vm.simulatorInventory.devices.isEmpty || !vm.simulatorInventory.runtimes.isEmpty,
         load: vm.readSimulators)
-    ).onChange(of: query) { _, _ in page = 0 }.onChange(of: vm.simulatorInventory.devices.count) {
+    ).onChange(of: query) { _, _ in page = 0; vm.selectedDevices = [] }.onChange(of: vm.simulatorInventory.devices.count) {
       _, _ in page = 0
     }
   }
 }
 struct DerivedDataView: View {
   @EnvironmentObject var vm: AppModel
+  @State private var query = ""
+  private var filtered: [DerivedCache] { vm.derivedCaches.filter { query.isEmpty || ($0.project + $0.workspace + $0.category).localizedCaseInsensitiveContains(query) } }
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("DerivedData").font(.title2.bold())
@@ -217,7 +220,14 @@ struct DerivedDataView: View {
         )
       ).font(.caption).foregroundStyle(.secondary)
       DeveloperReportView()
-      ForEach(vm.derivedCaches) { cache in
+      TextField(vm.t("Поиск проекта или кэша", "Search project or cache"), text: $query)
+        .onChange(of: query) { _, _ in vm.selectedDerived = [] }
+      SelectionControls(count: vm.selectedDerived.count,
+        bytes: vm.derivedCaches.filter { vm.selectedDerived.contains($0.id) }.reduce(0) { $0 + $1.bytes },
+        canSelect: filtered.contains { $0.issues == 0 },
+        select: { vm.selectedDerived = Set(filtered.filter { $0.issues == 0 }.map(\.id)) },
+        clear: { vm.selectedDerived = [] })
+      ForEach(filtered) { cache in
         Toggle(
           isOn: Binding(
             get: { vm.selectedDerived.contains(cache.id) },
@@ -244,6 +254,10 @@ struct DerivedDataView: View {
             }
           }
         }.oxyHelp(.selectDerived).toggleStyle(.checkbox).disabled(vm.busy || cache.issues > 0)
+        HStack {
+          Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(cache.id) }
+          Button(vm.t("Копировать путь", "Copy path")) { vm.copyPath(cache.id) }
+        }.font(.caption)
       }
       Text(DerivedData.root.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
       if let date = vm.derivedReadAt {

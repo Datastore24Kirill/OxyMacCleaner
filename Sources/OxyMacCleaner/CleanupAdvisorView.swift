@@ -5,6 +5,7 @@ struct CleanupAdvisorView: View {
   @EnvironmentObject var vm: AppModel
   @State private var rule = "all"
   @State private var query = ""
+  @State private var selected: Set<String> = []
   private var filtered: [CleanupCandidate] {
     vm.recommendations.filter {
       (rule == "all" || $0.rule.rawValue == rule)
@@ -89,6 +90,15 @@ struct CleanupAdvisorView: View {
           )
           .textFieldStyle(.roundedBorder)
         }
+        let shown = Array(filtered.prefix(1000))
+        let chosen = shown.map(\.file).filter { selected.contains($0.path) }
+        SelectionControls(count: chosen.count, bytes: SpaceEstimate(files: chosen).logical,
+          canSelect: shown.contains { vm.fileSelectable($0.file) },
+          select: { selected = Set(shown.filter { vm.fileSelectable($0.file) }.map { $0.file.path }) },
+          clear: { selected = [] }, shownOnly: true)
+        Button(vm.t("В карантин выбранные…", "Quarantine selected…")) {
+          vm.quarantineSelected(paths: Set(chosen.map(\.path)))
+        }.disabled(vm.busy || chosen.isEmpty)
         if vm.snapshotDate == nil {
           ContentUnavailableView(
             vm.t("Сначала выполните сканирование", "Scan first"), systemImage: "externaldrive")
@@ -106,7 +116,10 @@ struct CleanupAdvisorView: View {
             ForEach(Array(filtered.prefix(1000))) { candidate in
               VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                  Text(candidate.file.name).font(.headline).lineLimit(1)
+                  Toggle(candidate.file.name, isOn: Binding(
+                    get: { selected.contains(candidate.file.path) },
+                    set: { if $0 { selected.insert(candidate.file.path) } else { selected.remove(candidate.file.path) } }
+                  )).toggleStyle(.checkbox).disabled(vm.busy || !vm.fileSelectable(candidate.file)).font(.headline).lineLimit(1)
                   Spacer()
                   Text(size(candidate.file.bytes)).monospacedDigit()
                 }
@@ -123,6 +136,7 @@ struct CleanupAdvisorView: View {
                   Button(vm.t("Проверить и показать", "Validate & reveal")) {
                     vm.reviewCandidate(candidate)
                   }.oxyHelp(.review).disabled(vm.busy)
+                  Menu(vm.t("Действия", "Actions")) { FileActions(path: candidate.file.path, file: candidate.file) }
                   Button(vm.t("Не предлагать этот файл", "Exclude this file")) {
                     vm.protect(candidate.file.path)
                   }.oxyHelp(.protect).disabled(vm.busy)
@@ -145,6 +159,9 @@ struct CleanupAdvisorView: View {
         }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }.onAppear { vm.refreshRecommendations() }
+      .onChange(of: query) { _, _ in selected = [] }
+      .onChange(of: rule) { _, _ in selected = [] }
+      .onChange(of: vm.recommendations.count) { _, _ in selected = [] }
   }
   private func reason(_ candidate: CleanupCandidate) -> String {
     switch candidate.rule {

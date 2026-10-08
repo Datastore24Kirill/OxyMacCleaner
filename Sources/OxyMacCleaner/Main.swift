@@ -84,6 +84,8 @@ struct RootView: View {
   @AccessibilityFocusState(for: .voiceOver) private var headingFocused: Bool
   @EnvironmentObject var updater: AppUpdater
   @State private var showHelp = false
+  @State private var quarantineQuery = ""
+  @State private var selectedQuarantine: Set<UUID> = []
   @EnvironmentObject var vm: AppModel
   let pages: [(String, String, String, String)] = [
     ("overview", "Обзор", "Overview", "square.grid.2x2"),
@@ -91,7 +93,7 @@ struct RootView: View {
     ("map", "Карта диска", "Disk map", "square.grid.3x3.fill"),
     ("files", "Файлы и папки", "Files & folders", "externaldrive"),
     ("duplicates", "Дубликаты", "Duplicates", "square.on.square"),
-    ("archives", "Архивы и загрузки", "Archives", "shippingbox"),
+    ("archives", "Архивы и загрузки", "Archives & downloads", "shippingbox"),
     ("developer", "Xcode и проекты", "Xcode & projects", "hammer"),
     ("agents", "Агенты и контекст", "Agents & context", "text.bubble"),
     ("engine", "Локальный движок", "Local engine", "cpu"),
@@ -137,7 +139,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.10 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.11 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -350,8 +352,8 @@ struct RootView: View {
   }
   var visibleFiles: [FileRecord] {
     vm.report.files.filter {
-      (vm.page != "archives" || $0.category == "Archive")
-        && (vm.categoryFilter == "all" || $0.category == vm.categoryFilter)
+      (vm.page != "archives" || $0.category == "Archive" || Scanner.inside($0.path, vm.home.appendingPathComponent("Downloads").path))
+        && (vm.page == "archives" || vm.categoryFilter == "all" || $0.category == vm.categoryFilter)
         && $0.bytes >= Int64(vm.minimumMB) * 1_000_000
         && (vm.olderThanDays == 0
           || $0.modified < Date().addingTimeInterval(-Double(vm.olderThanDays) * 86400))
@@ -361,12 +363,14 @@ struct RootView: View {
   var files: some View {
     VStack(alignment: .leading) {
       scanButtons
+      if vm.page != "archives" {
       Picker(vm.t("Категория", "Category"), selection: $vm.categoryFilter) {
         Text(vm.t("Все категории", "All categories")).tag("all")
         ForEach(FileCategory.allCases, id: \.rawValue) { kind in
           Text(vm.t(kind.russian, kind.english)).tag(kind.rawValue)
         }
       }.oxyHelp(.category)
+      }
       HStack {
         Picker(vm.t("Размер", "Size"), selection: $vm.minimumMB) {
           Text(vm.t("Любой", "Any")).tag(0)
@@ -395,8 +399,19 @@ struct RootView: View {
             vm.selected.isEmpty || vm.busy)
       }
       SpaceEstimateView()
-      List(visibleFiles.prefix(2000), selection: $vm.selected) { f in
+      SelectionControls(count: vm.selected.count,
+        bytes: SpaceEstimate(files: visibleFiles.filter { vm.selected.contains($0.path) }).logical,
+        canSelect: visibleFiles.prefix(2000).contains { vm.fileSelectable($0) },
+        select: { vm.selected = Set(visibleFiles.prefix(2000).filter { vm.fileSelectable($0) }.map(\.path)) },
+        clear: { vm.selected = [] }, shownOnly: true)
+      if visibleFiles.isEmpty { Text(vm.t("Нет файлов по выбранным условиям. Измените фильтры или выполните сканирование.", "No matching files. Adjust filters or run a scan.")).foregroundStyle(.secondary) }
+      List(visibleFiles.prefix(2000)) { f in
         HStack {
+          Toggle(vm.t("Выбрать ", "Select ") + f.name, isOn: Binding(
+            get: { vm.selected.contains(f.path) },
+            set: { if $0 { vm.selected.insert(f.path) } else { vm.selected.remove(f.path) } }
+          )).labelsHidden().toggleStyle(.checkbox).disabled(vm.busy || !vm.fileSelectable(f))
+            .help(vm.fileSelectable(f) ? vm.t("Выбрать для карантина. Возможность переноса проверяется повторно.", "Select for quarantine. Eligibility is rechecked before moving.") : vm.t("Защищённый объект или жёсткая ссылка. Доступен просмотр в Finder.", "Protected item or hard link. Available for review in Finder."))
           Image(systemName: f.category == "Archive" ? "shippingbox" : "doc").foregroundStyle(.teal)
           VStack(alignment: .leading) {
             Text(f.name).lineLimit(1)
@@ -409,12 +424,15 @@ struct RootView: View {
           } label: {
             Image(systemName: "folder")
           }.oxyHelp(.finder).buttonStyle(.borderless)
-        }.tag(f.path).contextMenu {
-          Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(f.path) }.oxyHelp(
-            .protect)
-          Button(vm.t("Показать в Finder", "Show in Finder")) { vm.reveal(f.path) }.oxyHelp(.finder)
-        }
+          Menu { FileActions(path: f.path, file: f) } label: { Image(systemName: "ellipsis") }
+            .menuStyle(.borderlessButton).fixedSize().accessibilityLabel(vm.t("Действия с файлом", "File actions"))
+        }.contextMenu { FileActions(path: f.path, file: f) }
       }
+      .onChange(of: vm.search) { _, _ in vm.selected = [] }
+      .onChange(of: vm.categoryFilter) { _, _ in vm.selected = [] }
+      .onChange(of: vm.minimumMB) { _, _ in vm.selected = [] }
+      .onChange(of: vm.olderThanDays) { _, _ in vm.selected = [] }
+
       DisclosureGroup(
         vm.t("Крупные папки · сумма размеров файлов", "Large folders · summed logical file sizes")
       ) {
@@ -454,6 +472,15 @@ struct RootView: View {
           .disabled(
             vm.selected.isEmpty || vm.busy)
       }
+      HStack {
+        Button(vm.t("Выбрать лишние копии", "Select extra copies")) {
+          vm.selected = Set(vm.duplicates.flatMap { group in
+            group.sorted { $0.path < $1.path }.dropFirst().filter { vm.fileSelectable($0) }.map(\.path)
+          })
+        }.disabled(vm.busy || vm.duplicates.isEmpty)
+          .help(vm.t("Оставляет первую по пути копию в каждой группе. Проверьте, какую копию хотите сохранить.", "Keeps the first path in each group. Review which copy you want to keep."))
+        Button(vm.t("Снять выбор", "Clear selection")) { vm.selected = [] }.disabled(vm.busy || vm.selected.isEmpty)
+      }
       SpaceEstimateView()
       List {
         ForEach(Array(vm.duplicates.enumerated()), id: \.offset) { _, group in
@@ -464,6 +491,8 @@ struct RootView: View {
                   get: { vm.selected.contains(f.path) },
                   set: { if $0 { vm.selected.insert(f.path) } else { vm.selected.remove(f.path) } })
               ) { Text(f.path).font(.caption).textSelection(.enabled) }.oxyHelp(.selectDuplicate)
+                .toggleStyle(.checkbox).disabled(vm.busy || !vm.fileSelectable(f))
+                .contextMenu { FileActions(path: f.path, file: f) }
             }
           }
         }
@@ -624,6 +653,10 @@ struct RootView: View {
     }
   }
   var engine: some View { EnginePanel() }
+  var visibleQuarantine: [QuarantineEntry] {
+    vm.entries.filter { ["quarantined", "prepared", "restoring", "attention", "restored-copy"].contains($0.state)
+      && (quarantineQuery.isEmpty || $0.original.localizedCaseInsensitiveContains(quarantineQuery)) }
+  }
   var quarantine: some View {
     VStack(alignment: .leading, spacing: 12) {
       note(
@@ -657,19 +690,23 @@ struct RootView: View {
             vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.isArchive }
           )
       }
-      List(
-        vm.entries.filter {
-          ["quarantined", "prepared", "restoring", "attention", "restored-copy"].contains($0.state)
-        }
-      ) { e in
+      TextField(vm.t("Поиск в карантине", "Search quarantine"), text: $quarantineQuery)
+        .onChange(of: quarantineQuery) { _, _ in selectedQuarantine = [] }
+      QuarantineSelection(selected: $selectedQuarantine, entries: visibleQuarantine)
+      if visibleQuarantine.isEmpty { Text(vm.t("В карантине нет подходящих объектов.", "No matching quarantine items.")).foregroundStyle(.secondary) }
+      List(visibleQuarantine) { e in
         VStack(alignment: .leading, spacing: 8) {
-          Text(URL(fileURLWithPath: e.original).lastPathComponent).font(.headline)
+          Toggle(URL(fileURLWithPath: e.original).lastPathComponent, isOn: Binding(
+            get: { selectedQuarantine.contains(e.id) },
+            set: { if $0 { selectedQuarantine.insert(e.id) } else { selectedQuarantine.remove(e.id) } }
+          )).toggleStyle(.checkbox).font(.headline).disabled(e.state != "quarantined")
           Text(
             (e.kind == "directory" ? vm.t("Папка", "Folder") : vm.t("Файл", "File")) + " · "
               + vm.quarantineState(e.state)
           ).font(.caption).foregroundStyle(.secondary)
           Text(e.original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
           if let external = e.externalPayload { Text(external).font(.caption).textSelection(.enabled) }
+          Button(vm.t("Копировать исходный путь", "Copy original path")) { vm.copyPath(e.original) }.font(.caption)
           QuarantineInspectionView(entry: e)
           HStack {
             Text(size(e.bytes))

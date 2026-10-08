@@ -162,6 +162,7 @@ struct WorktreeView: View {
       HStack {
         Button(vm.t("Показать в Finder", "Reveal in Finder")) { vm.reveal(review.id) }.oxyHelp(
           .finder)
+        Button(vm.t("Копировать путь", "Copy path")) { vm.copyPath(review.id) }
         Button(vm.t("Удалить дерево…", "Remove worktree…"), role: .destructive) {
           vm.removeWorktree(review)
         }

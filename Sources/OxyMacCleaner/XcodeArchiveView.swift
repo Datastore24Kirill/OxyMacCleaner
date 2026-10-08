@@ -4,6 +4,7 @@ import SwiftUI
 struct XcodeArchiveView: View {
   @EnvironmentObject var vm: AppModel
   @State private var query = ""
+  @State private var selected: Set<String> = []
   @State private var onlyReview = false
   @State private var archivePage = 0
   private var decisions: [String: ArchiveRetention.Decision] {
@@ -100,6 +101,19 @@ struct XcodeArchiveView: View {
         Toggle(vm.t("Только сверх лимита", "Only beyond limit"), isOn: $onlyReview).oxyHelp(
           .beyondFilter)
       }
+      let chosen = archives.filter { selected.contains($0.path) && ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }
+      SelectionControls(count: chosen.count, bytes: chosen.reduce(0) { $0 + $1.bytes },
+        canSelect: archives.contains { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) },
+        select: { selected = Set(archives.filter { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }.map(\.path)) },
+        clear: { selected = [] })
+      HStack {
+        Button(vm.t("Удалить выбранные…", "Delete selected…"), role: .destructive) {
+          vm.processSelectedArchives(chosen, deleteImmediately: true)
+        }
+        Button(vm.t("В карантин выбранные…", "Quarantine selected…")) {
+          vm.processSelectedArchives(chosen, deleteImmediately: false)
+        }
+      }.disabled(vm.busy || chosen.isEmpty)
       if let date = vm.archiveScanDate {
         Text(
           vm.t("Проверено: ", "Checked: ") + date.formatted()
@@ -132,6 +146,11 @@ struct XcodeArchiveView: View {
       ForEach(archives.dropFirst(archivePage * 10).prefix(10)) { archive in
         VStack(alignment: .leading, spacing: 7) {
           HStack {
+            Toggle(vm.t("Выбрать ", "Select ") + archive.name, isOn: Binding(
+              get: { selected.contains(archive.path) },
+              set: { if $0 { selected.insert(archive.path) } else { selected.remove(archive.path) } }
+            )).labelsHidden().toggleStyle(.checkbox)
+              .disabled(vm.busy || !ArchiveRetention.permits(decisions[archive.path], explicitlySelected: true))
             Text(archive.name).font(.headline)
             Text("\(archive.version ?? "?") (\(archive.build ?? "?"))").foregroundStyle(.secondary)
             Spacer()
@@ -176,6 +195,7 @@ struct XcodeArchiveView: View {
             ).font(.caption).foregroundStyle(.secondary)
           }
           Menu(vm.t("Действия с архивом", "Archive actions")) {
+            Button(vm.t("Копировать путь", "Copy path")) { vm.copyPath(archive.path) }
             Button(vm.t("Проверить символы отладки", "Check debug symbols")) {
               vm.checkArchiveSymbols(archive)
             }.oxyHelp(.symbols)
@@ -217,9 +237,10 @@ struct XcodeArchiveView: View {
       ).font(.caption).foregroundStyle(.secondary)
     }
     .modifier(InventoryLoading(isLoaded: vm.archiveScanDate != nil, load: vm.scanArchives))
-    .onChange(of: query) { _, _ in archivePage = 0 }
-    .onChange(of: onlyReview) { _, _ in archivePage = 0 }
-    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0 }
+    .onChange(of: query) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: onlyReview) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: vm.pinnedArchives) { _, _ in selected.subtract(vm.pinnedArchives) }
+    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0; selected = [] }
   }
   private func decision(_ archive: XcodeArchive) -> String {
     switch decisions[archive.path] {

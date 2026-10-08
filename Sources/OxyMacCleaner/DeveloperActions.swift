@@ -182,12 +182,16 @@ extension AppModel {
   func quarantineExcessArchives() { processExcessArchives(deleteImmediately: false) }
   func deleteExcessArchives() { processExcessArchives(deleteImmediately: true) }
   func quarantineArchive(_ archive: XcodeArchive) {
-    processExcessArchives(deleteImmediately: false, selected: archive)
+    processExcessArchives(deleteImmediately: false, selected: [archive])
   }
   func deleteArchive(_ archive: XcodeArchive) {
-    processExcessArchives(deleteImmediately: true, selected: archive)
+    processExcessArchives(deleteImmediately: true, selected: [archive])
   }
-  private func processExcessArchives(deleteImmediately: Bool, selected: XcodeArchive? = nil) {
+  func processSelectedArchives(_ archives: [XcodeArchive], deleteImmediately: Bool) {
+    guard !archives.isEmpty else { return }
+    processExcessArchives(deleteImmediately: deleteImmediately, selected: archives)
+  }
+  private func processExcessArchives(deleteImmediately: Bool, selected: [XcodeArchive]? = nil) {
     guard !busy else { return }
     let root = archiveRoot
     var chosenBackup: URL?
@@ -235,7 +239,7 @@ extension AppModel {
           fresh.archives, keep: archiveKeep, pinned: pinnedArchives)
         let candidates = fresh.archives.filter {
           if let selected {
-            return $0 == selected && ArchiveRetention.permits(
+            return selected.contains($0) && ArchiveRetention.permits(
               decisions[$0.path], explicitlySelected: true)
           }
           return decisions[$0.path] == .review
@@ -281,8 +285,8 @@ extension AppModel {
         let selectionNote = selected == nil
           ? t("Операция включает все архивы сверх лимита, независимо от фильтра.",
               "Includes all archives beyond the limit regardless of filters.")
-          : t("Выбран только этот архив. Лимит хранения для ручного действия не применяется. Если это последний архив приложения, в Organizer не останется его архивов. Архив и dSYM могут потребоваться для разбора сбоев выпущенной версии.",
-              "Only this archive is selected. Manual selection overrides the count limit. If this is the application's last archive, none will remain in Organizer. The archive and dSYMs may be needed to diagnose released-version crashes.")
+          : t("Обрабатываются только отмеченные архивы. Лимит хранения для ручного действия не применяется. Если это последний архив приложения, в Organizer не останется его архивов. Архив и dSYM могут потребоваться для разбора сбоев выпущенной версии.",
+              "Only the selected archives are processed. Manual selection overrides the count limit. If this is the application's last archive, none will remain in Organizer. The archive and dSYMs may be needed to diagnose released-version crashes.")
         let names = plans.prefix(8).map { $0.source.lastPathComponent }.joined(separator: "\n")
         let extra =
           plans.count > 8
@@ -290,7 +294,7 @@ extension AppModel {
         guard
           confirm(
             deleteImmediately
-              ? (selected == nil ? t("Удалить архивы сверх лимита?", "Delete archives beyond the limit?") : t("Удалить выбранный архив?", "Delete selected archive?"))
+              ? (selected == nil ? t("Удалить архивы сверх лимита?", "Delete archives beyond the limit?") : t("Удалить выбранные архивы?", "Delete selected archives?"))
               : t("Перенести архивы в карантин?", "Quarantine archives?"),
             "\(plans.count) · "
               + ByteCountFormatter.string(
@@ -322,7 +326,7 @@ extension AppModel {
                 throw CleanerError.message("Inventory changed or incomplete")
               }
               let rules = ArchiveRetention.decisions(current.archives, keep: keep, pinned: pins)
-              guard ArchiveRetention.permits(rules[preview.source.path], explicitlySelected: selected?.path == preview.source.path),
+              guard ArchiveRetention.permits(rules[preview.source.path], explicitlySelected: selected?.contains(where: { $0.path == preview.source.path }) == true),
                 let archive = current.archives.first(where: { $0.path == preview.source.path }),
                 try DirectoryManifest.capture(preview.source, cancellation: token)
                   == preview.manifest
@@ -346,7 +350,7 @@ extension AppModel {
                   throw CleanerError.message("Archive changed while preparing backup")
                 }
               }
-              let retained = ArchiveRetention.retainedPaths(rules, explicitlySelected: selected?.path)
+              let retained = ArchiveRetention.retainedPaths(rules, explicitlySelected: selected?.contains(where: { $0.path == preview.source.path }) == true ? preview.source.path : nil)
               if deleteImmediately {
                 try store.deleteArchive(
                   plan, pinned: pins, retained: retained, protectedPaths: excluded,

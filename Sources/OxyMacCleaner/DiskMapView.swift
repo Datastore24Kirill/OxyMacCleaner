@@ -13,6 +13,7 @@ struct DiskMapView: View {
     ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
   }
   var body: some View {
+    let files = Dictionary(vm.report.files.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
     VStack(alignment: .leading, spacing: 12) {
       HStack {
         Button {
@@ -62,14 +63,20 @@ struct DiskMapView: View {
             } label: {
               Image(systemName: "arrow.up.right.square")
             }.oxyHelp(.finder).buttonStyle(.borderless)
+            Menu(vm.t("Действия", "Actions")) {
+              if node.directory {
+                Button(vm.t("Открыть папку на карте", "Explore folder")) { vm.mapPath = node.path }
+                Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineDirectory(node.path) }.disabled(vm.busy)
+              }
+              FileActions(path: node.path, file: files[node.path])
+            }.fixedSize()
           }.contextMenu {
             if node.directory {
               Button(vm.t("Переместить папку в карантин…", "Quarantine folder…")) {
                 vm.quarantineDirectory(node.path)
               }.oxyHelp(.quarantine).disabled(vm.busy)
             }
-            Button(vm.t("Защитить / исключить", "Protect / exclude")) { vm.protect(node.path) }
-              .oxyHelp(.protect)
+            FileActions(path: node.path, file: files[node.path])
           }
         }
         Text(
