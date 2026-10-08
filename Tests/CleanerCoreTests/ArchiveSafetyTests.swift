@@ -279,6 +279,34 @@ final class ArchiveSafetyTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(plan.backup).path))
   }
 
+  func testExplicitLastArchiveCanQuarantineRestoreAndDeleteButBulkCannot() throws {
+    let source = try fixture()
+    let archive = try XcodeArchives.read(source)
+    let rules = ArchiveRetention.decisions([archive], keep: 3, pinned: [])
+    XCTAssertEqual(rules[source.path], .latest)
+    XCTAssertFalse(ArchiveRetention.permits(rules[source.path], explicitlySelected: false))
+    XCTAssertTrue(ArchiveRetention.permits(rules[source.path], explicitlySelected: true))
+    let store = try QuarantineStore(root: root.appendingPathComponent("quarantine"))
+    let plan = try ArchiveTransfer.prepare(archive: archive)
+    XCTAssertThrowsError(try store.moveArchive(plan, pinned: [], retained: ArchiveRetention.retainedPaths(rules)))
+    let retained = ArchiveRetention.retainedPaths(rules, explicitlySelected: source.path)
+    let entry = try store.moveArchive(plan, pinned: [], retained: retained)
+    try store.restore(entry)
+    XCTAssertEqual(try DirectoryManifest.capture(source), plan.manifest)
+    let restored = try ArchiveTransfer.prepare(archive: XcodeArchives.read(source))
+    XCTAssertThrowsError(try store.deleteArchive(restored, pinned: [], retained: ArchiveRetention.retainedPaths(rules), idle: {}))
+    try store.deleteArchive(restored, pinned: [], retained: retained, idle: {})
+    XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+  }
+  func testExplicitSelectionNeverOverridesPinsUnknownOrOtherLatestArchives() {
+    let rules: [String: ArchiveRetention.Decision] = ["selected": .latest, "other": .latest, "pin": .pinned, "bad": .unknown, "old": .review]
+    XCTAssertEqual(ArchiveRetention.retainedPaths(rules, explicitlySelected: "selected"), ["other", "pin", "bad"])
+    for decision in [ArchiveRetention.Decision.pinned, .unknown] {
+      XCTAssertFalse(ArchiveRetention.permits(decision, explicitlySelected: true))
+    }
+    XCTAssertFalse(ArchiveRetention.permits(nil, explicitlySelected: true))
+    XCTAssertTrue(ArchiveRetention.retainedPaths(rules, explicitlySelected: "pin").contains("pin"))
+  }
   func testCleanupWithoutBackupOrSymbols() throws {
     let source = try fixture()
     try FileManager.default.removeItem(at: source.appendingPathComponent("dSYMs"))

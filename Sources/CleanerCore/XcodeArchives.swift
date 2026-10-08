@@ -26,6 +26,17 @@ public struct ArchiveInventory: Sendable {
 }
 public enum ArchiveRetention {
   public enum Decision: String, Sendable { case pinned, latest, review, unknown }
+  /// Explicit selection may override the count limit, never pins or unknown metadata.
+  public static func permits(_ decision: Decision?, explicitlySelected: Bool) -> Bool {
+    decision == .review || (explicitlySelected && decision == .latest)
+  }
+  public static func retainedPaths(
+    _ decisions: [String: Decision], explicitlySelected: String? = nil
+  ) -> Set<String> {
+    Set(decisions.filter {
+      !permits($0.value, explicitlySelected: $0.key == explicitlySelected)
+    }.map(\.key))
+  }
   public static func decisions(_ archives: [XcodeArchive], keep: Int, pinned: Set<String>)
     -> [String: Decision]
   {

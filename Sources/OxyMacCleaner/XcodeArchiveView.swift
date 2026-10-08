@@ -88,8 +88,8 @@ struct XcodeArchiveView: View {
       }.oxyHelp(.retention).disabled(vm.busy)
       Text(
         vm.t(
-          "«Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
-          "Keep protected excludes the archive from cleanup regardless of the limit. These archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
+          "Лимит действует на массовую очистку. Отдельный архив, даже последний, можно удалить или перенести в карантин через «Действия с архивом». «Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
+          "The limit applies to bulk cleanup. Archive actions can delete or quarantine an individual archive, including the last one. Keep protected excludes the archive from cleanup regardless of the limit. These archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
         )
       )
       .font(.caption).foregroundStyle(.secondary)
@@ -181,9 +181,13 @@ struct XcodeArchiveView: View {
             }.oxyHelp(.symbols)
             Button(vm.t("Резервная копия…", "Back up archive…")) { vm.backupArchive(archive) }
               .oxyHelp(.backup)
-            if decisions[archive.path] == .review {
+            if ArchiveRetention.permits(decisions[archive.path], explicitlySelected: true) {
+              Button(vm.t("Удалить…", "Delete…"), role: .destructive) {
+                vm.deleteArchive(archive)
+              }.help(vm.t("Удалить только этот архив после проверки и подтверждения. Без Корзины. Лимит хранения не мешает ручному выбору.", "Delete only this archive after checks and confirmation, without Trash. Manual selection overrides the count limit."))
               Button(vm.t("В карантин…", "Quarantine…")) { vm.quarantineArchive(archive) }.oxyHelp(
                 .archiveQuarantine)
+                .help(vm.t("Перенести только этот архив, даже последний. Можно восстановить; место пока не освободится.", "Move only this archive, including the last one. Restorable, but space is not freed yet."))
             }
           }.fixedSize().disabled(vm.busy)
           if !archive.issues.isEmpty {

@@ -181,7 +181,13 @@ extension AppModel {
   }
   func quarantineExcessArchives() { processExcessArchives(deleteImmediately: false) }
   func deleteExcessArchives() { processExcessArchives(deleteImmediately: true) }
-  private func processExcessArchives(deleteImmediately: Bool) {
+  func quarantineArchive(_ archive: XcodeArchive) {
+    processExcessArchives(deleteImmediately: false, selected: archive)
+  }
+  func deleteArchive(_ archive: XcodeArchive) {
+    processExcessArchives(deleteImmediately: true, selected: archive)
+  }
+  private func processExcessArchives(deleteImmediately: Bool, selected: XcodeArchive? = nil) {
     guard !busy else { return }
     let root = archiveRoot
     var chosenBackup: URL?
@@ -227,9 +233,17 @@ extension AppModel {
         archiveInventory = fresh
         let decisions = ArchiveRetention.decisions(
           fresh.archives, keep: archiveKeep, pinned: pinnedArchives)
-        let candidates = fresh.archives.filter { decisions[$0.path] == .review }
+        let candidates = fresh.archives.filter {
+          if let selected {
+            return $0 == selected && ArchiveRetention.permits(
+              decisions[$0.path], explicitlySelected: true)
+          }
+          return decisions[$0.path] == .review
+        }
         guard !candidates.isEmpty else {
-          throw CleanerError.message("No archives beyond retention limit")
+          throw CleanerError.message(t(
+            "Нет подходящих архивов. Архив мог измениться, быть защищён или иметь неполные данные. Обновите список.",
+            "No eligible archives. The archive may have changed, be protected, or have incomplete metadata. Refresh the list."))
         }
         var plans: [ArchiveTransferPlan] = []
         for (index, archive) in candidates.enumerated() {
@@ -264,6 +278,11 @@ extension AppModel {
             "Архивы будут перенесены в карантин: можно восстановить, но место пока не освободится. Отдельная копия не нужна.",
             "Archives will move to quarantine: they can be restored but still occupy space. No separate backup is needed."
           )
+        let selectionNote = selected == nil
+          ? t("Операция включает все архивы сверх лимита, независимо от фильтра.",
+              "Includes all archives beyond the limit regardless of filters.")
+          : t("Выбран только этот архив. Лимит хранения для ручного действия не применяется. Если это последний архив приложения, в Organizer не останется его архивов. Архив и dSYM могут потребоваться для разбора сбоев выпущенной версии.",
+              "Only this archive is selected. Manual selection overrides the count limit. If this is the application's last archive, none will remain in Organizer. The archive and dSYMs may be needed to diagnose released-version crashes.")
         let names = plans.prefix(8).map { $0.source.lastPathComponent }.joined(separator: "\n")
         let extra =
           plans.count > 8
@@ -271,15 +290,15 @@ extension AppModel {
         guard
           confirm(
             deleteImmediately
-              ? t("Удалить архивы сверх лимита?", "Delete archives beyond the limit?")
+              ? (selected == nil ? t("Удалить архивы сверх лимита?", "Delete archives beyond the limit?") : t("Удалить выбранный архив?", "Delete selected archive?"))
               : t("Перенести архивы в карантин?", "Quarantine archives?"),
             "\(plans.count) · "
               + ByteCountFormatter.string(
                 fromByteCount: plans.reduce(0) { $0 + $1.manifest.bytes }, countStyle: .file)
-              + "\n" + names + extra + "\n\n" + explanation + "\n\n"
+              + "\n" + names + extra + "\n\n" + explanation + "\n\n" + selectionNote + "\n\n"
               + t(
-                "Операция включает все архивы сверх лимита, независимо от фильтра. Защищённые архивы пропускаются. Xcode можно оставить открытым. Архивы, изменённые за последние 10 минут, пропускаются. Объём логический: реальная экономия может отличаться.",
-                "Includes all archives beyond the limit regardless of filters. Protected archives are skipped. Xcode may remain open. Archives modified within 10 minutes are skipped. Logical size may differ from reclaimed space."
+                "Защищённые архивы пропускаются. Xcode можно оставить открытым. Архивы, изменённые за последние 10 минут, пропускаются. Объём логический: реальная экономия может отличаться.",
+                "Protected archives are skipped. Xcode may remain open. Archives modified within 10 minutes are skipped. Logical size may differ from reclaimed space."
               ),
             destructive: deleteImmediately,
             action: deleteImmediately ? t("Удалить", "Delete") : t("В карантин", "Quarantine"))
@@ -303,7 +322,7 @@ extension AppModel {
                 throw CleanerError.message("Inventory changed or incomplete")
               }
               let rules = ArchiveRetention.decisions(current.archives, keep: keep, pinned: pins)
-              guard rules[preview.source.path] == .review,
+              guard ArchiveRetention.permits(rules[preview.source.path], explicitlySelected: selected?.path == preview.source.path),
                 let archive = current.archives.first(where: { $0.path == preview.source.path }),
                 try DirectoryManifest.capture(preview.source, cancellation: token)
                   == preview.manifest
@@ -327,7 +346,7 @@ extension AppModel {
                   throw CleanerError.message("Archive changed while preparing backup")
                 }
               }
-              let retained = Set(rules.filter { $0.value != .review }.map(\.key))
+              let retained = ArchiveRetention.retainedPaths(rules, explicitlySelected: selected?.path)
               if deleteImmediately {
                 try store.deleteArchive(
                   plan, pinned: pins, retained: retained, protectedPaths: excluded,
