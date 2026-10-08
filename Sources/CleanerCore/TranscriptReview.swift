@@ -59,6 +59,36 @@ public final class TranscriptReview: @unchecked Sendable {
       result.contains(ContextSafety.redact(excerpt))
     }
   }
+  /// Candidate pairs, not semantic verdicts. Matching uses shared literal identifiers.
+  public struct DecisionPair: Sendable, Identifiable {
+    public let earlier: Finding
+    public let later: Finding
+    public let sharedTerms: [String]
+    public var id: String { "\(earlier.offset):\(later.offset)" }
+  }
+  public static func decisionPairs(in items: [Finding]) -> [DecisionPair] {
+    let stop: Set<String> = ["user", "пользователь", "requirement", "требование", "delete", "удалить", "удаление", "never", "instead", "только", "вместо", "отменяю", "следующий", "проверить", "please", "нужно", "будет", "теперь", "после", "before", "after", "with", "this", "that", "must", "request", "earlier", "cancel"]
+    func terms(_ text: String) -> Set<String> {
+      // Drop the source citation so different lines cannot match through L123.
+      let body = text.replacingOccurrences(of: #"^\[L[0-9]+\]\s*"#, with: "", options: .regularExpression)
+      return Set(body.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+        .filter { $0.count >= 4 && !stop.contains($0) && $0.rangeOfCharacter(from: .letters) != nil })
+    }
+    let ordered = items.sorted { $0.offset < $1.offset }
+    var result: [DecisionPair] = []
+    for (index, later) in ordered.enumerated() where later.signals.contains(.changedDecision) || later.signals.contains(.restriction) {
+      let laterTerms = terms(later.excerpt)
+      for earlier in ordered[..<index].reversed() {
+        guard earlier.signals.contains(.requirement) || earlier.signals.contains(.changedDecision) || earlier.signals.contains(.restriction) else { continue }
+        let shared = terms(earlier.excerpt).intersection(laterTerms).sorted()
+        guard !shared.isEmpty else { continue }
+        result.append(DecisionPair(earlier: earlier, later: later, sharedTerms: shared))
+        break // nearest earlier matching signal, never choose an authoritative decision
+      }
+      if result.count == 50 { break }
+    }
+    return result
+  }
   public struct Findings: Sendable {
     public let items: [Finding]
     public let matches: Int

@@ -1,4 +1,4 @@
-# Implementation status — 0.4.6 Preview
+# Implementation status — 0.4.7 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -27,6 +27,10 @@ Confirmed cleanup now reconciles files, folder/category totals, disk index and t
 ## Review/access hardening — 0.4.6
 
 Explicit unlabelled decision changes, restrictions and pending work survive model omission. Review highlights exact redacted fragments absent from the result; citation alone is insufficient. Access denial is surfaced at every process launch, not suppressed by a reviewed-build preference. Batch results distinguish failed/skipped and unstarted work. User-data cleanup awaits a concrete selection; only disposable fixtures are used. See [acceptance](ACCEPTANCE-0.4.6-RU.md).
+
+## Specification follow-up — 0.4.7
+
+Related decision pairs compare the nearest earlier signal sharing literal terms with a later restriction/change. This works across read chunks but is not semantic conflict resolution; source roles/project identity still require review. At most the first 200 signals and 50 pairs are considered. Composer/Bundler/Gradle/Maven and requirements-based Python catalogs are review-only and avoid overlapping paths. Project markers and owners are displayed. Permission, stale-data and activity errors have RU/EN guidance. See [acceptance](ACCEPTANCE-0.4.7-RU.md).
 
 ## Next work
 

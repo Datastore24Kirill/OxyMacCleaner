@@ -11,6 +11,9 @@ public enum ErrorPresentation {
     else if text.contains("destination") && (text.contains("exists") || text.contains("changed")) { common = ("По выбранному пути уже есть данные или назначение изменилось. Выберите другую папку либо имя.", "The destination exists or has changed. Choose another folder or name.") }
     else if text.contains("no space") || text.contains("insufficient space") { common = ("Не хватает места на целевом диске. Исходные копии не удаляйте; освободите место и повторите операцию.", "The destination disk has insufficient space. Keep the source copies, free space and retry.") }
     else if text.contains("no such file") || text.contains("disconnected") || text.contains("offline") { common = ("Объект или диск недоступен. Подключите диск и обновите список.", "The item or disk is unavailable. Reconnect the disk and refresh the list.") }
+    else if text.contains("permission") || text.contains("not permitted") || text.contains("access denied") { common = ("Нет доступа к объекту. Откройте «Доступ к диску», проверьте разрешение и обновите список.", "Access denied. Open Disk access, check permission and refresh the list.") }
+    else if text.contains("changed") || text.contains("scan again") { common = ("Данные изменились после проверки. Обновите список и выберите объекты заново.", "Data changed after inspection. Refresh the list and select the items again.") }
+    else if text.contains("protected") || text.contains("active") || text.contains("xcodebuild") { common = ("Объект защищён или используется. Проверьте причину блокировки; принудительное удаление не выполняется.", "The item is protected or in use. Check the blocking reason; forced deletion is not performed.") }
     else { common = nil }
     if let common { return (russian ? common.0 + "\n\nПодробности: " : common.1 + "\n\nDetails: ") + raw }
     guard russian else { return raw }

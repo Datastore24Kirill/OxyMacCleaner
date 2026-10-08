@@ -30,7 +30,7 @@ extension AppModel {
         projectDataDate = Date()
         status = t("Данные проекта прочитаны", "Project data inspected")
       } catch {
-        projectDataIssue = error.localizedDescription
+        projectDataIssue = ErrorPresentation.message(error.localizedDescription, russian: language != "en")
         status = t("Проверка неполная", "Inspection incomplete")
       }
       busy = false
@@ -128,6 +128,7 @@ struct ProjectDataView: View {
         Spacer()
         Text(ByteCountFormatter.string(fromByteCount: item.bytes, countStyle: .file))
       }
+      Text(ProjectData.evidence(for: item, russian: vm.language != "en")).font(.caption).foregroundStyle(.secondary)
       Text(item.id).font(.caption).textSelection(.enabled)
       Text(item.recovery).font(.callout)
       Text(

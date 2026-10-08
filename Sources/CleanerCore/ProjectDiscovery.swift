@@ -16,10 +16,10 @@ public enum ProjectDiscovery {
     let root = root.standardizedFileURL.resolvingSymlinksInPath()
     var result = ProjectDiscoveryResult(); var found: [String: Set<String>] = [:]
     let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
-    let skipped: Set<String> = ["node_modules", "Pods", ".build", ".venv", "venv", "target", ".next", "Library", ".Trash"]
+    let skipped: Set<String> = ["node_modules", "Pods", ".build", ".venv", "venv", "target", ".next", "vendor", ".gradle", "Library", ".Trash"]
     func inspect(_ url: URL) {
       let name = url.lastPathComponent
-      if ["Package.swift", "package.json", "Cargo.toml", "pyproject.toml", "Podfile", ".git"].contains(name) || ["xcodeproj", "xcworkspace"].contains(url.pathExtension) {
+      if ["Package.swift", "package.json", "Cargo.toml", "pyproject.toml", "Podfile", "composer.json", "Gemfile", "settings.gradle", "settings.gradle.kts", "pom.xml", "requirements.txt", ".git"].contains(name) || ["xcodeproj", "xcworkspace"].contains(url.pathExtension) {
         let parent = url.deletingLastPathComponent()
         if GitWorktrees.locationAllowed(parent) { found[parent.path, default: []].insert(name) }
       }

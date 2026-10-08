@@ -76,6 +76,27 @@ struct ContextComparisonView: View {
               }.frame(height: 145)
             }
           }
+          if let findings {
+            let pairs = TranscriptReview.decisionPairs(in: findings.items)
+            DisclosureGroup(vm.t("Связанные решения для сверки: ", "Related decisions to compare: ") + String(pairs.count)) {
+              Text(vm.t("Совпадение слов в первых 200 подсказках, до 50 пар. Это не доказательство противоречия: проверьте проект, автора и смысл. Более поздняя строка не становится автоматически действующей.", "Shared words in the first 200 signals, up to 50 pairs. This does not prove a conflict: check the project, author and meaning. A later line is not automatically authoritative.")).font(.caption)
+              ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                  ForEach(pairs) { pair in
+                    HStack(alignment: .top) {
+                      Button { load(pair.earlier.offset) } label: {
+                        VStack(alignment: .leading) { Text(vm.t("Ранее", "Earlier")).bold(); Text(pair.earlier.excerpt) }
+                      }
+                      Button { load(pair.later.offset) } label: {
+                        VStack(alignment: .leading) { Text(vm.t("Позднее", "Later")).bold(); Text(pair.later.excerpt) }
+                      }
+                    }.buttonStyle(.plain).font(.caption).disabled(loading)
+                      .help(vm.t("Открыть выбранную строку исходника; решение принимаете вы.", "Open the selected source line; you decide which applies."))
+                  }
+                }
+              }.frame(height: 100)
+            }
+          }
           HStack(alignment: .top) {
             pane(vm.t("Исходник", "Source"), text: page?.text ?? "")
             pane(vm.t("Результат", "Result"), text: vm.output)
@@ -102,7 +123,7 @@ struct ContextComparisonView: View {
         let value = try await Task.detached { try TranscriptReview(transcript) }.value
         let first = try await Task.detached { try value.page() }.value
         reader = value; page = first; showing = true
-      } catch { vm.error = error.localizedDescription }
+      } catch { vm.error = ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }
   }
   private func review() {
@@ -121,7 +142,7 @@ struct ContextComparisonView: View {
           }
         }.value
         try cancellation.check(); findings = value; message = ""
-      } catch { message = cancellation.cancelled ? vm.t("Проверка остановлена", "Review stopped") : error.localizedDescription }
+      } catch { message = cancellation.cancelled ? vm.t("Проверка остановлена", "Review stopped") : ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }
   }
   private func load(_ offset: Int, remember: Bool = true) {
@@ -131,7 +152,7 @@ struct ContextComparisonView: View {
       do {
         let result = try await Task.detached { try reader.page(at: offset) }.value
         if remember, let old = page { offsets.append(old.offset) }; page = result; message = ""
-      } catch { message = error.localizedDescription }
+      } catch { message = ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }
   }
   private func search(next: Bool) {
@@ -148,7 +169,7 @@ struct ContextComparisonView: View {
         try cancellation.check()
         if let result { if let old = page { offsets.append(old.offset) }; page = result; message = "" }
         else { message = vm.t("Совпадений дальше нет.", "No further matches.") }
-      } catch { message = cancellation.cancelled ? vm.t("Поиск остановлен", "Search stopped") : error.localizedDescription }
+      } catch { message = cancellation.cancelled ? vm.t("Поиск остановлен", "Search stopped") : ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }
   }
   private func pane(_ title: String, text: String) -> some View {

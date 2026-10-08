@@ -24,6 +24,18 @@ public enum ProjectData {
     let cleanable: Bool
   }
   private static let rules: [Rule] = [
+    .init(id: "Composer dependencies", path: "vendor", marker: "composer.json",
+      recovery: "composer install · Нужны lock-файл и доступ к источникам; возможны локальные правки / Requires lockfile and registry access; local edits may exist.", cleanable: false),
+    .init(id: "Bundler dependencies", path: "vendor/bundle", marker: "Gemfile",
+      recovery: "bundle install · Нужны Gemfile.lock и источники; возможны локальные правки / Requires Gemfile.lock and sources; local edits may exist.", cleanable: false),
+    .init(id: "Gradle project data", path: ".gradle", marker: "settings.gradle",
+      recovery: "Gradle · Содержимое требует ручной проверки / Contents require manual review.", cleanable: false),
+    .init(id: "Gradle Kotlin project data", path: ".gradle", marker: "settings.gradle.kts",
+      recovery: "Gradle · Содержимое требует ручной проверки / Contents require manual review.", cleanable: false),
+    .init(id: "Maven build data", path: "target", marker: "pom.xml",
+      recovery: "Maven · Здесь могут быть нужные артефакты / May contain required build artifacts.", cleanable: false),
+    .init(id: "Python requirements environment", path: ".venv", marker: "requirements.txt",
+      recovery: "Python · Окружение может содержать незаписанные пакеты / Environment may contain undeclared packages.", cleanable: false),
     .init(
       id: "SwiftPM", path: ".build", marker: "Package.swift",
       recovery:
@@ -94,6 +106,7 @@ public enum ProjectData {
       GitWorktrees.locationAllowed(root)
     else { throw CleanerError.message("Protected or noncanonical project path") }
     var result: [ProjectDataItem] = []
+    var seen = Set<String>()
     for rule in rules {
       try cancellation.check()
       let path = root.appendingPathComponent(rule.path)
@@ -102,6 +115,8 @@ public enum ProjectData {
       else { continue }
       var valid = true
       do { _ = try recognized(rule, root: root) } catch { valid = false }
+      guard !seen.contains(where: { Scanner.inside(path.path, $0) }) else { continue }
+      seen.insert(path.path)
       let scan = Scanner.scan(roots: [path], excluded: [], cancellation: cancellation)
       try cancellation.check()
       result.append(
@@ -111,6 +126,14 @@ public enum ProjectData {
           cleanable: rule.cleanable && valid))
     }
     return result
+  }
+  public static func evidence(for item: ProjectDataItem, russian: Bool) -> String {
+    guard let rule = rules.first(where: { $0.id == item.rule }) else {
+      return russian ? "Неизвестное правило: только просмотр" : "Unknown rule: review only"
+    }
+    return (russian ? "Проект: " : "Project: ") + item.project.lastPathComponent
+      + " · " + (russian ? "Признак: " : "Marker: ") + rule.marker
+      + " · " + (russian ? "Правило v1: " : "Rule v1: ") + rule.path
   }
   public static func prepare(
     _ item: ProjectDataItem, exclusions: [String], cancellation: Cancellation = Cancellation(),
