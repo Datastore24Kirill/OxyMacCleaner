@@ -293,7 +293,7 @@ import UserNotifications
       (try? String(contentsOf: support.appendingPathComponent("operations.log"), encoding: .utf8)
         .components(separatedBy: "\n")) ?? []
     reminderTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-      Task { @MainActor in self?.remind() }
+      Task { @MainActor [weak self] in self?.remind() }
     }
   }
   func t(_ ru: String, _ en: String) -> String { language == "en" ? en : ru }

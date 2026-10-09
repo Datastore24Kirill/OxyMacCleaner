@@ -41,31 +41,8 @@ struct XcodeArchiveView: View {
         Toggle(vm.t("Только сверх лимита", "Only beyond limit"), isOn: $onlyReview).oxyHelp(
           .beyondFilter)
       }
-      let chosen = archives.filter { selected.contains($0.path) && ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }
-      SelectionControls(count: chosen.count, bytes: chosen.reduce(0) { $0 + $1.bytes },
-        canSelect: archives.contains { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) },
-        select: { selected = Set(archives.filter { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }.map(\.path)) },
-        clear: { selected = [] })
-      HStack {
-        Button(vm.t("Удалить выбранные…", "Delete selected…"), role: .destructive) {
-          vm.processSelectedArchives(chosen, deleteImmediately: true)
-        }
-        Button(vm.t("В карантин выбранные…", "Quarantine selected…")) {
-          vm.processSelectedArchives(chosen, deleteImmediately: false)
-        }
-      }.disabled(vm.busy || chosen.isEmpty)
-      if let date = vm.archiveScanDate {
-        Text(
-          vm.t("Проверено: ", "Checked: ") + date.formatted()
-            + " · \(vm.archiveInventory.archives.count) " + vm.t("архивов", "archives")
-            + (vm.archiveInventory.complete
-              ? "" : vm.t(" · неполный обход", " · partial inventory"))
-        ).font(.caption)
-      }
-      if !vm.archiveInventory.issues.isEmpty {
-        Text(vm.archiveInventory.issues.prefix(3).joined(separator: "\n")).font(.caption)
-          .foregroundStyle(.orange).textSelection(.enabled)
-      }
+      selectionActions
+      inventoryStatus
       if archives.isEmpty {
         Text(
           vm.t(
@@ -98,6 +75,36 @@ struct XcodeArchiveView: View {
     .onChange(of: onlyReview) { _, _ in archivePage = 0; selected = [] }
     .onChange(of: vm.pinnedArchives) { _, _ in selected.subtract(vm.pinnedArchives) }
     .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0; selected = [] }
+  }
+  @ViewBuilder private var selectionActions: some View {
+      let chosen = archives.filter { selected.contains($0.path) && ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }
+      SelectionControls(count: chosen.count, bytes: chosen.reduce(0) { $0 + $1.bytes },
+        canSelect: archives.contains { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) },
+        select: { selected = Set(archives.filter { ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }.map(\.path)) },
+        clear: { selected = [] })
+      HStack {
+        Button(vm.t("Удалить выбранные…", "Delete selected…"), role: .destructive) {
+          vm.processSelectedArchives(chosen, deleteImmediately: true)
+        }
+        Button(vm.t("В карантин выбранные…", "Quarantine selected…")) {
+          vm.processSelectedArchives(chosen, deleteImmediately: false)
+        }
+      }.disabled(vm.busy || chosen.isEmpty)
+  }
+  @ViewBuilder private var inventoryStatus: some View {
+      if let date = vm.archiveScanDate {
+        Text(inventorySummary(date)).font(.caption)
+      }
+      if !vm.archiveInventory.issues.isEmpty {
+        Text(vm.archiveInventory.issues.prefix(3).joined(separator: "\n")).font(.caption)
+          .foregroundStyle(.orange).textSelection(.enabled)
+      }
+  }
+  private func inventorySummary(_ date: Date) -> String {
+    let checked = vm.t("Проверено: ", "Checked: ") + date.formatted()
+    let count = String(vm.archiveInventory.archives.count) + " " + vm.t("архивов", "archives")
+    let incomplete = vm.archiveInventory.complete ? "" : vm.t(" · неполный обход", " · partial inventory")
+    return checked + " · " + count + incomplete
   }
   private func archiveRow(_ archive: XcodeArchive) -> some View {
         VStack(alignment: .leading, spacing: 7) {
