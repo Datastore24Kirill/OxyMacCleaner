@@ -16,4 +16,4 @@ try store.restore(relocated)
 guard try String(contentsOf: source.appendingPathComponent("a.txt"), encoding: .utf8) == "cross-volume-payload",
   FileManager.default.fileExists(atPath: source.appendingPathComponent("empty").path),
   !FileManager.default.fileExists(atPath: external) else { fatalError("Restore failed") }
-print("PASS: separate APFS volume, folder plus empty child, verified copy, restore, old payload removed")
+print("PASS: separate target volume, folder plus empty child, verified copy, restore, old payload removed")

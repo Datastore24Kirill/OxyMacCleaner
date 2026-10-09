@@ -129,9 +129,11 @@ public final class TranscriptReview: @unchecked Sendable {
     public let items: [Finding]
     public let matches: Int
     public let shortenedRecords: Int
+    public let skipped: Int
+    public let nextOffset: Int?
   }
-  public func reviewIndex(cancellation: Cancellation = Cancellation(), progress: @Sendable (Int, Int) -> Void = { _, _ in }) throws -> Findings {
-    var items: [Finding] = []; var matches = 0; var shortened = 0
+  public func reviewIndex(after: Int? = nil, cancellation: Cancellation = Cancellation(), progress: @Sendable (Int, Int) -> Void = { _, _ in }) throws -> Findings {
+    var items: [Finding] = []; var matches = 0; var shortened = 0; var skipped = 0; var remaining = 0
     var prefix = Data(); var lineStart = 0; var lineLength = 0; var offset = 0
     func finish() {
       if lineLength > 64_000 { shortened += 1 }
@@ -140,7 +142,11 @@ public final class TranscriptReview: @unchecked Sendable {
       let signals = Self.signals(in: text)
       if !signals.isEmpty {
         matches += 1
-        if items.count < 200 { items.append(Finding(offset: lineStart, excerpt: String(text.prefix(700)), signals: signals)) }
+        if let after, lineStart <= after { skipped += 1 }
+        else {
+          remaining += 1
+          if items.count < 200 { items.append(Finding(offset: lineStart, excerpt: String(text.prefix(700)), signals: signals)) }
+        }
       }
       prefix.removeAll(keepingCapacity: true); lineLength = 0
     }
@@ -160,7 +166,7 @@ public final class TranscriptReview: @unchecked Sendable {
     }
     try cancellation.check()
     if lineLength > 0 { finish() }
-    return Findings(items: items, matches: matches, shortenedRecords: shortened)
+    return Findings(items: items, matches: matches, shortenedRecords: shortened, skipped: skipped, nextOffset: remaining > items.count ? items.last?.offset : nil)
   }
   private func bytes(at offset: Int, count: Int) throws -> Data {
     if let memory { return memory.subdata(in: offset..<min(total, offset + count)) }

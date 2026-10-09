@@ -7,6 +7,19 @@ on:
 permissions:
   contents: read
 jobs:
+  compatibility:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record compatibility environment
+        run: |
+          sw_vers
+          uname -m
+          swift --version
+      - name: Build and test on minimum macOS
+        run: swift test
+  # macOS 14 hosted runners retire November 2, 2026; replace this job
+  # with an explicit minimum-OS test host, never silently macos-latest.
   build:
     runs-on: macos-26
     steps:

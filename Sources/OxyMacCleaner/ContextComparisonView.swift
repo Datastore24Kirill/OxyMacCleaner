@@ -46,7 +46,12 @@ struct ContextComparisonView: View {
           }
           if let findings {
             DisclosureGroup(vm.t("Места для проверки: ", "Review signals: ") + String(findings.matches), isExpanded: $signalsExpanded) {
-              Text(vm.t("Показаны первые 200 совпадений. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "First 200 matches shown. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
+              Text(vm.t("Показано до 200 совпадений на странице. Это подсказки, не доказанные противоречия. Укорочено длинных записей: ", "Up to 200 matches per page. These are signals, not proven contradictions. Long records inspected by prefix only: ") + String(findings.shortenedRecords)).font(.caption)
+              HStack {
+                Text("\(findings.skipped + (findings.items.isEmpty ? 0 : 1))–\(findings.skipped + findings.items.count) / \(findings.matches)").font(.caption.monospacedDigit())
+                Button(vm.t("К началу", "First page")) { review() }.disabled(loading || findings.skipped == 0)
+                Button(vm.t("Следующие 200", "Next 200")) { review(after: findings.nextOffset) }.disabled(loading || findings.nextOffset == nil)
+              }
               Toggle(vm.t("Только фрагменты, не найденные в результате", "Only fragments not found in result"), isOn: $onlyMissing)
               Text(vm.t("Текст не найден среди показанных фрагментов: ", "Displayed fragments not found: ") + String(findings.items.filter { !$0.fragmentPresent(in: vm.output) }.count))
                 .font(.caption).foregroundStyle(.orange)
@@ -58,7 +63,7 @@ struct ContextComparisonView: View {
                 }
               }.pickerStyle(.menu)
               if findings.items.filter({ matchesFilter($0) }).isEmpty {
-                Text(vm.t("В первых 200 совпадениях нет подсказок этого типа. Это не доказывает, что их нет в истории.", "No signals of this type in the first 200 matches. This does not prove absence from the history.")).font(.caption)
+                Text(vm.t("На этой странице нет подсказок этого типа. Это не доказывает, что их нет в истории.", "No signals of this type on this page. This does not prove absence from the history.")).font(.caption)
               }
               ScrollView {
                 LazyVStack(alignment: .leading) {
@@ -81,7 +86,7 @@ struct ContextComparisonView: View {
           if let findings {
             let pairs = TranscriptReview.decisionPairs(in: findings.items)
             DisclosureGroup(vm.t("Связанные решения для сверки: ", "Related decisions to compare: ") + String(pairs.count), isExpanded: $pairsExpanded) {
-              Text(vm.t("Совпадение слов в первых 200 подсказках, до 50 пар. Это не доказательство противоречия: проверьте проект, автора и смысл. Более поздняя строка не становится автоматически действующей.", "Shared words in the first 200 signals, up to 50 pairs. This does not prove a conflict: check the project, author and meaning. A later line is not automatically authoritative.")).font(.caption)
+              Text(vm.t("Совпадение слов на текущей странице, до 50 пар. Связи между страницами могут быть пропущены. Это не доказательство противоречия: проверьте проект, автора и смысл. Более поздняя строка не становится автоматически действующей.", "Shared words on this page, up to 50 pairs. Cross-page links may be missed. This does not prove a conflict: check the project, author and meaning. A later line is not automatically authoritative.")).font(.caption)
               ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                   ForEach(pairs) { pair in
@@ -136,7 +141,7 @@ struct ContextComparisonView: View {
       } catch { vm.error = ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }
   }
-  private func review() {
+  private func review(after: Int? = nil) {
     guard let reader, !loading else { return }
     loading = true; findings = nil; reviewProgress = 0
     token = Cancellation(); let cancellation = token
@@ -144,7 +149,7 @@ struct ContextComparisonView: View {
       defer { loading = false; reviewProgress = 0 }
       do {
         let value = try await Task.detached {
-          try reader.reviewIndex(cancellation: cancellation) { done, total in
+          try reader.reviewIndex(after: after, cancellation: cancellation) { done, total in
             Task { @MainActor in
               guard loading, token === cancellation, !cancellation.cancelled else { return }
               reviewProgress = Double(done) / Double(max(total, 1))
