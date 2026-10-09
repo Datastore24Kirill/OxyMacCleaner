@@ -58,7 +58,7 @@ struct CleanupAdvisorView: View {
           .headline)
         HStack {
           Label(
-            "\(vm.recommendations.count) " + vm.t("файлов", "files"),
+            vm.t("Файлов: ", "Files: ") + "\(vm.recommendations.count)",
             systemImage: "doc.text.magnifyingglass")
           Text(size(SpaceEstimate(files: vm.recommendations.map(\.file)).logical)).bold()
           Text(

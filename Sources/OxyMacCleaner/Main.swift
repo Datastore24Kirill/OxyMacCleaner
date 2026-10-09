@@ -26,6 +26,14 @@ import CoreServices
     }.windowStyle(.hiddenTitleBar).defaultSize(width: 1180, height: 800)
       .commands {
         CommandGroup(replacing: .newItem) {}
+        CommandMenu(vm.t("Размер окна", "Window size")) {
+          Button(vm.t("Компактное · 1000 × 700", "Compact · 1000 × 700")) {
+            NSApplication.shared.mainWindow?.setContentSize(NSSize(width: 1000, height: 700))
+          }.disabled(updater.installing)
+          Button(vm.t("Обычное · 1180 × 800", "Standard · 1180 × 800")) {
+            NSApplication.shared.mainWindow?.setContentSize(NSSize(width: 1180, height: 800))
+          }.disabled(updater.installing)
+        }
         CommandMenu(vm.t("Разделы", "Sections")) {
           Button(vm.t("Обзор", "Overview")) { vm.page = "overview" }.keyboardShortcut("1").disabled(updater.installing)
           Button(vm.t("Карта диска", "Disk map")) { vm.page = "map" }.keyboardShortcut("2").disabled(updater.installing)
@@ -144,7 +152,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.19 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.9.0 · 1.0 RC1").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -335,7 +343,7 @@ struct RootView: View {
           }.oxyHelp(.disclosure)
         }
         card {
-          Label(vm.t("Первая тестовая версия", "First preview"), systemImage: "testtube.2").font(
+          Label(vm.t("Кандидат первой версии", "Release candidate"), systemImage: "testtube.2").font(
             .headline)
           note(
             "Карантин файлов и обычных папок на одном диске готов. DerivedData и архивы очищаются в разделе Xcode. Симуляторы удаляются штатным simctl после подтверждения. Истории агентов импортируются вручную; базы чатов не изменяются.",
