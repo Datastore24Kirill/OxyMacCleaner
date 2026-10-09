@@ -7,11 +7,9 @@ struct CleanupAdvisorView: View {
   @State private var query = ""
   @State private var selected: Set<String> = []
   @State private var visibleLimit = 100
+  @State private var sort: CandidateSort = .suggested
   private var filtered: [CleanupCandidate] {
-    vm.recommendations.filter {
-      (rule == "all" || $0.rule.rawValue == rule)
-        && (query.isEmpty || $0.file.path.localizedCaseInsensitiveContains(query))
-    }
+    CandidateList.matching(vm.recommendations, rule: rule, query: query, sort: sort)
   }
   private func size(_ value: Int64) -> String {
     ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
@@ -91,6 +89,12 @@ struct CleanupAdvisorView: View {
           )
           .textFieldStyle(.roundedBorder)
         }
+        Picker(vm.t("Сортировка", "Sort by"), selection: $sort) {
+          Text(vm.t("По рекомендации", "Suggested")).tag(CandidateSort.suggested)
+          Text(vm.t("Сначала крупные", "Largest first")).tag(CandidateSort.size)
+          Text(vm.t("Давно не изменялись", "Oldest modified first")).tag(CandidateSort.oldest)
+          Text(vm.t("По типу файлов", "File type")).tag(CandidateSort.type)
+        }.help(vm.t("Меняет только порядок. Выбор сохраняется; возраст не означает, что файл не нужен.", "Changes order only. Selection is preserved; age does not mean a file is disposable."))
         let matching = filtered
         let shown = Array(matching.prefix(visibleLimit))
         let chosen = matching.map(\.file).filter { selected.contains($0.path) && vm.fileSelectable($0) }
@@ -129,7 +133,17 @@ struct CleanupAdvisorView: View {
                 }
                 Text(candidate.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                   .truncationMode(.middle).help(candidate.file.path)
-                Text(reason(candidate)).font(.callout)
+                Label(candidate.rule == .oldInstaller
+                  ? vm.t("Установщик · проверьте необходимость", "Installer · review before removing")
+                  : vm.t("Личный файл · может быть важен", "Personal file · may be important"),
+                  systemImage: candidate.rule == .oldInstaller ? "shippingbox" : "doc")
+                  .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup(vm.t("Почему предложен и что произойдёт", "Why suggested and what happens")) {
+                  VStack(alignment: .leading, spacing: 5) {
+                    Text(reason(candidate))
+                    Text(vm.t("В карантине файл исчезнет из исходной папки, но продолжит занимать диск. Вернуть его можно в разделе «Карантин». Это не восстановимый кэш.", "Quarantine removes the file from its original folder but still uses disk space. Restore it from Quarantine. This is not a regenerable cache."))
+                  }.font(.caption)
+                }
                 Text(
                   vm.t("Не изменялся: ", "Last modified: ")
                     + candidate.file.modified.formatted(date: .abbreviated, time: .omitted)
@@ -166,6 +180,7 @@ struct CleanupAdvisorView: View {
         }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }.onAppear { vm.refreshRecommendations() }
+      .onChange(of: sort) { _, _ in visibleLimit = 100 }
       .onChange(of: query) { _, _ in selected = []; visibleLimit = 100 }
       .onChange(of: rule) { _, _ in selected = []; visibleLimit = 100 }
       .onChange(of: vm.recommendationsRevision) { _, _ in selected = []; visibleLimit = 100 }
