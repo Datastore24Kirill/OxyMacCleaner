@@ -35,6 +35,14 @@ final class LocalProtocol: URLProtocol {
       let count = Self.paths.filter { $0 == "/api/generate" }.count
       body = ["response": Self.mode == "retry" && count > 1 ? "[L1]" : "[L99999]"]
     }
+    if path == "/api/generate", Self.mode.hasPrefix("semantic") {
+      let count = Self.paths.filter { $0 == "/api/generate" }.count
+      let response: String
+      if count == 1 { response = #"{"facts":[{"category":"constraint","text":"Keep originals","evidence":1}]}"# }
+      else if Self.mode == "semantic-bad-audit" { response = #"{"unsupported":[99],"missing":[],"concerns":[]}"# }
+      else { response = #"{"unsupported":[],"missing":[],"concerns":[]}"# }
+      body = ["response":response]
+    }
     let data = try! JSONSerialization.data(withJSONObject: body)
     client?.urlProtocol(
       self,
@@ -68,6 +76,22 @@ final class LocalModelTests: XCTestCase {
       XCTFail("Repeated invalid citations accepted")
     } catch {}
     XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count, 2)
+  }
+  func testSemanticPipelineReviewsEveryPartAndRejectsBrokenAudit() async throws {
+    let transcript = Transcript(source: URL(fileURLWithPath:"/synthetic.md"), agent:"test", text:"User: never delete originals", digest:"fixture")
+    LocalProtocol.mode = "semantic"
+    let result = try await engine.semanticContext(transcript, model:"qwen2.5:3b", style:"Бережный", russian:false) { _ in }
+    XCTAssertEqual(result.facts.count,1)
+    XCTAssertTrue(result.unrepresented.isEmpty)
+    XCTAssertTrue(result.text.contains("Keep originals [L1]"))
+    XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count,2)
+    LocalProtocol.mode = "semantic-bad-audit"; LocalProtocol.paths = []
+    do {
+      _ = try await engine.semanticContext(transcript, model:"qwen2.5:3b", style:"Бережный", russian:false) { _ in }
+      XCTFail("Invalid review accepted")
+    } catch {}
+    XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count,3)
+    XCTAssertEqual(transcript.text,"User: never delete originals")
   }
   func testPullProgressAndMissingTotals() throws {
     let progress = try ModelPullProgress.parse(Data(#"{"status":"pulling","completed":5,"total":10}"#.utf8))

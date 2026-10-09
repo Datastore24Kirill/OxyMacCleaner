@@ -31,6 +31,7 @@ extension AppModel {
     busy = true
     transcript = nil
     output = ""
+    contextAudit = nil; contextFailure = nil; contextBackup = nil
     task = Task {
       do {
         let loaded = try await Task.detached { try Transcript.loadNative(url, agent: selected, cancellation: token) { done, total in

@@ -252,6 +252,13 @@ import UserNotifications
   @Published var sessionCatalog: SessionCatalogResult?
   @Published var transcript: Transcript?
   @Published var output = ""
+  @Published var contextAudit: ContextAudit?
+  @Published var contextStage: ContextStage?
+  @Published var contextStarted: Date?
+  @Published var contextRunning = false
+  @Published var contextFailure: String?
+  @Published var contextBackup: String?
+  @AppStorage("contextMethod") var contextMethod = "semantic"
   @Published var models: [String] = []
   @Published var engineChecking = false
   @Published var engineReady = false
@@ -693,6 +700,7 @@ import UserNotifications
       busy = true
       transcript = nil
       output = ""
+      contextAudit = nil; contextFailure = nil; contextBackup = nil
       task = Task {
         do {
           let loaded = try await Task.detached {
@@ -772,34 +780,45 @@ import UserNotifications
   }
   func summarize() {
     guard let transcript, !model.isEmpty, !busy else { return }
-    guard
-      confirm(
-        t("Подготовить продолжение?", "Prepare handoff?"),
-        t(
-          "Подтвердите, что сессия завершена. Создадим резервную копию и выжимку исходных цитат для новой сессии. Исходную историю не удаляем.",
-          "Confirm the session is inactive. A backup and local handoff will be created. Original history is not deleted."
-        ))
-    else { return }
-    busy = true
-    output = ""
-    let selectedModel = model
-    let compression = style
-    cancellation = Cancellation()
-    let token = cancellation
+    guard confirm(t("Подготовить продолжение?", "Prepare handoff?"),
+      t("Подтвердите, что сессия завершена. Сохраним проверенную копию и подготовим текст локально. Исходная история останется без изменений.", "Confirm the session is inactive. A verified backup and local handoff will be created. Original history stays unchanged.")) else { return }
+    busy = true; contextRunning = true; contextStarted = Date(); contextStage = nil; contextFailure = nil
+    status = t("Готовим резервную копию…", "Preparing backup…")
+    let selectedModel = model; let compression = style; let semantic = contextMethod == "semantic"; let russian = language != "en"
+    cancellation = Cancellation(); let token = cancellation
     let backupRoot = support.appendingPathComponent("HistoryBackups")
     task = Task {
+      defer { busy = false; contextRunning = false }
       do {
         let saved = try await Task.detached { try transcript.backup(in: backupRoot, cancellation: token) }.value
-        try token.check()
+        try token.check(); contextBackup = saved.path
         log("Verified history backup: \(saved.lastPathComponent)")
-        output = try await engine.summarize(transcript, model: selectedModel, style: compression) {
-          s in
-          Task { @MainActor in self.status = self.t("Обработка частей: ", "Processing chunks: ") + s
+        if semantic {
+          let result = try await engine.semanticContext(transcript, model: selectedModel, style: compression, russian: russian, cancellation: token) { stage in
+            Task { @MainActor [weak self] in
+              guard let self, self.cancellation === token, !token.cancelled else { return }
+              self.contextStage = stage
+            }
           }
+          try token.check(); contextAudit = result; output = result.text
+        } else {
+          let result = try await engine.summarize(transcript, model: selectedModel, style: compression) { value in
+            Task { @MainActor [weak self] in
+              guard let self, self.cancellation === token, !token.cancelled else { return }
+              self.status = self.t("Обработка частей: ", "Processing chunks: ") + value
+            }
+          }
+          try token.check(); contextAudit = nil; output = result
         }
-        status = t("Проверьте результат перед продолжением", "Review before starting a new session")
-      } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
-      busy = false
+        status = t("Готово. Проверьте результат и замечания перед переносом.", "Ready. Review the result and findings before transfer.")
+      } catch {
+        if Task.isCancelled || token.cancelled {
+          status = t("Обработка остановлена. Оригинал и копия сохранены.", "Stopped. Original and backup are retained.")
+        } else {
+          contextFailure = error.localizedDescription
+          status = t("Не удалось завершить. Можно повторить или выбрать выжимку цитат.", "Could not finish. Retry or choose source excerpts.")
+        }
+      }
     }
   }
   func exportContext() {

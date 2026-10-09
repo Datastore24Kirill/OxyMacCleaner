@@ -57,7 +57,7 @@ public final class LocalModel: @unchecked Sendable {
     }
     guard succeeded else { throw CleanerError.message("Model download interrupted before completion. Retry to resume.") }
   }
-  public func generate(_ prompt: String, model: String) async throws -> String {
+  public func generate(_ prompt: String, model: String, system: String = ContextPlan.system, json: Bool = false, schema: String? = nil) async throws -> String {
     let available = try await models()
     guard available.contains(model) else {
       throw CleanerError.message("Select an installed local model")
@@ -69,12 +69,13 @@ public final class LocalModel: @unchecked Sendable {
       details["remote_host"] == nil, details["remote_model"] == nil,
       (details["details"] as? [String: Any])?["format"] as? String == "gguf"
     else { throw CleanerError.message("Only verified local GGUF models are allowed") }
-    let r = try request(
-      "generate",
-      [
-        "model": model, "system": ContextPlan.system, "prompt": ContextSafety.redact(prompt), "stream": false,
-        "options": ["temperature": 0.1, "num_ctx": 16384, "num_predict": 1024], "keep_alive": "5m",
-      ])
+    var body: [String: Any] = [
+      "model": model, "system": system, "prompt": ContextSafety.redact(prompt), "stream": false,
+      "options": ["temperature": 0.1, "num_ctx": 16384, "num_predict": json ? 4096 : 1024], "keep_alive": "5m",
+    ]
+    if let schema { body["format"] = try JSONSerialization.jsonObject(with: Data(schema.utf8)) }
+    else if json { body["format"] = "json" }
+    let r = try request("generate", body)
     let (data, response) = try await session.data(for: r)
     try validate(response)
     try Task.checkCancellation()

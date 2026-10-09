@@ -144,7 +144,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.14 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.15 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -435,6 +435,7 @@ struct RootView: View {
           Picker(vm.t("Агент", "Agent"), selection: $vm.agent) {
             ForEach(Agents.catalog) { Text($0.name).tag($0.id) }
           }.oxyHelp(.agent).disabled(vm.busy).onChange(of: vm.agent) { _, _ in
+            vm.contextAudit = nil; vm.contextFailure = nil; vm.contextBackup = nil
             vm.transcript = nil
             vm.sessionCatalog = nil
             vm.output = ""
@@ -481,6 +482,18 @@ struct RootView: View {
             "TXT / MD / JSON / JSONL. Direct database access and new-session launch are not implemented yet. Copy the handoff into a new chat of the selected agent."
           )
         }
+        if vm.contextRunning { ContextProgressView() }
+        if let failure = vm.contextFailure {
+          card {
+            Label(vm.t("Подготовка контекста не завершена", "Context preparation did not finish"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+            Text(vm.t("Оригинал не изменён; созданная копия сохранена. Повтор начнёт обработку заново. Можно выбрать режим цитат.", "Original is unchanged; the created backup is retained. Retry starts processing again. Source excerpts are also available."))
+            DisclosureGroup(vm.t("Подробности", "Details")) { Text(failure).font(.caption).textSelection(.enabled) }
+            HStack {
+              Button(vm.t("Повторить", "Retry")) { vm.summarize() }.disabled(vm.busy)
+              Button(vm.t("Выбрать выжимку цитат", "Choose source excerpts")) { vm.contextMethod = "excerpts"; vm.contextFailure = nil }.disabled(vm.busy)
+            }
+          }
+        }
         if let input = vm.transcript {
           card {
             Text(input.source.lastPathComponent).font(.headline)
@@ -501,6 +514,11 @@ struct RootView: View {
                 "Records remain in file order, including branches and system events. Compression creates separate text for a new chat; original history is not shrunk or deleted."))
                 .font(.caption).foregroundStyle(.secondary)
             }
+            Picker(vm.t("Способ", "Method"), selection: $vm.contextMethod) {
+              Text(vm.t("Смысловой пересказ", "Semantic summary")).tag("semantic")
+              Text(vm.t("Выжимка цитат", "Source excerpts")).tag("excerpts")
+            }.disabled(vm.busy)
+            Text(vm.t("Пересказ: до 30 MB, краткие утверждения со ссылками и отдельная проверка модели. Цитаты: прежний режим отбора исходных строк, включая большие JSONL.", "Summary: up to 30 MB, compact cited claims and a separate model review. Excerpts: original-line selection, including larger JSONL histories.")).font(.caption).foregroundStyle(.secondary)
             HStack {
               Picker(vm.t("Режим", "Mode"), selection: $vm.style) {
                 Text(vm.t("Бережный", "Careful")).tag("Бережный")
@@ -514,7 +532,7 @@ struct RootView: View {
             }
             Button(vm.t("Начать с чистого контекста…", "Prepare a clean context…")) { vm.prepareCleanContext() }
               .disabled(vm.busy).help(vm.t("Создаёт проверенную копию и пустой шаблон новой задачи без вызова модели. Новый чат открывается вами в агенте; исходная история остаётся.", "Creates a verified backup and a blank task template without a model call. Open the new chat in your agent; original history remains."))
-            Text(vm.t("Результат — цитаты исходных строк со ссылками, а не свободный пересказ. Проверьте актуальность решений перед переносом. Фильтр секретов не гарантирует обнаружение всех значений.", "The result uses cited source excerpts, not free-form paraphrase. Review current decisions before transfer. Secret filtering cannot detect every value.")).font(.caption).foregroundStyle(.secondary)
+            Text(vm.t("Оба режима создают отдельный текст для нового чата. Проверьте актуальность решений и возможные пропуски. Фильтр секретов не гарантирует обнаружение всех значений.", "Both modes create separate text for a new chat. Review current decisions and possible omissions. Secret filtering cannot detect every value.")).font(.caption).foregroundStyle(.secondary)
             if vm.model.isEmpty {
               Button(vm.t("Настроить локальную модель", "Set up local model")) {
                 vm.page = "engine"
@@ -523,7 +541,7 @@ struct RootView: View {
           }
         }
         if !vm.output.isEmpty {
-          ContextComparisonView()
+          ContextResultView()
           card {
             HStack {
               Text(

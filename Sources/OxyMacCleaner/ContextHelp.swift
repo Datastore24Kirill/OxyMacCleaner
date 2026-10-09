@@ -237,12 +237,12 @@ enum HelpTopic {
       )
     case .summaryStyle:
       return (
-        "Задаёт подробность инструкции локальной модели: бережный, сбалансированный или краткий отбор исходных цитат. Результат всё равно требует проверки.",
+        "Задаёт подробность инструкции локальной модели: бережный, сбалансированный или краткий пересказ / отбор цитат. Результат всё равно требует проверки.",
         "Sets the local model’s requested detail level: careful, balanced or concise. The result still needs review."
       )
     case .summarize:
       return (
-        "Сохраняет проверенную копию исходника и обрабатывает сессию локальной моделью. Нужна запущенная Ollama и выбранная модель. Результат не заменяет историю агента.",
+        "Сохраняет проверенную копию. Смысловой пересказ создаёт краткие утверждения и проверяет их отдельным проходом модели; выжимка цитат сохраняет исходные строки. Нужна запущенная Ollama и выбранная модель. Результат не заменяет историю агента.",
         "Retains a verified source backup and processes the session with a local model. Requires running Ollama and a selected model. The result does not replace agent history."
       )
     case .engine:

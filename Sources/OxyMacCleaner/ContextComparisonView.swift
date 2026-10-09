@@ -2,6 +2,7 @@ import CleanerCore
 import SwiftUI
 
 struct ContextComparisonView: View {
+  var reference: Int? = nil
   @EnvironmentObject var vm: AppModel
   @State private var showing = false
   @State private var reader: TranscriptReview?
@@ -19,7 +20,7 @@ struct ContextComparisonView: View {
   @State private var operation: Task<Void, Never>?
   @State private var token = Cancellation()
   var body: some View {
-    Button(vm.t("Сравнить с исходником", "Compare with source")) { open() }
+    Button(reference.map { "[L\($0)] " + vm.t("в исходнике", "in source") } ?? vm.t("Сравнить с исходником", "Compare with source")) { open() }
       .disabled(vm.busy || loading)
       .help(vm.t("Все страницы исходника, поиск текста и ссылок [L…]. Оригинал не изменяется.", "Browse the full source and search text or [L…] references. Original is unchanged."))
       .sheet(isPresented: $showing, onDismiss: { token.cancel(); operation?.cancel() }) {
@@ -52,10 +53,10 @@ struct ContextComparisonView: View {
                 Button(vm.t("К началу", "First page")) { review() }.disabled(loading || findings.skipped == 0)
                 Button(vm.t("Следующие 200", "Next 200")) { review(after: findings.nextOffset) }.disabled(loading || findings.nextOffset == nil)
               }
-              Toggle(vm.t("Только фрагменты, не найденные в результате", "Only fragments not found in result"), isOn: $onlyMissing)
-              Text(vm.t("Текст не найден среди показанных фрагментов: ", "Displayed fragments not found: ") + String(findings.items.filter { !$0.fragmentPresent(in: vm.output) }.count))
+              Toggle(vm.contextAudit == nil ? vm.t("Только фрагменты, не найденные в результате", "Only fragments not found in result") : vm.t("Только строки без ссылки в результате", "Only unreferenced source lines"), isOn: $onlyMissing)
+              Text((vm.contextAudit == nil ? vm.t("Текст не найден среди показанных фрагментов: ", "Displayed fragments not found: ") : vm.t("Нет ссылки на показанные строки: ", "Displayed lines without references: ")) + String(findings.items.filter { !represented($0) }.count))
                 .font(.caption).foregroundStyle(.orange)
-              Text(vm.t("Сравниваются точные фрагменты после скрытия секретов. Совпадение фрагмента не подтверждает полноту длинной записи или актуальность решения.", "Exact fragments are compared after secret redaction. A match does not confirm the full long record or that a decision is current.")).font(.caption)
+              Text(vm.contextAudit == nil ? vm.t("Сравниваются точные фрагменты после скрытия секретов. Совпадение фрагмента не подтверждает полноту длинной записи или актуальность решения.", "Exact fragments are compared after secret redaction. A match does not confirm the full long record or that a decision is current.") : vm.t("Для пересказа проверяем наличие ссылки, а не совпадение формулировки. Ссылка не доказывает сохранение всего смысла строки.", "For a summary, this checks references rather than exact wording. A reference does not prove that all meaning was retained.")).font(.caption)
               Picker(vm.t("Показать", "Show"), selection: $signalFilter) {
                 Text(vm.t("Все подсказки", "All signals")).tag("all")
                 ForEach(TranscriptReview.Signal.allCases, id: \.rawValue) { signal in
@@ -71,8 +72,8 @@ struct ContextComparisonView: View {
                     Button { load(item.offset) } label: {
                       VStack(alignment: .leading, spacing: 4) {
                         Text(item.signals.map { $0.title(russian: vm.language != "en") }.joined(separator: " · ")).bold()
-                        if !item.fragmentPresent(in: vm.output) {
-                          Label(vm.t("Фрагмент не найден в результате", "Fragment not found in result"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        if !represented(item) {
+                          Label(vm.contextAudit == nil ? vm.t("Фрагмент не найден в результате", "Fragment not found in result") : vm.t("Нет ссылки в результате", "No reference in result"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                         }
                         Text(item.excerpt).fixedSize(horizontal: false, vertical: true)
                       }.font(.caption).frame(maxWidth: .infinity, alignment: .leading).padding(6)
@@ -125,9 +126,15 @@ struct ContextComparisonView: View {
           .onChange(of: pairsExpanded) { _, expanded in if expanded { signalsExpanded = false } }
       }
   }
+  private func represented(_ item: TranscriptReview.Finding) -> Bool {
+    guard vm.contextAudit != nil else { return item.fragmentPresent(in: vm.output) }
+    guard item.excerpt.hasPrefix("[L"), let end = item.excerpt.firstIndex(of: "]"),
+      let line = Int(item.excerpt[item.excerpt.index(item.excerpt.startIndex, offsetBy: 2)..<end]) else { return false }
+    return ContextSafety.citations(vm.output).contains(line)
+  }
   private func matchesFilter(_ item: TranscriptReview.Finding) -> Bool {
     (signalFilter == "all" || item.signals.contains { $0.rawValue == signalFilter })
-      && (!onlyMissing || !item.fragmentPresent(in: vm.output))
+      && (!onlyMissing || !represented(item))
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
@@ -136,7 +143,11 @@ struct ContextComparisonView: View {
       defer { loading = false }
       do {
         let value = try await Task.detached { try TranscriptReview(transcript) }.value
-        let first = try await Task.detached { try value.page() }.value
+        let target = reference
+        let first = try await Task.detached {
+          let offset = try target.flatMap { try value.findSourceLine($0) } ?? 0
+          return try value.page(at: offset)
+        }.value
         reader = value; page = first; showing = true
       } catch { vm.error = ErrorPresentation.message(error.localizedDescription, russian: vm.language != "en") }
     }

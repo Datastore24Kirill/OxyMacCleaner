@@ -180,6 +180,11 @@ public final class TranscriptReview: @unchecked Sendable {
     guard !data.isEmpty || offset == total else { throw CleanerError.message("Invalid history text boundary") }
     return ReviewPage(text: String(decoding: data, as: UTF8.self), offset: offset, next: offset + data.count, total: total)
   }
+  public func findSourceLine(_ line: Int, cancellation: Cancellation = Cancellation()) throws -> Int? {
+    let needle = "[L\(line)]"
+    if try page().text.hasPrefix(needle) { return 0 }
+    return try find("\n" + needle, cancellation:cancellation).map { $0 + 1 }
+  }
   public func find(_ text: String, from start: Int = 0, cancellation: Cancellation = Cancellation()) throws -> Int? {
     let query = Data(text.utf8)
     guard !query.isEmpty, query.count <= 4096, start >= 0, start <= total else { return nil }
