@@ -44,6 +44,58 @@ final class AcceptanceTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: a), try Data(contentsOf: b))
     XCTAssertEqual(Scanner.scan(roots: [files], excluded: [], cancellation: Cancellation()).files.count, 2)
   }
+  func testRestoredFilesRefreshSnapshotWithoutWideningScope() throws {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
+    try fm.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: root) }
+    let scope = root.appendingPathComponent("scope")
+    try fm.createDirectory(at: scope, withIntermediateDirectories: true)
+    let file = scope.appendingPathComponent("restored.txt")
+    try Data("old".utf8).write(to: file)
+    var report = ScanReport(); report.files = [try FileRecord.read(file)]; report.complete = true
+    let date = Date(timeIntervalSince1970: 123)
+    let saved = SavedScan(roots: [scope], volumeID: "test", report: report, progress: ScanProgress(), date: date)
+    try Data("restored content".utf8).write(to: file)
+    let outside = root.appendingPathComponent("outside.txt")
+    try Data("outside".utf8).write(to: outside)
+    let excluded = scope.appendingPathComponent("excluded.txt")
+    try Data("excluded".utf8).write(to: excluded)
+    let link = scope.appendingPathComponent("link.txt")
+    try fm.createSymbolicLink(at: link, withDestinationURL: outside)
+    let result = ScanReconciliation.restoring([file.path, file.path, outside.path, excluded.path, link.path, scope.path], into: saved, exclusions: [excluded.path])
+    XCTAssertEqual(result.report.files.map(\.path), [file.path])
+    XCTAssertEqual(result.report.total, 16)
+    XCTAssertEqual(result.progress.bytes, 16)
+    XCTAssertEqual(result.report.folders[scope.path], 16)
+    XCTAssertEqual(result.date, date)
+    XCTAssertFalse(result.report.complete)
+    XCTAssertNil(result.report.checkpoint)
+  }
+
+  func testRestoreRoundTripReappearsInAdjustedSnapshot() throws {
+    let fm = FileManager.default
+    let root = fm.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/OxyRestoreQA-" + UUID().uuidString)
+    try fm.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: root) }
+    let file = root.appendingPathComponent("original.txt")
+    try Data("fixture".utf8).write(to: file)
+    var report = ScanReport(); report.files = [try FileRecord.read(file)]
+    let saved = SavedScan(roots: [root], volumeID: "test", report: report, progress: ScanProgress())
+    let store = try QuarantineStore(root: root.appendingPathComponent("quarantine"))
+    let entry = try store.move(try FileRecord.read(file))
+    let removed = ScanReconciliation.removing([file.path], from: saved)
+    let alternate = root.appendingPathComponent("renamed.txt")
+    try store.restore(entry, destination: alternate)
+    let updated = ScanReconciliation.restoring([alternate.path], into: removed)
+    XCTAssertEqual(updated.report.files.map(\.path), [alternate.path])
+    XCTAssertEqual(updated.report.total, 7)
+    XCTAssertEqual(try Data(contentsOf: alternate), Data("fixture".utf8))
+    let persisted = ScanStore(url: root.appendingPathComponent("snapshot"))
+    try persisted.save(updated)
+    XCTAssertEqual(try persisted.load()?.report.files.map(\.path), [alternate.path])
+  }
+
   func testActionableFailureMessagesInBothLanguages() {
     for raw in ["Update checksum mismatch", "Connection refused", "model qwen not found", "Insufficient space", "Original volume disconnected"] {
       for russian in [true, false] {

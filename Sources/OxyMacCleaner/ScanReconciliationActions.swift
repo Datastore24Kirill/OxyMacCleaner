@@ -2,12 +2,15 @@ import CleanerCore
 import Foundation
 
 extension AppModel {
-  func reconcileRemovedPaths(_ paths: [String], invalidateOnly: Bool = false) async {
-    guard (!paths.isEmpty || invalidateOnly), let date = snapshotDate else { refreshVolumes(); return }
+  func reconcileRemovedPaths(_ paths: [String], invalidateOnly: Bool = false, restoredPaths: [String] = []) async {
+    guard (!paths.isEmpty || invalidateOnly || !restoredPaths.isEmpty), let date = snapshotDate else { refreshVolumes(); return }
     let saved = SavedScan(roots: roots, volumeID: volumeID, report: report, progress: scanProgress ?? ScanProgress(), date: date)
     let store = scanStore; let journal = scanJournalURL
+    let excluded = exclusions + [quarantine.root.path]
     let result = await Task.detached {
-      let updated = ScanReconciliation.removing(paths, from: saved)
+      let removed = ScanReconciliation.removing(paths, from: saved)
+      let updated = restoredPaths.isEmpty ? removed
+        : ScanReconciliation.restoring(restoredPaths, into: removed, exclusions: excluded)
       return (updated, DiskIndex(report: updated.report))
     }.value
     report = result.0.report; scanProgress = result.0.progress; diskIndex = result.1

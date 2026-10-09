@@ -40,6 +40,8 @@ extension AppModel {
     task = Task {
       var attempted = 0, completed = 0
       var failures: [String] = []
+      var restoredPaths: [String] = []
+      var restoredDirectory = false
       for item in items {
         if token.cancelled { break }
         attempted += 1
@@ -51,12 +53,19 @@ extension AppModel {
             else { try store.restore(item, cancellation: token) }
           }.value
           completed += 1
+          if !erase {
+            restoredPaths.append(item.original)
+            restoredDirectory = restoredDirectory || item.kind == "directory"
+          }
           log((erase ? "Deleted: " : "Restored: ") + item.original)
         } catch { failures.append(item.original + ": " + error.localizedDescription) }
       }
-      if !erase && completed > 0 { await reconcileRemovedPaths([], invalidateOnly: true) }
+      if !erase && completed > 0 { await reconcileRemovedPaths([], invalidateOnly: true, restoredPaths: restoredPaths) }
       entries = store.entries(); refreshVolumes(); scheduleReminder()
       status = CleanupSummary(selected: items.count, completed: completed, attempted: attempted).text(russian: language != "en")
+      if restoredDirectory {
+        status += t(" · Папки восстановлены; выполните сканирование для обновления их содержимого.", " · Folders restored; scan again to update their contents.")
+      }
       log(status)
       if !failures.isEmpty { error = failures.joined(separator: "\n") }
       busy = false

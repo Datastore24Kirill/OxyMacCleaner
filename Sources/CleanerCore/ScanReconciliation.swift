@@ -1,6 +1,27 @@
 import Foundation
 
 public enum ScanReconciliation {
+  /// Re-read confirmed restored files only, within the original scan scope.
+  /// Directories and inaccessible paths require a new scan; never traverse them here.
+  public static func restoring(_ paths: [String], into saved: SavedScan,
+    exclusions: [String] = []) -> SavedScan {
+    var report = saved.report
+    var replacements: [String: FileRecord] = [:]
+    for path in Set(paths) {
+      let url = URL(fileURLWithPath: path).standardizedFileURL
+      guard saved.roots.contains(where: { Scanner.inside(url.path, $0.standardizedFileURL.path) }),
+        !exclusions.contains(where: { Scanner.inside(url.path, $0) }),
+        url.resolvingSymlinksInPath().path == url.path,
+        let fresh = try? FileRecord.read(url) else { continue }
+      replacements[url.path] = fresh
+    }
+    report.files.removeAll { replacements[$0.path] != nil }
+    report.files.append(contentsOf: replacements.values.sorted { $0.path < $1.path })
+    let updated = SavedScan(roots: saved.roots, volumeID: saved.volumeID,
+      report: report, progress: saved.progress, date: saved.date)
+    return removing([], from: updated)
+  }
+
   /// Remove only confirmed paths. Remaining observations keep their original date;
   /// this is not a new scan and cannot be resumed from its former checkpoint.
   public static func removing(_ paths: [String], from saved: SavedScan) -> SavedScan {

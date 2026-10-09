@@ -49,7 +49,12 @@ final class CleanupAdvisorTests: XCTestCase {
     XCTAssertTrue(candidates([file("Downloads/empty.dmg", size: 0)]).isEmpty)
   }
   func testLargeCatalogSearchAndOrderingDoNotTruncateOrChangeEligibility() {
-    let files = (0..<1505).map { file("Downloads/fixture-\($0).dmg", size: Int64($0 + 1), days: 90 + $0, inode: UInt64($0 + 1)) }
+    var files: [FileRecord] = []
+    for index in 0..<1505 {
+      let path = "Downloads/fixture-\(index).dmg"
+      let record = file(path, size: Int64(index + 1), days: 90 + index, inode: UInt64(index + 1))
+      files.append(record)
+    }
     let all = candidates(files)
     XCTAssertEqual(all.count, 1505)
     for sort in CandidateSort.allCases {

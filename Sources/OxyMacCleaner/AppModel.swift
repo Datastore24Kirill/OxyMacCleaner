@@ -654,9 +654,11 @@ import UserNotifications
     task = Task {
       do {
         try await Task.detached { try store.restore(e, destination: destination, cancellation: token) }.value
-        status = t("Восстановление завершено", "Restore complete")
+        status = e.kind == "directory"
+          ? t("Папка восстановлена. Для обновления её содержимого в списках выполните сканирование.", "Folder restored. Scan again to update its contents in the lists.")
+          : t("Файл восстановлен. Список обновлён в пределах текущего снимка.", "File restored. List updated within the current snapshot scope.")
         log("Restored: \(e.original)")
-        await reconcileRemovedPaths([], invalidateOnly: true)
+        await reconcileRemovedPaths([], invalidateOnly: true, restoredPaths: [destination?.path ?? e.original])
       } catch { self.error = error is CancellationError ? t("Восстановление отменено до перемещения данных", "Restore cancelled before moving data") : error.localizedDescription }
       entries = store.entries()
       busy = false
