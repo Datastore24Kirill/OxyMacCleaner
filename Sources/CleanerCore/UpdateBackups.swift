@@ -11,6 +11,9 @@ public struct UpdateBackup: Identifiable, Sendable {
 }
 public enum UpdateBackups {
   public static func list(beside app: URL) throws -> [UpdateBackup] {
+    try list(beside: app, legacyOnly: false)
+  }
+  private static func list(beside app: URL, legacyOnly: Bool) throws -> [UpdateBackup] {
     let fm = FileManager.default
     let parent = app.deletingLastPathComponent()
     let candidates = try fm.contentsOfDirectory(at: parent, includingPropertiesForKeys: [.contentModificationDateKey])
@@ -18,6 +21,7 @@ public enum UpdateBackups {
       .sorted { $0.path < $1.path }
     var result: [UpdateBackup] = []
     for url in candidates {
+      if legacyOnly && !fm.fileExists(atPath: url.appendingPathComponent("previous.app").path) { continue }
       guard url.resolvingSymlinksInPath() == url.standardizedFileURL,
         let date = try? url.appendingPathComponent("healthy").resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
         let data = try? Data(contentsOf: url.appendingPathComponent(fm.fileExists(atPath: url.appendingPathComponent("rollback/OxyMac Cleaner.app").path) ? "rollback/OxyMac Cleaner.app/Contents/Info.plist" : "previous.app/Contents/Info.plist")),
@@ -37,7 +41,7 @@ public enum UpdateBackups {
   public static func normalizeLegacyNames(beside app: URL) throws -> Int {
     let fm = FileManager.default
     var count = 0
-    for entry in try list(beside: app) {
+    for entry in try list(beside: app, legacyOnly: true) {
       let old = entry.url.appendingPathComponent("previous.app")
       let directory = entry.url.appendingPathComponent("rollback")
       guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: directory.path) else { continue }

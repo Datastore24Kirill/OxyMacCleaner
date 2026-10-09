@@ -1,7 +1,7 @@
 """Exercise the real updater helper with disposable app stubs, no installed apps."""
 from pathlib import Path
 import subprocess, tempfile
-source = Path('Sources/OxyMacCleaner/AppUpdater.swift').read_text()
+source = Path('Sources/CleanerCore/UpdateInstaller.swift').read_text()
 script = source.split('static let script = #"""',1)[1].split('"""#',1)[0]
 # Keep OS application launching out of this fixture; paths and moves remain real.
 script = script.replace('/usr/bin/open "$app"', ':')

@@ -1,4 +1,4 @@
-# Implementation status — 0.4.12 Preview
+# Implementation status — 0.4.13 Preview
 
 This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
 
@@ -273,3 +273,7 @@ Explicit file/archive selection, filtered batch actions, quarantine restore/dele
 ## UX and navigation — 0.4.12
 
 Background file index, protected-by-default list, task cards and clearer Xcode caches. 187 tests passed; local build installed and all sections opened. See [scenario audit](UX-AUDIT-0.4.12-RU.md). Legacy macOS previous.app label remains unresolved; access works.
+
+## Identity and recovery — 0.4.13
+
+Legacy previous.app label repaired on the local Mac; access verified after re-adding this ad-hoc build. Launch registration refreshed without TCC resets. Concise error sheets preserve full details and suggest navigation, never retry mutation. 190 local tests and updater rollback fixtures passed. See [acceptance](ACCEPTANCE-0.4.13-RU.md). Permission continuity remains unproven without Developer ID.

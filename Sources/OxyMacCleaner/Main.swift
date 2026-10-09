@@ -1,6 +1,7 @@
 import CleanerCore
 import SwiftUI
 import UserNotifications
+import CoreServices
 
 @main struct CleanerApp: App {
   @StateObject private var vm = AppModel()
@@ -47,6 +48,8 @@ import UserNotifications
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
   weak var model: AppModel?
   func applicationDidFinishLaunching(_ notification: Notification) {
+    // Refresh only this bundle’s display metadata; never reset TCC permissions.
+    LSRegisterURL(Bundle.main.bundleURL as CFURL, true)
     let center = UNUserNotificationCenter.current()
     center.delegate = self
     center.setNotificationCategories([
@@ -141,7 +144,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.4.12 · Preview").font(.caption).foregroundStyle(.secondary)
+        Text("0.4.13 · Preview").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -221,13 +224,8 @@ struct RootView: View {
         }.padding(.bottom, 16)
       }.padding(.horizontal, 28)
     }.disabled(updater.installing).sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
-      .alert(
-        vm.t("Обратите внимание", "Attention"),
-        isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })
-      ) {
-        Button("OK") { vm.error = nil }
-      } message: {
-        Text(ErrorPresentation.message(vm.error ?? "", russian: vm.t("ru", "en") == "ru"))
+      .sheet(isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })) {
+        ErrorRecoveryView(raw: vm.error ?? "").environmentObject(vm)
       }
   }
   func note(_ ru: String, _ en: String) -> some View {
