@@ -89,6 +89,8 @@ struct SmartRecommendationsView: View {
           ForEach(report.objects) { item in
             VStack(alignment: .leading) {
               Text(item.title).bold()
+              Text(item.path ?? item.id).font(.caption).textSelection(.enabled)
+              Text(item.owner).font(.caption).foregroundStyle(.secondary)
               Text(item.recovery).font(.caption)
               Button(vm.t("Проверить и выбрать действие в разделе", "Validate and choose action in section")) {
                 previewing = false; open(item.section)
