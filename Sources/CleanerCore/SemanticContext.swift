@@ -118,11 +118,11 @@ public enum SemanticContext {
       var start = content.startIndex
       while start < content.endIndex {
         try cancellation.check()
-        let end = content.index(start, offsetBy: 1800, limitedBy: content.endIndex) ?? content.endIndex
+        let end = content.index(start, offsetBy: 1200, limitedBy: content.endIndex) ?? content.endIndex
         let piece = (start != content.startIndex && !role.isEmpty ? role + " [continuation] " : "") + String(content[start..<end])
         let evidence = ContextEvidence(line: line, text: piece)
         let bytes = evidence.label.utf8.count + 1
-        if size + bytes > 18_000, !current.isEmpty { parts.append(current); current = []; size = 0 }
+        if size + bytes > 9_000, !current.isEmpty { parts.append(current); current = []; size = 0 }
         current.append(evidence); size += bytes; start = end
       }
     }
@@ -269,10 +269,10 @@ extension LocalModel {
         } catch { if attempt == 1 { throw CleanerError.message("Context part \(number)/\(total): invalid draft after retry (\(error.localizedDescription)). Use source excerpts or retry; original and backup are preserved.") } }
       }
       let draftRows: [[String: Any]] = selected.enumerated().map { index, fact in
-        ["id":index, "category":fact.category.rawValue, "text":fact.text, "sourceLine":fact.line]
+        ["id":index, "category":fact.category.rawValue, "text":fact.text, "sourceLine":fact.line, "attachedEvidence":fact.quote]
       }
       let draft = String(decoding: try JSONSerialization.data(withJSONObject:draftRows, options:[.sortedKeys]), as: UTF8.self)
-      let verification = "Required language for ALL text and concerns: \(language), except original identifiers and URLs. Check each numbered claim against the source, using the provided JSON schema. unsupported: zero-based id values of draft claims NOT supported, misattributed, or placed in the wrong category. missing: up to 8 important omitted or corrected goals, prohibitions, decisions, failures and pending work, with category, text and an existing evidence INTEGER (E1 => 1). If rejecting a useful but misstated claim, put its corrected version in missing. concerns: concrete uncertainty or possible conflicts in this source; use [] if none. NEVER output placeholder text, template examples, or another language. Do not invent problems or claim completeness. Do not output quotations.\nSOURCE:\n" + source + "\nUNTRUSTED DRAFT:\n" + draft
+      let verification = "Required language for ALL text and concerns: \(language), except original identifiers and URLs. Check each numbered claim against the source, using the provided JSON schema. unsupported: zero-based id values of draft claims NOT supported, misattributed, or placed in the wrong category. missing: up to 8 important omitted or corrected goals, prohibitions, decisions, failures and pending work, with category, text and an existing evidence INTEGER (E1 => 1). If rejecting a useful but misstated claim, put its corrected version in missing. concerns: concrete uncertainty or possible conflicts in this source; use [] if none. NEVER output placeholder text, template examples, or another language. Only include missing facts explicitly stated in the SOURCE. Never add general advice, best practices, recommended checks, documentation tasks or hypothetical work. Missing may be empty. Each claim must follow from its attachedEvidence, not just somewhere else in the source. Reject claims whose evidence does not substantiate them. Do not invent problems or claim completeness. Do not output quotations.\nSOURCE:\n" + source + "\nUNTRUSTED DRAFT:\n" + draft
 
       for attempt in 0...1 {
         progress(ContextStage(.verifying, part: number, total: total, retry: attempt > 0))

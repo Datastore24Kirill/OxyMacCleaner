@@ -515,10 +515,10 @@ struct RootView: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
             Picker(vm.t("Способ", "Method"), selection: $vm.contextMethod) {
-              Text(vm.t("Смысловой пересказ", "Semantic summary")).tag("semantic")
+              Text(vm.t("Смысловой пересказ · Preview", "Semantic summary · Preview")).tag("semantic")
               Text(vm.t("Выжимка цитат", "Source excerpts")).tag("excerpts")
             }.disabled(vm.busy)
-            Text(vm.t("Пересказ: до 30 MB, краткие утверждения со ссылками и отдельная проверка модели. Цитаты: прежний режим отбора исходных строк, включая большие JSONL.", "Summary: up to 30 MB, compact cited claims and a separate model review. Excerpts: original-line selection, including larger JSONL histories.")).font(.caption).foregroundStyle(.secondary)
+            Text(vm.t("Пересказ — экспериментальный режим до 30 MB. Краткие утверждения со ссылками и отдельная проверка модели; длинные истории могут не пройти проверку. Цитаты: прежний режим отбора исходных строк, включая большие JSONL.", "Summary is experimental, up to 30 MB. Compact cited claims and a separate model review; long histories may fail validation. Excerpts: original-line selection, including larger JSONL histories.")).font(.caption).foregroundStyle(.secondary)
             HStack {
               Picker(vm.t("Режим", "Mode"), selection: $vm.style) {
                 Text(vm.t("Бережный", "Careful")).tag("Бережный")
@@ -565,7 +565,7 @@ struct RootView: View {
           }
         }
       }
-    }
+    }.task { vm.refreshModels(force: false) }
   }
   var engine: some View { EnginePanel() }
   var visibleQuarantine: [QuarantineEntry] {

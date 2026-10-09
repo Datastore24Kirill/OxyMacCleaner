@@ -258,7 +258,7 @@ import UserNotifications
   @Published var contextRunning = false
   @Published var contextFailure: String?
   @Published var contextBackup: String?
-  @AppStorage("contextMethod") var contextMethod = "semantic"
+  @AppStorage("contextMethod") var contextMethod = "excerpts"
   @Published var models: [String] = []
   @Published var engineChecking = false
   @Published var engineReady = false
