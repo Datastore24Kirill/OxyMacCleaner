@@ -161,7 +161,10 @@ import UserNotifications
   var cachedBrowser: FileBrowserIndex?
   var cachedBrowserRevision = -1
   var cachedBrowserExclusions: [String] = []
-  @Published var recommendations: [CleanupCandidate] = []
+  @Published var recommendations: [CleanupCandidate] = [] {
+    didSet { recommendationsRevision += 1 }
+  }
+  @Published var recommendationsRevision = 0
   @Published var recommendationsLoading = false
   private var recommendationGeneration = UUID()
   func refreshRecommendations() {

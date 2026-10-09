@@ -6,6 +6,7 @@ struct CleanupAdvisorView: View {
   @State private var rule = "all"
   @State private var query = ""
   @State private var selected: Set<String> = []
+  @State private var visibleLimit = 100
   private var filtered: [CleanupCandidate] {
     vm.recommendations.filter {
       (rule == "all" || $0.rule.rawValue == rule)
@@ -22,8 +23,8 @@ struct CleanupAdvisorView: View {
           .title3.bold())
         Text(
           vm.t(
-            "Это не список мусора. Возраст и размер помогают выбрать, что проверить; решение остаётся за вами. Ничего не выбрано для удаления.",
-            "This is not a junk list. Age and size help prioritize review; you decide what to keep. Nothing is selected for deletion."
+            "Это не список мусора. Возраст и размер помогают выбрать, что проверить; решение остаётся за вами. Выберите файлы после просмотра.",
+            "This is not a junk list. Age and size help prioritize review; you decide what to keep. Select files after reviewing them."
           )
         )
         .foregroundStyle(.secondary)
@@ -61,7 +62,7 @@ struct CleanupAdvisorView: View {
           Label(
             "\(vm.recommendations.count) " + vm.t("файлов", "files"),
             systemImage: "doc.text.magnifyingglass")
-          Text(size(vm.recommendations.reduce(0) { $0 + $1.file.bytes })).bold()
+          Text(size(SpaceEstimate(files: vm.recommendations.map(\.file)).logical)).bold()
           Text(
             vm.t(
               "объём кандидатов, не гарантированная экономия",
@@ -90,15 +91,18 @@ struct CleanupAdvisorView: View {
           )
           .textFieldStyle(.roundedBorder)
         }
-        let shown = Array(filtered.prefix(1000))
-        let chosen = shown.map(\.file).filter { selected.contains($0.path) }
+        let matching = filtered
+        let shown = Array(matching.prefix(visibleLimit))
+        let chosen = matching.map(\.file).filter { selected.contains($0.path) && vm.fileSelectable($0) }
         SelectionControls(count: chosen.count, bytes: SpaceEstimate(files: chosen).logical,
-          canSelect: shown.contains { vm.fileSelectable($0.file) },
-          select: { selected = Set(shown.filter { vm.fileSelectable($0.file) }.map { $0.file.path }) },
-          clear: { selected = [] }, shownOnly: true)
+          canSelect: !vm.recommendationsLoading && matching.contains { vm.fileSelectable($0.file) },
+          select: { selected = Set(matching.filter { vm.fileSelectable($0.file) }.map { $0.file.path }) },
+          clear: { selected = [] })
+          .disabled(vm.recommendationsLoading)
         Button(vm.t("В карантин выбранные…", "Quarantine selected…")) {
           vm.quarantineSelected(paths: Set(chosen.map(\.path)))
-        }.disabled(vm.busy || chosen.isEmpty)
+        }.disabled(vm.busy || vm.recommendationsLoading || chosen.isEmpty)
+        CleanupExplanationView(section: "personal")
         if vm.snapshotDate == nil {
           ContentUnavailableView(
             vm.t("Сначала выполните сканирование", "Scan first"), systemImage: "externaldrive")
@@ -113,20 +117,19 @@ struct CleanupAdvisorView: View {
               )))
         } else {
           LazyVStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(filtered.prefix(1000))) { candidate in
+            ForEach(shown) { candidate in
               VStack(alignment: .leading, spacing: 6) {
                 HStack {
                   Toggle(candidate.file.name, isOn: Binding(
                     get: { selected.contains(candidate.file.path) },
                     set: { if $0 { selected.insert(candidate.file.path) } else { selected.remove(candidate.file.path) } }
-                  )).toggleStyle(.checkbox).disabled(vm.busy || !vm.fileSelectable(candidate.file)).font(.headline).lineLimit(1)
+                  )).toggleStyle(.checkbox).disabled(vm.busy || vm.recommendationsLoading || !vm.fileSelectable(candidate.file)).font(.headline).lineLimit(1)
                   Spacer()
                   Text(size(candidate.file.bytes)).monospacedDigit()
                 }
                 Text(candidate.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                   .truncationMode(.middle).help(candidate.file.path)
                 Text(reason(candidate)).font(.callout)
-                CleanupExplanationView(section: "personal")
                 Text(
                   vm.t("Не изменялся: ", "Last modified: ")
                     + candidate.file.modified.formatted(date: .abbreviated, time: .omitted)
@@ -146,11 +149,15 @@ struct CleanupAdvisorView: View {
             }
           }
         }
+        if shown.count < matching.count {
+          Button(vm.t("Показать ещё 100", "Show 100 more")) { visibleLimit += 100 }
+            .disabled(vm.recommendationsLoading)
+        }
         HStack {
-          Text(
+          Text("\(shown.count) / \(matching.count) · " +
             vm.t(
-              "Показано до 1000 кандидатов. Последнее использование не определяется по дате изменения.",
-              "Up to 1,000 candidates shown. Modification time does not indicate last use.")
+              "Дата изменения не означает последнее использование.",
+              "Modification time does not indicate last use.")
           ).font(.caption).foregroundStyle(.secondary)
           Spacer()
           Button(vm.t("Проверить точные дубликаты", "Check exact duplicates")) {
@@ -159,9 +166,12 @@ struct CleanupAdvisorView: View {
         }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }.onAppear { vm.refreshRecommendations() }
-      .onChange(of: query) { _, _ in selected = [] }
-      .onChange(of: rule) { _, _ in selected = [] }
-      .onChange(of: vm.recommendations.count) { _, _ in selected = [] }
+      .onChange(of: query) { _, _ in selected = []; visibleLimit = 100 }
+      .onChange(of: rule) { _, _ in selected = []; visibleLimit = 100 }
+      .onChange(of: vm.recommendationsRevision) { _, _ in selected = []; visibleLimit = 100 }
+      .onChange(of: vm.recommendationsLoading) { _, loading in
+        if loading { selected = []; visibleLimit = 100 }
+      }
   }
   private func reason(_ candidate: CleanupCandidate) -> String {
     switch candidate.rule {
