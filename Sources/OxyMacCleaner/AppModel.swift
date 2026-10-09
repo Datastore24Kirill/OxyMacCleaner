@@ -798,6 +798,12 @@ import UserNotifications
             Task { @MainActor [weak self] in
               guard let self, self.cancellation === token, !token.cancelled else { return }
               self.contextStage = stage
+              switch stage.kind {
+              case .preparing: self.status = self.t("Подготовка истории…", "Preparing history…")
+              case .extracting: self.status = self.t("Сокращаем часть ", "Summarizing part ") + "\(stage.part)/\(stage.total)"
+              case .verifying: self.status = self.t("Проверяем часть ", "Reviewing part ") + "\(stage.part)/\(stage.total)"
+              case .finished: break
+              }
             }
           }
           try token.check(); contextAudit = result; output = result.text

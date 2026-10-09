@@ -39,8 +39,8 @@ final class LocalProtocol: URLProtocol {
       let count = Self.paths.filter { $0 == "/api/generate" }.count
       let response: String
       if count == 1 { response = #"{"facts":[{"category":"constraint","text":"Keep originals","evidence":1}]}"# }
-      else if Self.mode == "semantic-bad-audit" { response = #"{"unsupported":[99],"missing":[],"concerns":[]}"# }
-      else { response = #"{"unsupported":[],"missing":[],"concerns":[]}"# }
+      else if Self.mode == "semantic-bad-audit" { response = #"{"checks":[{"id":99,"supported":true}],"missingEvidence":[]}"# }
+      else { response = #"{"checks":[{"id":0,"supported":true}],"missingEvidence":[]}"# }
       body = ["response":response]
     }
     let data = try! JSONSerialization.data(withJSONObject: body)
@@ -83,7 +83,8 @@ final class LocalModelTests: XCTestCase {
     let result = try await engine.semanticContext(transcript, model:"qwen2.5:3b", style:"Бережный", russian:false) { _ in }
     XCTAssertEqual(result.facts.count,1)
     XCTAssertTrue(result.unrepresented.isEmpty)
-    XCTAssertTrue(result.text.contains("Keep originals [L1]"))
+    XCTAssertTrue(result.text.contains("User: never delete originals"))
+    XCTAssertEqual(SemanticContext.claimReferences(in:result.text),[1])
     XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count,2)
     LocalProtocol.mode = "semantic-bad-audit"; LocalProtocol.paths = []
     do {

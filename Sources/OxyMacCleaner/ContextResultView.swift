@@ -36,13 +36,14 @@ struct ContextProgressView: View {
 struct ContextResultView: View {
   @EnvironmentObject var vm: AppModel
   @State private var evidenceLimit = 20
+  @State private var reviewLimit = 20
   private var sourceBytes: Int { vm.contextAudit?.sourceBytes ?? Int(vm.transcript?.streaming?.bytes ?? Int64(vm.transcript?.text.utf8.count ?? 0)) }
   private var resultBytes: Int { vm.output.utf8.count }
   private func size(_ count: Int) -> String { ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file) }
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Label(vm.t("Результат для нового чата", "New-chat handoff"), systemImage: "text.badge.checkmark").font(.headline)
+        Label(vm.t("Готово к переносу", "Ready to transfer"), systemImage: "text.badge.checkmark").font(.headline)
         Spacer()
         Text(size(sourceBytes) + " → " + size(resultBytes)).font(.headline.monospacedDigit())
       }
@@ -52,34 +53,33 @@ struct ContextResultView: View {
         Text(vm.t("Сравниваем UTF-8 байты, не токены. Это сокращение текста для переноса, не освобождение диска.", "Comparison uses UTF-8 bytes, not tokens. This reduces transferred text, not disk usage.")).font(.caption).foregroundStyle(.secondary)
       }
       if let audit = vm.contextAudit {
-        Text(vm.t("Проверено частей: \(audit.parts). Утверждений: \(audit.facts.count). Возможных пропусков: \(audit.missing.count). Строк без ссылки: \(audit.unrepresented.count).", "Parts reviewed: \(audit.parts). Claims: \(audit.facts.count). Possible omissions: \(audit.missing.count). Unreferenced lines: \(audit.unrepresented.count)."))
-          .font(.callout)
-        Text(vm.t("Ссылки и цитаты сверены с исходником. Смысл повторно проверяла та же локальная модель — это помощь при сверке, а не гарантия точности.", "References and quotations match the source. The same local model reviewed meaning again: assistance, not a correctness guarantee.")).font(.caption).foregroundStyle(.secondary)
+        Text(vm.t("Черновик со ссылками: \(audit.facts.count). Реплики пользователя сохранены по порядку; сообщения агента подписаны отдельно.", "Cited draft: \(audit.facts.count) entries. User statements retain their order; agent reports are attributed separately.")).font(.callout)
+        Text(vm.t("Перед переносом сверьте актуальность. Проверка той же моделью не гарантирует точность.", "Review currency before transfer. Review by the same model does not guarantee accuracy.")).font(.caption).foregroundStyle(.secondary)
         if vm.output != audit.text {
           Label(vm.t("Текст изменён после проверки. Замечания относятся к исходному черновику.", "Edited after review. Findings refer to the original draft."), systemImage: "pencil.circle").foregroundStyle(.orange)
         }
-        if audit.normalizedRecords > 0 {
-          Text(vm.t("Сообщения извлечены из JSON-оболочки: \(audit.normalizedRecords). Служебная оболочка не включается в пересказ; полная история сохранена.", "Messages decoded from JSON envelopes: \(audit.normalizedRecords). Envelope metadata is not summarized; full history is retained.")).font(.caption).foregroundStyle(.secondary)
+        DisclosureGroup(vm.t("Источники пересказа", "Summary evidence")) {
+          ForEach(Array(audit.facts.prefix(evidenceLimit).enumerated()), id: \.offset) { _, fact in
+            evidenceRow(fact)
+          }
+          if evidenceLimit < audit.facts.count { Button(vm.t("Ещё 20", "Next 20")) { evidenceLimit += 20 } }
+        }
+        Divider()
+        Label(vm.t("Нужно проверить", "Needs review"),systemImage:"text.magnifyingglass").font(.headline)
+        Text(vm.t("Фрагментов: \(audit.missing.count) · Контрольных строк без ссылки: \(audit.unrepresented.count)", "Fragments: \(audit.missing.count) · Unreferenced control lines: \(audit.unrepresented.count)")).font(.callout)
+        Text(vm.t("Эти фрагменты не добавляются в копируемый текст автоматически. Это исходные записи, а не новые задачи модели.", "These fragments are not automatically included in the copied text. They are original evidence, not new model tasks.")).font(.caption).foregroundStyle(.secondary)
+        if !audit.missing.isEmpty {
+          DisclosureGroup(vm.t("Открыть фрагменты для сверки", "Open review fragments")) {
+            ForEach(Array(audit.missing.prefix(reviewLimit).enumerated()),id: \.offset) { _, fact in evidenceRow(fact) }
+            if reviewLimit < audit.missing.count { Button(vm.t("Ещё 20 фрагментов", "Next 20 fragments")) { reviewLimit += 20 } }
+          }
         }
         if !audit.concerns.isEmpty {
-          DisclosureGroup(vm.t("Замечания и возможные противоречия: ", "Concerns and possible conflicts: ") + String(audit.concerns.count)) {
-            ForEach(Array(audit.concerns.enumerated()), id: \.offset) { _, text in Text(text).font(.caption).textSelection(.enabled) }
+          DisclosureGroup(vm.t("Дополнительные замечания", "Additional findings")) {
+            ForEach(Array(audit.concerns.enumerated()),id: \.offset) { _, text in Text(text).font(.caption).textSelection(.enabled) }
           }
         }
-        DisclosureGroup(vm.t("Утверждения и подтверждающие цитаты", "Claims and supporting quotations")) {
-          let evidence = audit.facts + audit.missing
-          ForEach(Array(evidence.prefix(evidenceLimit).enumerated()), id: \.offset) { index, fact in
-            VStack(alignment: .leading, spacing: 5) {
-              Text(fact.text).font(.callout)
-              DisclosureGroup(vm.t("Цитата исходника", "Source quotation")) {
-                Text("[L\(fact.line)] «" + fact.quote + "»").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-              }
-              if index >= audit.facts.count { Text(vm.t("Возможный пропуск — проверьте", "Possible omission — review")).foregroundStyle(.orange).font(.caption) }
-              ContextComparisonView(reference: fact.line)
-            }.padding(.vertical, 6)
-          }
-          if evidenceLimit < evidence.count { Button(vm.t("Ещё 20", "Next 20")) { evidenceLimit += 20 } }
-        }
+
       }
       if let path = vm.contextBackup {
         Button(vm.t("Показать резервную копию", "Show backup")) { vm.reveal(path) }
@@ -87,4 +87,14 @@ struct ContextResultView: View {
       ContextComparisonView()
     }.padding().background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
   }
+  private func evidenceRow(_ fact: ContextFact) -> some View {
+    VStack(alignment:.leading,spacing:5) {
+      Text(fact.text).font(.callout).lineLimit(3)
+      DisclosureGroup(vm.t("Полный фрагмент", "Full evidence")) {
+        Text(fact.quote).font(.caption).textSelection(.enabled)
+      }
+      ContextComparisonView(reference:fact.line)
+    }.padding(.vertical,6)
+  }
+
 }

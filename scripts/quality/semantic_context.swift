@@ -18,6 +18,10 @@ import CleanerCore
         try? FileHandle.standardOutput.write(contentsOf: Data(line.utf8))
       }
       guard try Scanner.hash(source) == transcript.digest, try Scanner.hash(backup) == transcript.digest else { throw CleanerError.message("Integrity mismatch") }
+      let encoded = try JSONEncoder().encode(report.facts)
+      let review = try JSONEncoder().encode(report.missing)
+      FileManager.default.createFile(atPath:folder.appendingPathComponent("accepted.json").path,contents:encoded,attributes:[.posixPermissions:0o600])
+      FileManager.default.createFile(atPath:folder.appendingPathComponent("review.json").path,contents:review,attributes:[.posixPermissions:0o600])
       let target = folder.appendingPathComponent("handoff.md")
       try Data(report.text.utf8).write(to:target)
       try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:target.path)
