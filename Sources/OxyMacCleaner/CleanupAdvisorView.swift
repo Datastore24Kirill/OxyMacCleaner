@@ -45,7 +45,10 @@ struct CleanupAdvisorView: View {
               ))
           }
         }
-        OpportunityCards().environmentObject(vm)
+        SmartRecommendationsView().environmentObject(vm)
+        DisclosureGroup(vm.t("Все источники и проверки", "All sources and inspections")) {
+          OpportunityCards().environmentObject(vm)
+        }
         Text(
           vm.t(
             "Категории могут пересекаться: объёмы не складываются и не обещают фактическую экономию. Переход в раздел ничего не выбирает для удаления.",

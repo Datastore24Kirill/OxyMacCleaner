@@ -45,7 +45,7 @@ This is an early implementation milestone, **not completion of the version-one s
 
 ## Install
 
-Download `OxyMacCleaner-0.9.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-0.9.1-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
@@ -104,3 +104,7 @@ Cleanup opportunities currently offer two review-only rules for old installers a
 ## 1.0 RC1
 
 Кандидат первой версии: техническая версия **0.9.0**, предварительный релиз. [Конечный чек-лист](docs/RELEASE-GATES-RU.md), [результаты приёмки](docs/ACCEPTANCE-RC1-RU.md), [первый запуск](docs/FIRST-LAUNCH-RU.md). Developer ID отложен; свободный пересказ контекста экспериментальный.
+
+## 1.0 RC2 / 0.9.1
+
+Unified review catalog with versioned rules, evidence, risk groups and a combined preview. No automatic deletion. [Release notes](docs/release-0.9.1.md), [rule quality and limits](docs/SMART-CLEANUP-QUALITY-RU.md).
