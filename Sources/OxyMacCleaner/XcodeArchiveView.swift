@@ -33,68 +33,7 @@ struct XcodeArchiveView: View {
         Spacer()
         if vm.archivesLoading { ProgressView().controlSize(.small) }
       }
-      DisclosureGroup(vm.t("Правила хранения и резервная копия", "Retention and backup options")) {
-      let beyond = vm.archiveInventory.archives.filter { decisions[$0.path] == .review }
-      HStack {
-        Text(
-          vm.t("Сверх лимита: ", "Beyond limit: ") + "\(beyond.count) · "
-            + ByteCountFormatter.string(
-              fromByteCount: beyond.reduce(0) { $0 + $1.bytes }, countStyle: .file))
-        Spacer()
-        Button(vm.t("Удалить сверх лимита…", "Delete beyond limit…"), role: .destructive) {
-          vm.deleteExcessArchives()
-        }.oxyHelp(.archiveDelete).disabled(vm.busy || beyond.isEmpty)
-        Menu(vm.t("Ещё", "More")) {
-          Button(vm.t("В карантин…", "Quarantine…")) {
-            vm.quarantineExcessArchives()
-          }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
-        }.help(
-          vm.t(
-            "Перенести сверх лимита в карантин вместо удаления.",
-            "Quarantine archives beyond the limit instead of deleting.")
-        )
-        .fixedSize()
-      }
-      Toggle(
-        vm.t("Сделать резервную копию перед удалением", "Back up before deleting"),
-        isOn: $vm.archiveBackupBeforeDelete
-      )
-      .oxyHelp(.backupOption).disabled(vm.busy)
-      Text(
-        vm.t(
-          "Удаление — без Корзины, после одного подтверждения. Копия необязательна. В меню «Ещё» можно выбрать карантин с восстановлением. Архивы выпущенных версий защитите отметкой «Не удалять».",
-          "Delete without Trash after one confirmation. Backup is optional. More offers quarantine with restoration. Protect released archives using Keep protected."
-        )
-      ).font(.caption).foregroundStyle(.secondary)
-      DisclosureGroup(
-        vm.t("Зачем проверять символы и делать копию?", "Why check symbols and make a backup?")
-      ) {
-        VStack(alignment: .leading, spacing: 10) {
-          Text(vm.t(HelpTopic.symbols.text.ru, HelpTopic.symbols.text.en))
-          Text(vm.t(HelpTopic.backup.text.ru, HelpTopic.backup.text.en))
-          Text(
-            vm.t(
-              "Проверка символов — отдельная диагностика, для очистки она не обязательна. Копирование и карантин тоже необязательны. Без сохранённой копии удалённый архив восстановить из приложения нельзя.",
-              "Symbol checking is optional diagnostics, not a cleanup prerequisite. Backup and quarantine are optional too. Without a saved copy, a deleted archive cannot be restored by this app."
-            ))
-        }.font(.callout).foregroundStyle(.secondary).padding(.top, 6)
-      }.oxyHelp(.disclosure)
-      DeveloperReportView()
-      Text(vm.archiveRoot.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-      Stepper(value: $vm.archiveKeep, in: 1...20) {
-        Text(
-          vm.t(
-            "Сохранять последние \(vm.archiveKeep) для каждого приложения",
-            "Keep the latest \(vm.archiveKeep) per application"))
-      }.oxyHelp(.retention).disabled(vm.busy)
-      Text(
-        vm.t(
-          "Лимит действует на массовую очистку. Отдельный архив, даже последний, можно удалить или перенести в карантин через «Действия с архивом». «Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
-          "The limit applies to bulk cleanup. Archive actions can delete or quarantine an individual archive, including the last one. Keep protected excludes the archive from cleanup regardless of the limit. These archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
-        )
-      )
-      .font(.caption).foregroundStyle(.secondary)
-      }
+      retentionOptions
       HStack {
         TextField(vm.t("Поиск приложения / Bundle ID", "Search app / Bundle ID"), text: $query)
           .oxyHelp(.search)
@@ -145,6 +84,22 @@ struct XcodeArchiveView: View {
         }
       }
       ForEach(archives.dropFirst(archivePage * 10).prefix(10)) { archive in
+        archiveRow(archive)
+      }
+      Text(
+        vm.t(
+          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Свежие изменения за последние 10 минут защищены. Копия и проверка символов необязательны. На странице показано 10 архивов.",
+          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Changes within the last 10 minutes are protected. Backup and symbol checks are optional. 10 archives per page."
+        )
+      ).font(.caption).foregroundStyle(.secondary)
+    }
+    .modifier(InventoryLoading(isLoaded: vm.archiveScanDate != nil, load: vm.scanArchives))
+    .onChange(of: query) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: onlyReview) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: vm.pinnedArchives) { _, _ in selected.subtract(vm.pinnedArchives) }
+    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0; selected = [] }
+  }
+  private func archiveRow(_ archive: XcodeArchive) -> some View {
         VStack(alignment: .leading, spacing: 7) {
           HStack {
             Toggle(vm.t("Выбрать ", "Select ") + archive.name, isOn: Binding(
@@ -229,19 +184,70 @@ struct XcodeArchiveView: View {
               .finder)
           }
         }.padding(14).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+  }
+  private var retentionOptions: some View {
+      DisclosureGroup(vm.t("Правила хранения и резервная копия", "Retention and backup options")) {
+      let beyond = vm.archiveInventory.archives.filter { decisions[$0.path] == .review }
+      HStack {
+        Text(
+          vm.t("Сверх лимита: ", "Beyond limit: ") + "\(beyond.count) · "
+            + ByteCountFormatter.string(
+              fromByteCount: beyond.reduce(0) { $0 + $1.bytes }, countStyle: .file))
+        Spacer()
+        Button(vm.t("Удалить сверх лимита…", "Delete beyond limit…"), role: .destructive) {
+          vm.deleteExcessArchives()
+        }.oxyHelp(.archiveDelete).disabled(vm.busy || beyond.isEmpty)
+        Menu(vm.t("Ещё", "More")) {
+          Button(vm.t("В карантин…", "Quarantine…")) {
+            vm.quarantineExcessArchives()
+          }.oxyHelp(.archiveBatch).disabled(vm.busy || beyond.isEmpty)
+        }.help(
+          vm.t(
+            "Перенести сверх лимита в карантин вместо удаления.",
+            "Quarantine archives beyond the limit instead of deleting.")
+        )
+        .fixedSize()
       }
+      Toggle(
+        vm.t("Сделать резервную копию перед удалением", "Back up before deleting"),
+        isOn: $vm.archiveBackupBeforeDelete
+      )
+      .oxyHelp(.backupOption).disabled(vm.busy)
       Text(
         vm.t(
-          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Свежие изменения за последние 10 минут защищены. Копия и проверка символов необязательны. На странице показано 10 архивов.",
-          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Changes within the last 10 minutes are protected. Backup and symbol checks are optional. 10 archives per page."
+          "Удаление — без Корзины, после одного подтверждения. Копия необязательна. В меню «Ещё» можно выбрать карантин с восстановлением. Архивы выпущенных версий защитите отметкой «Не удалять».",
+          "Delete without Trash after one confirmation. Backup is optional. More offers quarantine with restoration. Protect released archives using Keep protected."
         )
       ).font(.caption).foregroundStyle(.secondary)
-    }
-    .modifier(InventoryLoading(isLoaded: vm.archiveScanDate != nil, load: vm.scanArchives))
-    .onChange(of: query) { _, _ in archivePage = 0; selected = [] }
-    .onChange(of: onlyReview) { _, _ in archivePage = 0; selected = [] }
-    .onChange(of: vm.pinnedArchives) { _, _ in selected.subtract(vm.pinnedArchives) }
-    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0; selected = [] }
+      DisclosureGroup(
+        vm.t("Зачем проверять символы и делать копию?", "Why check symbols and make a backup?")
+      ) {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(vm.t(HelpTopic.symbols.text.ru, HelpTopic.symbols.text.en))
+          Text(vm.t(HelpTopic.backup.text.ru, HelpTopic.backup.text.en))
+          Text(
+            vm.t(
+              "Проверка символов — отдельная диагностика, для очистки она не обязательна. Копирование и карантин тоже необязательны. Без сохранённой копии удалённый архив восстановить из приложения нельзя.",
+              "Symbol checking is optional diagnostics, not a cleanup prerequisite. Backup and quarantine are optional too. Without a saved copy, a deleted archive cannot be restored by this app."
+            ))
+        }.font(.callout).foregroundStyle(.secondary).padding(.top, 6)
+      }.oxyHelp(.disclosure)
+      DeveloperReportView()
+      Text(vm.archiveRoot.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+      Stepper(value: $vm.archiveKeep, in: 1...20) {
+        Text(
+          vm.t(
+            "Сохранять последние \(vm.archiveKeep) для каждого приложения",
+            "Keep the latest \(vm.archiveKeep) per application"))
+      }.oxyHelp(.retention).disabled(vm.busy)
+      Text(
+        vm.t(
+          "Лимит действует на массовую очистку. Отдельный архив, даже последний, можно удалить или перенести в карантин через «Действия с архивом». «Не удалять» защищает архив от очистки независимо от лимита. Такие архивы сохраняются дополнительно. Группируем по Bundle ID и команде; неполные метаданные не участвуют в рекомендациях.",
+          "The limit applies to bulk cleanup. Archive actions can delete or quarantine an individual archive, including the last one. Keep protected excludes the archive from cleanup regardless of the limit. These archives are kept additionally. Grouping uses Bundle ID and team; incomplete metadata is excluded from recommendations."
+        )
+      )
+      .font(.caption).foregroundStyle(.secondary)
+      }
   }
   private func decision(_ archive: XcodeArchive) -> String {
     switch decisions[archive.path] {

@@ -91,7 +91,8 @@ struct FileBrowserView: View {
       do {
         try await Task.sleep(for: .milliseconds(100))
         let index = try await vm.browserIndex()
-        var filter = current.query; filter.archivesAndDownloads = current.archives
+        var configured = current.query; configured.archivesAndDownloads = current.archives
+        let filter = configured
         let token = Cancellation()
         let output = try await withTaskCancellationHandler {
           try await Task.detached { try index.filter(filter, cancellation: token) }.value

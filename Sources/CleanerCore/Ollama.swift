@@ -102,9 +102,19 @@ public final class LocalModel: @unchecked Sendable {
       let chunk = ContextSafety.labelContinuation(rawChunk, previous: &previousLine)
       part += 1
       progress("\(part)")
-      let proposal = try await generate(
-        "Agent: \(transcript.agent). Compression: \(style). Select evidence references for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>", model: model)
-      let note = try ContextSafety.groundedExcerpt(proposal, source: chunk)
+      let prompt = "Agent: \(transcript.agent). Compression: \(style). Select evidence references for part \(part). Preserve source line citations.\n<transcript>\n\(chunk)\n</transcript>"
+      let proposal = try await generate(prompt, model: model)
+      let note: String
+      do {
+        note = try ContextSafety.groundedExcerpt(proposal, source: chunk)
+      } catch {
+        // Retry only failed validation, never a transport error or cancelled request.
+        try Task.checkCancellation()
+        progress("\(part) · retry 1/1")
+        let corrected = try await generate(
+          "The previous selection had invalid citations. Return ONLY individual [Lnumber] references present at the START of lines in this part. Do not emit ranges.\n" + prompt, model: model)
+        note = try ContextSafety.groundedExcerpt(corrected, source: chunk)
+      }
       noteBytes += note.utf8.count
       guard noteBytes <= 8_000_000 else {
         throw CleanerError.message("Summary exceeds 8 MB. Process a smaller exported session; original and backup remain intact")

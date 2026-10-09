@@ -31,6 +31,10 @@ final class LocalProtocol: URLProtocol {
         ? ["response": ""]
         : ["response": "# Goal\nPreserve user files [L1].\nNext: quarantine [L3]."]
     }
+    if path == "/api/generate", ["retry", "invalid"].contains(Self.mode) {
+      let count = Self.paths.filter { $0 == "/api/generate" }.count
+      body = ["response": Self.mode == "retry" && count > 1 ? "[L1]" : "[L99999]"]
+    }
     let data = try! JSONSerialization.data(withJSONObject: body)
     client?.urlProtocol(
       self,
@@ -50,6 +54,20 @@ final class LocalModelTests: XCTestCase {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [LocalProtocol.self]
     engine = LocalModel(configuration: config)
+  }
+  func testInvalidSelectionRetriesOnlyOnceAndValidatesAgain() async throws {
+    let transcript = Transcript(source: URL(fileURLWithPath: "/fixture.md"), agent: "test", text: "User: never delete originals", digest: "fixture")
+    LocalProtocol.mode = "retry"
+    let result = try await engine.summarize(transcript, model: "qwen2.5:3b", style: "test") { _ in }
+    XCTAssertTrue(result.contains("never delete originals"))
+    XCTAssertFalse(result.contains("L99999"))
+    XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count, 2)
+    LocalProtocol.mode = "invalid"; LocalProtocol.paths = []
+    do {
+      _ = try await engine.summarize(transcript, model: "qwen2.5:3b", style: "test") { _ in }
+      XCTFail("Repeated invalid citations accepted")
+    } catch {}
+    XCTAssertEqual(LocalProtocol.paths.filter { $0 == "/api/generate" }.count, 2)
   }
   func testPullProgressAndMissingTotals() throws {
     let progress = try ModelPullProgress.parse(Data(#"{"status":"pulling","completed":5,"total":10}"#.utf8))
