@@ -9,6 +9,7 @@ struct ContextComparisonView: View {
   @State private var page: ReviewPage?
   @State private var offsets: [Int] = []
   @State private var query = ""
+  @State private var outputReferences = Set<Int>()
   @State private var message = ""
   @State private var findings: TranscriptReview.Findings?
   @State private var signalFilter = "all"
@@ -130,7 +131,7 @@ struct ContextComparisonView: View {
     guard vm.contextAudit != nil else { return item.fragmentPresent(in: vm.output) }
     guard item.excerpt.hasPrefix("[L"), let end = item.excerpt.firstIndex(of: "]"),
       let line = Int(item.excerpt[item.excerpt.index(item.excerpt.startIndex, offsetBy: 2)..<end]) else { return false }
-    return ContextSafety.citations(vm.output).contains(line)
+    return outputReferences.contains(line)
   }
   private func matchesFilter(_ item: TranscriptReview.Finding) -> Bool {
     (signalFilter == "all" || item.signals.contains { $0.rawValue == signalFilter })
@@ -138,6 +139,7 @@ struct ContextComparisonView: View {
   }
   private func open() {
     guard let transcript = vm.transcript else { return }
+    outputReferences = SemanticContext.claimReferences(in: vm.output)
     loading = true; offsets = []; query = ""; message = ""; findings = nil; reviewProgress = 0; signalFilter = "all"; onlyMissing = false; signalsExpanded = false; pairsExpanded = false
     operation = Task {
       defer { loading = false }

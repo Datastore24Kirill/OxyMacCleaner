@@ -62,10 +62,11 @@ public enum SemanticContext {
   struct DraftFact: Decodable { let category: ContextCategory; let text: String; let evidence: Int }
   struct DraftSelection: Decodable { let facts: [DraftFact] }
   struct DraftVerification: Decodable { let unsupported: [Int]; let missing: [DraftFact]; let concerns: [String] }
-  static func resolve(_ drafts: [DraftFact], source: [ContextEvidence]) throws -> [ContextFact] {
+  static func resolve(_ drafts: [DraftFact], source: [ContextEvidence], russian: Bool? = nil) throws -> [ContextFact] {
     guard drafts.count <= 40 else { throw CleanerError.message("Too many draft claims") }
     return try drafts.map { draft in
       guard source.indices.contains(draft.evidence - 1) else { throw CleanerError.message("Invalid evidence ID in context draft") }
+      if let russian { try validateLanguage(draft.text, russian:russian, reference:draft.category == .reference) }
       let evidence = source[draft.evidence - 1]
       let fact = ContextFact(category:draft.category, text:draft.text, line:evidence.line, quote:evidence.text)
       try validate([fact], source:source)
@@ -185,6 +186,16 @@ public enum SemanticContext {
     }
     return sections.joined(separator: "\n\n")
   }
+  public static func claimReferences(in text: String) -> Set<Int> {
+    let headings = Set(ContextCategory.allCases.flatMap { [$0.title(russian:true),$0.title(russian:false)] }
+      + ["Возможно пропущено — проверьте","Possibly omitted — review"])
+    var active = false; var references = Set<Int>()
+    for line in text.components(separatedBy:"\n") {
+      if line.hasPrefix("## ") { active = headings.contains(String(line.dropFirst(3))) }
+      if active && line.hasPrefix("- ") { references.formUnion(ContextSafety.citations(line)) }
+    }
+    return references
+  }
   static func relatedDecisions(_ facts: [ContextFact], russian: Bool) -> [String] {
     // A bounded lexical check, not automatic semantic conflict resolution.
     let candidates = facts.filter { [.goal, .constraint, .decision].contains($0.category) }.suffix(1000)
@@ -196,6 +207,16 @@ public enum SemanticContext {
     return TranscriptReview.decisionPairs(in: findings).filter { $0.earlier.offset != $0.later.offset }.map { pair in
       let refs = "[L\(pair.earlier.offset)] / [L\(pair.later.offset)]"
       return russian ? "Сверьте связанные решения \(refs): общие слова, не доказанное противоречие. Уточните автора и проект." : "Compare related decisions \(refs): shared words, not a proven conflict. Verify author and project."
+    }
+  }
+  static func validateLanguage(_ text: String, russian: Bool, reference: Bool = false) throws {
+    let placeholders = ["short uncertainty", "omitted requirement", "short paraphrase"]
+    let lower = text.lowercased().trimmingCharacters(in:.whitespacesAndNewlines)
+    guard !placeholders.contains(lower) else { throw CleanerError.message("Model copied a placeholder instead of reviewing the source") }
+    if russian && !reference {
+      guard text.unicodeScalars.contains(where:{ (0x0400...0x04FF).contains($0.value) }) else {
+        throw CleanerError.message("Context response did not use the requested Russian language")
+      }
     }
   }
   static func schema(verifying: Bool, evidenceCount: Int, factCount: Int = 0) throws -> String {
@@ -235,22 +256,23 @@ extension LocalModel {
       for item in part where !TranscriptReview.signals(in: item.text).isEmpty { critical.insert(item.line) }
       let language = russian ? "Russian" : "English"
       let limit = style == "Краткий" ? 4 : style == "Сбалансированный" ? 6 : 8
-      let prompt = "Language: \(language). Extract up to \(limit) concise facts (fewer for tool noise). JSON example: {\"facts\":[{\"category\":\"goal\",\"text\":\"short paraphrase\",\"evidence\":1}]}. Category must be one of: goal, constraint, decision, pending, test, reference, uncertain. evidence is an INTEGER from the E identifiers below (E1 => 1). Choose the fragment that substantiates the claim. Do NOT output quotations; the app attaches the original fragment itself. Return facts:[] for empty noise. SOURCE:\n" + source
+      let prompt = "Required language for every text field: \(language), except original identifiers and URLs. Extract up to \(limit) concise facts (fewer for tool noise), using the provided JSON schema. Category must be goal, constraint, decision, pending, test, reference or uncertain. A goal is a requested objective, not a completed fix. pending is unfinished work, not already created commits. evidence is an INTEGER from the E identifiers below (E1 => 1). Choose the fragment that substantiates the claim. Do NOT output quotations; the app attaches the original fragment. Return facts:[] for pure noise. Preserve authorship: a question or proposal is not an approved decision. SOURCE:\n" + source
+
       var selected: [ContextFact] = []
       for attempt in 0...1 {
         progress(ContextStage(.extracting, part: number, total: total, retry: attempt > 0))
-        let response = try await generate(prompt + (attempt > 0 ? "\nPrevious response failed validation. Check JSON, category names and valid INTEGER evidence IDs." : ""), model: model, system: SemanticContext.system, json: true, schema: try SemanticContext.schema(verifying:false,evidenceCount:part.count))
+        let response = try await generate(prompt + (attempt > 0 ? "\nPrevious response failed validation. Check JSON, category names, valid INTEGER evidence IDs and the required language." : ""), model: model, system: SemanticContext.system, json: true, schema: try SemanticContext.schema(verifying:false,evidenceCount:part.count))
         diagnostics("extract-\(number)-\(attempt)", response)
         do {
           let draft = try SemanticContext.decode(response, as: SemanticContext.DraftSelection.self)
-          selected = try SemanticContext.resolve(draft.facts, source: part); break
+          selected = try SemanticContext.resolve(draft.facts, source: part, russian:russian); break
         } catch { if attempt == 1 { throw CleanerError.message("Context part \(number)/\(total): invalid draft after retry (\(error.localizedDescription)). Use source excerpts or retry; original and backup are preserved.") } }
       }
       let draftRows: [[String: Any]] = selected.enumerated().map { index, fact in
         ["id":index, "category":fact.category.rawValue, "text":fact.text, "sourceLine":fact.line]
       }
       let draft = String(decoding: try JSONSerialization.data(withJSONObject:draftRows, options:[.sortedKeys]), as: UTF8.self)
-      let verification = "Language: \(language). Check each numbered draft claim against the source; identify omissions. Return JSON with exactly these keys: {\"unsupported\":[0],\"missing\":[{\"category\":\"constraint\",\"text\":\"omitted requirement\",\"evidence\":1}],\"concerns\":[\"short uncertainty\"]}. This is a shape example, not an answer. unsupported contains only zero-based id values of draft claims NOT supported by the source. missing contains up to 8 important omitted goals/prohibitions/corrections/failures/pending work with an existing evidence INTEGER (E1 => 1). Category is one of goal, constraint, decision, pending, test, reference, uncertain. Empty arrays are allowed and preferred when there is nothing to report. Do not invent problems or claim completeness. Do not output quotations.\nSOURCE:\n" + source + "\nUNTRUSTED DRAFT:\n" + draft
+      let verification = "Required language for ALL text and concerns: \(language), except original identifiers and URLs. Check each numbered claim against the source, using the provided JSON schema. unsupported: zero-based id values of draft claims NOT supported, misattributed, or placed in the wrong category. missing: up to 8 important omitted or corrected goals, prohibitions, decisions, failures and pending work, with category, text and an existing evidence INTEGER (E1 => 1). If rejecting a useful but misstated claim, put its corrected version in missing. concerns: concrete uncertainty or possible conflicts in this source; use [] if none. NEVER output placeholder text, template examples, or another language. Do not invent problems or claim completeness. Do not output quotations.\nSOURCE:\n" + source + "\nUNTRUSTED DRAFT:\n" + draft
 
       for attempt in 0...1 {
         progress(ContextStage(.verifying, part: number, total: total, retry: attempt > 0))
@@ -258,7 +280,8 @@ extension LocalModel {
         diagnostics("verify-\(number)-\(attempt)", response)
         do {
           let wire = try SemanticContext.decode(response, as: SemanticContext.DraftVerification.self)
-          let audit = SemanticContext.Verification(unsupported:wire.unsupported, missing:try SemanticContext.resolve(wire.missing, source:part), concerns:wire.concerns)
+          let audit = SemanticContext.Verification(unsupported:wire.unsupported, missing:try SemanticContext.resolve(wire.missing, source:part, russian:russian), concerns:wire.concerns)
+          for concern in audit.concerns { try SemanticContext.validateLanguage(concern, russian:russian) }
           let accepted = try SemanticContext.apply(audit, to: selected, source: part)
           facts.append(contentsOf: accepted); missing.append(contentsOf: audit.missing)
           concerns.append(contentsOf: audit.concerns)

@@ -20,6 +20,18 @@ final class SemanticContextTests: XCTestCase {
     XCTAssertTrue(try reader.page(at:offset).text.hasPrefix("[L3] actual third line"))
     XCTAssertNil(try reader.findSourceLine(99))
   }
+  func testReviewerPlaceholdersAndWrongOutputLanguageAreNotAccepted() throws {
+    XCTAssertThrowsError(try SemanticContext.validateLanguage("short uncertainty",russian:false))
+    XCTAssertThrowsError(try SemanticContext.validateLanguage("具体的解决方案",russian:true))
+    XCTAssertThrowsError(try SemanticContext.validateLanguage("Pipeline status",russian:true))
+    XCTAssertNoThrow(try SemanticContext.validateLanguage("Проверить статус pipeline",russian:true))
+    XCTAssertNoThrow(try SemanticContext.validateLanguage("src/main.swift",russian:true,reference:true))
+  }
+  func testWarningReferencesDoNotPretendToCoverMissingClaims() {
+    let output = SemanticContext.render(facts:[fact()],missing:[],concerns:["Review [L8]"],unrepresented:[9],agent:"test",digest:"fixture",russian:true)
+    XCTAssertEqual(SemanticContext.claimReferences(in:output),[1])
+    XCTAssertEqual(SemanticContext.claimReferences(in:output.replacingOccurrences(of:"- Keep originals [L1]",with:"")),[])
+  }
   func testQuoteAndReferenceMustMatchSameSourceRecord() throws {
     let source = [ContextEvidence(line: 1, text: "User: never delete originals"), ContextEvidence(line: 2, text: "test FAILED")]
     XCTAssertNoThrow(try SemanticContext.validate([fact()], source: source))
