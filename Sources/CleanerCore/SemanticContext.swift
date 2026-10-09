@@ -292,7 +292,7 @@ extension LocalModel {
       guard facts.count + missing.count <= 12000 else { throw CleanerError.message("Context draft is too large. Choose a smaller session; original and backup are preserved.") }
     }
     try Task.checkCancellation()
-    facts = SemanticContext.unique(facts); missing = SemanticContext.unique(missing)
+    facts = SemanticContext.unique(facts); missing = SemanticContext.unique(missing).filter { item in !facts.contains { $0.line == item.line && $0.text == item.text } }
     // Only literal duplicate claims are removed. Different/contradictory claims remain reviewable.
     concerns.append(contentsOf: SemanticContext.relatedDecisions(facts + missing, russian: russian))
     let represented = Set((facts + missing).map(\.line))
