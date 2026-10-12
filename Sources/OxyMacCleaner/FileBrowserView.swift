@@ -6,9 +6,12 @@ struct FileBrowserView: View {
   @State private var query = FileBrowserIndex.Query()
   @State private var result = FileBrowserIndex.Result()
   @State private var loading = false
+  @State private var retry = 0
+  @State private var fraction = 0.0
+  @State private var activeToken: Cancellation?
   @State private var failure: String?
-  private var request: Request { Request(revision: vm.reportRevision, exclusions: vm.exclusions, archives: vm.page == "archives", query: query) }
-  private struct Request: Hashable { let revision: Int; let exclusions: [String]; let archives: Bool; let query: FileBrowserIndex.Query }
+  private var request: Request { Request(retry: retry, revision: vm.reportRevision, exclusions: vm.exclusions, archives: vm.page == "archives", query: query) }
+  private struct Request: Hashable { let retry: Int; let revision: Int; let exclusions: [String]; let archives: Bool; let query: FileBrowserIndex.Query }
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       SectionIntro(icon: "folder.fill", title: vm.t("Выберите ненужное", "Choose what you no longer need"),
@@ -43,7 +46,7 @@ struct FileBrowserView: View {
         Text(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
         Spacer()
         Button(vm.t("Папки на карте", "Explore folders")) { vm.page = "map" }
-        if loading { ProgressView().controlSize(.small); Text(vm.t("Готовим список…", "Preparing list…")).font(.caption) }
+        if loading { ProgressView(value: fraction).frame(width: 90); Text("\(Int(fraction * 100))%").font(.caption); Button(vm.t("Остановить", "Stop")) { activeToken?.cancel() } }
       }.font(.callout)
       if query.minimumMB > 0 || query.olderThanDays > 0 {
         Text(vm.t("Фильтры: ", "Filters: ") + "≥ \(query.minimumMB) MB · " + vm.t("без изменений от ", "unmodified for ") + "\(query.olderThanDays) " + vm.t("дней", "days")).font(.caption)
@@ -57,7 +60,7 @@ struct FileBrowserView: View {
         canSelect: !loading && result.rows.contains( where: { $0.selectable }),
         select: { vm.selected = Set(result.rows.filter(\.selectable).map { $0.file.path }) },
         clear: { vm.selected = [] }, shownOnly: true)
-      if let failure { Text(failure).foregroundStyle(.orange) }
+      if let failure { HStack { Text(failure).foregroundStyle(.orange); Button(vm.t("Повторить", "Retry")) { retry += 1 } } }
       if result.rows.isEmpty && !loading {
         ContentUnavailableView(vm.t("Нет подходящих файлов", "No matching files"), systemImage: "doc.text.magnifyingglass",
           description: Text(vm.snapshotDate == nil ? vm.t("Сначала запустите сканирование в Обзоре.", "Run a scan from Overview first.") : vm.t("Измените фильтры. Защищённые данные скрыты по умолчанию.", "Adjust filters. Protected data is hidden by default.")))
@@ -69,6 +72,7 @@ struct FileBrowserView: View {
             Image(systemName: row.selectable ? "doc.fill" : "lock.doc.fill").foregroundStyle(row.selectable ? Color.teal : Color.secondary)
             VStack(alignment: .leading, spacing: 3) {
               Text(row.file.name).lineLimit(1)
+              Text(DataOwnership.identify(row.file.path, home: vm.home).label(russian: vm.language != "en")).font(.caption2).foregroundStyle(.secondary)
               Text(row.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(row.file.path)
             }
             Spacer()
@@ -98,21 +102,24 @@ struct FileBrowserView: View {
       query.category = vm.categoryFilter; query.text = vm.search
     }.task(id: request) {
       let current = request
-      vm.selected = []; loading = true; failure = nil
+      let token = Cancellation(); activeToken = token
+      vm.selected = []; loading = true; fraction = 0; failure = nil; result = .init()
       do {
         try await Task.sleep(for: .milliseconds(100))
+        try token.check()
         let index = try await vm.browserIndex()
         var configured = current.query; configured.archivesAndDownloads = current.archives
         let filter = configured
-        let token = Cancellation()
         let output = try await withTaskCancellationHandler {
-          try await Task.detached { try index.filter(filter, cancellation: token) }.value
+          try await Task.detached { try index.filter(filter, cancellation: token) { value in
+            Task { @MainActor in if activeToken === token && !token.cancelled { fraction = value } }
+          } }.value
         } onCancel: { token.cancel() }
         try Task.checkCancellation()
         guard current == request else { return }
         result = output; loading = false
       } catch {
-        if !Task.isCancelled { failure = error.localizedDescription; loading = false }
+        if !Task.isCancelled { failure = error is CancellationError ? vm.t("Подготовка остановлена. Измените фильтр для повторного поиска.", "Preparation stopped. Change a filter to search again.") : error.localizedDescription; loading = false }
       }
     }
   }

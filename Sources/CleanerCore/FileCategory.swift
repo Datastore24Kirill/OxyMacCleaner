@@ -46,15 +46,17 @@ public enum FileCategory: String, CaseIterable, Sendable {
       || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2")
   }
   public static func classify(_ path: String) -> Self {
-    let url = URL(fileURLWithPath: path, isDirectory: false)
-    let parts = url.pathComponents.map { $0.lowercased() }
+    // Paths in scan records are absolute. Split UTF-8 directly: Foundation URL
+    // component parsing is disproportionately expensive for millions of records.
     let lower = path.lowercased()
+    let parts = lower.utf8.split(separator: 47).map { String(decoding: $0, as: UTF8.self) }
+    func contains(_ part: String) -> Bool { lower.range(of: part, options: .literal) != nil }
     if parts.contains("com.docker.docker") || parts.contains("group.com.docker")
       || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2") { return .docker }
     if parts.contains("deriveddata") { return .derivedData }
     if parts.contains(where: { $0.hasSuffix(".xcarchive") }) { return .xcodeArchive }
-    if lower.contains("/steamapps/") || lower.contains("/gog games/")
-      || lower.contains("/epic games/") || lower.contains("/library/application support/minecraft/")
+    if contains("/steamapps/") || contains("/gog games/")
+      || contains("/epic games/") || contains("/library/application support/minecraft/")
     {
       return .games
     }
@@ -70,13 +72,13 @@ public enum FileCategory: String, CaseIterable, Sendable {
     {
       return .system
     }
-    if lower.contains("/library/application support/") || lower.contains("/library/containers/")
-      || lower.contains("/library/group containers/")
+    if contains("/library/application support/") || contains("/library/containers/")
+      || contains("/library/group containers/")
     {
       return .appData
     }
     if parts.contains(where: { $0.hasSuffix(".photoslibrary") }) { return .images }
-    let ext = url.pathExtension.lowercased()
+    let ext = (path as NSString).pathExtension.lowercased()
     if [
       "jpg", "jpeg", "png", "heic", "heif", "gif", "webp", "avif", "tif", "tiff", "bmp", "svg",
       "raw", "dng", "cr2", "cr3", "nef", "arw", "raf", "psd", "ai", "exr",

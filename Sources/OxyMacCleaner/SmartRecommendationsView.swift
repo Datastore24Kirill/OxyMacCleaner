@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SmartRecommendationsView: View {
   @EnvironmentObject var vm: AppModel
+  @State private var explaining: SmartRecommendation?
   @State private var catalog: [SmartRecommendation] = []
   @State private var selected = Set<String>()
   @State private var query = ""
@@ -54,6 +55,7 @@ struct SmartRecommendationsView: View {
     .onChange(of: vm.exclusions) { _, _ in reload() }
     .onChange(of: vm.language) { _, _ in reload() }
     .onChange(of: query) { _, _ in limit = 50 }
+    .sheet(item: $explaining) { RecommendationExplanationView(item: $0) }
     .sheet(isPresented: $previewing) { preview }
   }
   private func row(_ item: SmartRecommendation) -> some View {
@@ -78,6 +80,7 @@ struct SmartRecommendationsView: View {
           Text(item.evidenceComplete ? vm.t("Метаданные заполнены; это не гарантия безопасности", "Metadata complete; not a safety guarantee") : vm.t("Не все условия выполнены или размер неизвестен", "Some conditions are unmet or size is unknown"))
         }.font(.caption).textSelection(.enabled)
       }
+      Button(vm.t("Объяснить рекомендацию…", "Explain recommendation…")) { explaining = item }
       Button(vm.t("Посмотреть в разделе", "Review in section")) { open(item.section) }.disabled(vm.busy)
       Divider()
     }

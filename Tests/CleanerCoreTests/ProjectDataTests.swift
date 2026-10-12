@@ -131,4 +131,26 @@ final class ProjectDataTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: product.path))
   }
 
+  func testPythonCacheSignatureAndChangesAreVerified() throws {
+    try Data("[project]\nname = \"fixture\"".utf8).write(to: root.appendingPathComponent("pyproject.toml"))
+    try Data(".next/\n.pytest_cache/\n.mypy_cache/\n.ruff_cache/\n".utf8).write(to: root.appendingPathComponent(".gitignore"))
+    for name in [".pytest_cache", ".mypy_cache", ".ruff_cache"] {
+      let cache = root.appendingPathComponent(name)
+      try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+      try Data("cached".utf8).write(to: cache.appendingPathComponent("data.bin"))
+      var item = try XCTUnwrap(ProjectData.inventory(root).first { $0.path.path == cache.path })
+      XCTAssertFalse(item.cleanable)
+      try Data("Signature: 8a477f597d28d172789f06886806bc55\n".utf8).write(to: cache.appendingPathComponent("CACHEDIR.TAG"))
+      item = try XCTUnwrap(ProjectData.inventory(root).first { $0.path.path == cache.path })
+      XCTAssertTrue(item.cleanable)
+      let prepared = try ProjectData.prepare(item, exclusions: [], now: later, run: run, idle: {})
+      try Data("changed".utf8).write(to: cache.appendingPathComponent("data.bin"))
+      XCTAssertThrowsError(try ProjectData.remove(prepared, exclusions: [], now: later, run: run, idle: {}))
+      let fresh = try ProjectData.prepare(item, exclusions: [], now: later, run: run, idle: {})
+      try ProjectData.remove(fresh, exclusions: [], now: later, run: run, idle: {})
+      XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+    }
+    XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("pyproject.toml").path))
+  }
+
 }

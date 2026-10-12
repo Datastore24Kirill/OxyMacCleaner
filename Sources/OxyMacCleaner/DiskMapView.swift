@@ -5,7 +5,9 @@ struct DiskMapView: View {
   @EnvironmentObject var vm: AppModel
   @State private var files: [String: FileRecord] = [:]
   @State private var limit = 200
-  private var nodes: [DiskNode] { vm.diskIndex.children[vm.mapPath] ?? [] }
+  @State private var nodes: [DiskNode] = []
+  @State private var loading = false
+  private struct Request: Hashable { let revision: Int; let path: String }
   private var shown: [DiskNode] {
     let top = Array(nodes.filter { $0.bytes > 0 }.prefix(24))
     let rest = nodes.filter { $0.bytes > 0 }.dropFirst(24).reduce(Int64(0)) { $0 + $1.bytes }
@@ -32,7 +34,8 @@ struct DiskMapView: View {
         Spacer()
         Text(size(nodes.reduce(0) { $0 + $1.bytes })).monospacedDigit()
       }
-      if nodes.isEmpty {
+      if loading { ProgressView(vm.t("Подготавливаем папку…", "Preparing folder…")) }
+      if nodes.isEmpty && !loading {
         ContentUnavailableView(
           vm.t("Нет данных карты", "No map data"), systemImage: "square.grid.3x3",
           description: Text(
@@ -89,12 +92,17 @@ struct DiskMapView: View {
         )
         .font(.caption).foregroundStyle(.secondary)
       }
-    }.task(id: vm.reportRevision) {
-      let source = vm.report.files
-      let lookup = await Task.detached { Dictionary(source.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first }) }.value
-      guard !Task.isCancelled else { return }
-      files = lookup
-    }.onChange(of: vm.mapPath) { _, _ in limit = 200 }
+    }.task(id: Request(revision: vm.reportRevision, path: vm.mapPath)) {
+      let index = vm.diskIndex, path = vm.mapPath, token = Cancellation()
+      loading = true; nodes = []; files = [:]; limit = 200
+      do {
+        let result = try await withTaskCancellationHandler {
+          try await Task.detached { try index.nodes(in: path, cancellation: token) }.value
+        } onCancel: { token.cancel() }
+        try Task.checkCancellation()
+        nodes = result.0; files = result.1; loading = false
+      } catch { if !Task.isCancelled { loading = false } }
+    }
   }
 
   private func tileHelp(_ node: DiskNode) -> String {

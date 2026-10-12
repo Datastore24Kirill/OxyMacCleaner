@@ -10,7 +10,7 @@ public struct CleanupCandidate: Identifiable, Sendable {
 public enum CleanupAdvisor {
   /// Review-only rules: neither size nor age proves that a file is disposable.
   public static func candidates(
-    files: [FileRecord], home: URL, exclusions: [String], now: Date = Date()
+    files: [FileRecord], home: URL, exclusions: [String], now: Date = Date(), cancellation: Cancellation = Cancellation()
   ) -> [CleanupCandidate] {
     let locations = ["Downloads", "Desktop", "Documents", "Pictures", "Movies", "Music"].map {
       home.appendingPathComponent($0).path
@@ -21,7 +21,8 @@ public enum CleanupAdvisor {
     ]
     var seen = Set<String>()
     var output: [CleanupCandidate] = []
-    for file in files {
+    for (index, file) in files.enumerated() {
+      if index % 256 == 0 && cancellation.cancelled { return [] }
       // Cheap necessary conditions first: do not inspect ownership of millions
       // of small/current files that cannot match either recommendation rule.
       let age = Int(now.timeIntervalSince(file.modified) / 86400)

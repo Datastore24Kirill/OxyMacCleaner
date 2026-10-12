@@ -152,7 +152,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("1.0.0").font(.caption).foregroundStyle(.secondary)
+        Text("1.1.0").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -492,6 +492,7 @@ struct RootView: View {
             "TXT / MD / JSON / JSONL. Direct database access and new-session launch are not implemented yet. Copy the handoff into a new chat of the selected agent."
           )
         }
+        AgentStorageView()
         if vm.contextRunning { ContextProgressView() }
         if let failure = vm.contextFailure {
           card {

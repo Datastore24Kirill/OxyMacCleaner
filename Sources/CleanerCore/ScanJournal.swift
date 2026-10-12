@@ -55,13 +55,18 @@ public final class ScanJournal {
     pending.removeAll(keepingCapacity: true); directories.removeAll(keepingCapacity: true); issues.removeAll(keepingCapacity: true)
     } catch { failed = true; throw error }
   }
-  public static func recover(_ url: URL) throws -> SavedScan? {
+  public static func recover(_ url: URL, cancellation: Cancellation = Cancellation(), progress reportProgress: @Sendable (Double) -> Void = { _ in }) throws -> SavedScan? {
+    try cancellation.check()
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
     let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
+    let total = try handle.seekToEnd(); try handle.seek(toOffset: 0)
+    var consumed: UInt64 = 0
     var buffer = Data(); var header: Header?; var report = ScanReport()
     while true {
+      try cancellation.check()
       let data = try handle.read(upToCount: 1_048_576) ?? Data()
       if data.isEmpty { break }; buffer.append(data)
+      consumed += UInt64(data.count); reportProgress(0.8 * Double(consumed) / Double(max(1, total)))
       while let newline = buffer.firstIndex(of: 10) {
         let line = Data(buffer[..<newline]); buffer.removeSubrange(...newline)
         try autoreleasepool {
@@ -97,8 +102,12 @@ public final class ScanJournal {
       guard buffer.count <= 8_000_000 else { throw CleanerError.message("Scan recovery record too large") }
     }
     guard let header else { throw CleanerError.message("Incomplete scan recovery header") }
-    report.files.sort { $0.bytes > $1.bytes }
-    for f in report.files {
+    try cancellation.check()
+    var allocated: Int64 = 0, categories: [String: Int64] = [:]
+    for (index, f) in report.files.enumerated() {
+      if index % 256 == 0 { try cancellation.check() }
+      if index % 8192 == 0 { reportProgress(0.8 + 0.2 * Double(index) / Double(max(1, report.files.count))) }
+      allocated += max(0, f.allocated); categories[f.category, default: 0] += max(0, f.allocated)
       var parent = (f.path as NSString).deletingLastPathComponent
       while header.roots.contains(where: { Scanner.inside(parent, $0.path) }) {
         report.folders[parent, default: 0] += f.bytes
@@ -110,6 +119,8 @@ public final class ScanJournal {
       ? "Recovered interrupted scan; results are partial. Repeat the scan for current totals."
       : "Recovered interrupted scan. Resume unfinished folders or start a new scan for current totals.")
     var progress = ScanProgress(); progress.files = report.files.count; progress.bytes = report.total; progress.phase = .cancelled; progress.issues = report.issues.count
+    progress.allocatedBytes = allocated; progress.allocatedCategories = categories
+    try cancellation.check(); reportProgress(1)
     return SavedScan(roots: header.roots, volumeID: header.volumeID, report: report, progress: progress, date: header.date)
   }
 }

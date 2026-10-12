@@ -24,6 +24,12 @@ public enum ProjectData {
     let cleanable: Bool
   }
   private static let rules: [Rule] = [
+    .init(id: "Python pytest cache", path: ".pytest_cache", marker: "pyproject.toml",
+      recovery: "pytest · Кэш и список прошлых ошибок пересоздаются; --last-failed потеряет прошлый список / Cache is recreated; previous failed-test state is lost.", cleanable: true),
+    .init(id: "Python mypy cache", path: ".mypy_cache", marker: "pyproject.toml",
+      recovery: "mypy · Повторная проверка типов пересоздаст кэш и займёт больше времени / Type checking regenerates the cache and takes longer.", cleanable: true),
+    .init(id: "Python Ruff cache", path: ".ruff_cache", marker: "pyproject.toml",
+      recovery: "ruff check · Следующий запуск пересоздаёт кэш / The next run recreates the cache.", cleanable: true),
     .init(id: "Composer dependencies", path: "vendor", marker: "composer.json",
       recovery: "composer install · Нужны lock-файл и доступ к источникам; возможны локальные правки / Requires lockfile and registry access; local edits may exist.", cleanable: false),
     .init(id: "Bundler dependencies", path: "vendor/bundle", marker: "Gemfile",
@@ -82,6 +88,17 @@ public enum ProjectData {
     let main = root.appendingPathComponent(rule.marker)
     let data = try marker(main)
     var markers = [main]
+    if rule.id.hasPrefix("Python ") && rule.cleanable {
+      guard let text = String(data: data, encoding: .utf8), text.contains("[") else {
+        throw CleanerError.message("Python project metadata is unavailable")
+      }
+      let tag = root.appendingPathComponent(rule.path).appendingPathComponent("CACHEDIR.TAG")
+      let tagData = try marker(tag)
+      guard tagData.starts(with: Data("Signature: 8a477f597d28d172789f06886806bc55".utf8)) else {
+        throw CleanerError.message("Cache signature missing; review only")
+      }
+      markers.append(tag)
+    }
     if rule.id.hasPrefix("Next.js") {
       let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
       let dependencies = (json?["dependencies"] as? [String: Any] ?? [:])

@@ -74,7 +74,8 @@ public struct ScanStore: Sendable {
     try write(.end); try handle.synchronize()
     guard rename(temporary.path, url.path) == 0 else { throw CleanerError.message("Cannot finish scan snapshot; previous result retained") }
   }
-  public func load() throws -> SavedScan? {
+  public func load(cancellation: Cancellation = Cancellation(), progress: @Sendable (Double) -> Void = { _ in }) throws -> SavedScan? {
+    try cancellation.check()
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
     let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
     let prefix = try handle.read(upToCount: 8) ?? Data()
@@ -84,11 +85,17 @@ public struct ScanStore: Sendable {
       try validate(snapshot.report)
       return SavedScan(roots: snapshot.roots, volumeID: snapshot.volumeID, report: snapshot.report, progress: snapshot.progress, date: snapshot.date)
     }
+    try cancellation.check()
+    let total = try handle.seekToEnd()
+    var consumed: UInt64 = 0
     try handle.seek(toOffset: 0)
     var buffer = Data(); var metadata: Metadata?; var report = ScanReport(); var ended = false
     while true {
+      try cancellation.check()
       let data = try handle.read(upToCount: 1_048_576) ?? Data()
       if data.isEmpty { break }; buffer.append(data)
+      consumed += UInt64(data.count)
+      progress(0.8 * Double(consumed) / Double(max(1, total)))
       while let newline = buffer.firstIndex(of: 10) {
         let line = Data(buffer[..<newline]); buffer.removeSubrange(...newline)
         guard !ended else { throw CleanerError.message("Unexpected data after scan snapshot") }
@@ -112,8 +119,22 @@ public struct ScanStore: Sendable {
       guard buffer.count < 8_000_000 else { throw CleanerError.message("Scan snapshot record too large") }
     }
     guard ended, buffer.isEmpty, let metadata, report.files.count == metadata.fileCount else { throw CleanerError.message("Incomplete scan snapshot") }
+    try cancellation.check()
     try validate(report); report.complete = metadata.complete
-    return SavedScan(roots: metadata.roots, volumeID: metadata.volumeID, report: report, progress: metadata.progress, date: metadata.date)
+    var measured = metadata.progress
+    if measured.allocatedBytes == nil || measured.allocatedCategories == nil {
+      var allocated: Int64 = 0, categories: [String: Int64] = [:]
+      for (index, file) in report.files.enumerated() {
+        if index % 256 == 0 { try cancellation.check() }
+        if index % 8192 == 0 { progress(0.8 + 0.2 * Double(index) / Double(max(1, report.files.count))) }
+        allocated += max(0, file.allocated)
+        if measured.allocatedCategories == nil { categories[file.category, default: 0] += max(0, file.allocated) }
+      }
+      if measured.allocatedBytes == nil { measured.allocatedBytes = allocated }
+      if measured.allocatedCategories == nil { measured.allocatedCategories = categories }
+    }
+    try cancellation.check(); progress(1)
+    return SavedScan(roots: metadata.roots, volumeID: metadata.volumeID, report: report, progress: measured, date: metadata.date)
   }
   private func validate(_ report: ScanReport) throws {
     guard report.files.allSatisfy({ $0.bytes >= 0 && $0.path.hasPrefix("/") }) else { throw CleanerError.message("Invalid scan snapshot") }
@@ -133,23 +154,37 @@ public struct DiskNode: Identifiable, Sendable {
   public var name: String { URL(fileURLWithPath: path).lastPathComponent }
 }
 public struct DiskIndex: Sendable {
-  public var children: [String: [DiskNode]] = [:]
-  public init(report: ScanReport) {
-    for (path, bytes) in report.folders {
-      guard path != "/" else { continue }
-      let parent = (path as NSString).deletingLastPathComponent
-      children[parent, default: []].append(DiskNode(path: path, bytes: bytes, directory: true))
+  private let report: ScanReport
+  public init(report: ScanReport) { self.report = report }
+  public func nodes(in parent: String, cancellation: Cancellation = Cancellation()) throws -> ([DiskNode], [String: FileRecord]) {
+    var nodes: [DiskNode] = [], files: [String: FileRecord] = [:]
+    for (index, entry) in report.folders.enumerated() {
+      if index % 256 == 0 { try cancellation.check() }
+      if entry.key != parent && (entry.key as NSString).deletingLastPathComponent == parent {
+        nodes.append(DiskNode(path: entry.key, bytes: entry.value, directory: true))
+      }
     }
-    for file in report.files {
-      let parent = (file.path as NSString).deletingLastPathComponent
-      children[parent, default: []].append(
-        DiskNode(path: file.path, bytes: file.bytes, directory: false))
+    for (index, file) in report.files.enumerated() {
+      if index % 256 == 0 { try cancellation.check() }
+      if (file.path as NSString).deletingLastPathComponent == parent {
+        nodes.append(DiskNode(path: file.path, bytes: file.bytes, directory: false)); files[file.path] = file
+      }
     }
-    for path in children.keys {
-      children[path]?.sort { $0.bytes == $1.bytes ? $0.path < $1.path : $0.bytes > $1.bytes }
+    nodes.sort { $0.bytes == $1.bytes ? $0.path < $1.path : $0.bytes > $1.bytes }
+    return (nodes, files)
+  }
+  // Compatibility for small callers; the UI uses cancellable per-folder loading.
+  public var children: [String: [DiskNode]] {
+    var result: [String: [DiskNode]] = [:]
+    for (path, bytes) in report.folders where path != "/" {
+      result[(path as NSString).deletingLastPathComponent, default: []].append(.init(path: path, bytes: bytes, directory: true))
     }
+    for file in report.files { result[(file.path as NSString).deletingLastPathComponent, default: []].append(.init(path: file.path, bytes: file.bytes, directory: false)) }
+    for path in result.keys { result[path]?.sort { $0.bytes == $1.bytes ? $0.path < $1.path : $0.bytes > $1.bytes } }
+    return result
   }
 }
+
 public enum DiskLayout {
   public struct Tile: Sendable {
     public let index: Int

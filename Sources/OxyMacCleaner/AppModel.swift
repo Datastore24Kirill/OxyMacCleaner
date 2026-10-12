@@ -167,17 +167,20 @@ import UserNotifications
   @Published var recommendationsRevision = 0
   @Published var recommendationsLoading = false
   private var recommendationGeneration = UUID()
+  private var recommendationCancellation = Cancellation()
   func refreshRecommendations() {
     guard !isScanning else { return }
     let generation = UUID()
     recommendationGeneration = generation
+    recommendationCancellation.cancel()
+    let token = Cancellation(); recommendationCancellation = token
     let files = report.files
     let excluded = exclusions
     let userHome = home
     recommendationsLoading = true
     Task {
       let result = await Task.detached {
-        CleanupAdvisor.candidates(files: files, home: userHome, exclusions: excluded)
+        CleanupAdvisor.candidates(files: files, home: userHome, exclusions: excluded, cancellation: token)
       }.value
       guard recommendationGeneration == generation else { return }
       recommendations = result
@@ -209,12 +212,21 @@ import UserNotifications
     status = t("Загружаем прошлый результат…", "Loading previous scan…")
     let store = scanStore
     let journalURL = scanJournalURL
+    let token = Cancellation(); cancellation = token
     task = Task {
       do {
         let recovery = try await Task.detached { () throws -> (SavedScan?, Bool) in
-          if let partial = try ScanJournal.recover(journalURL) { return (partial, true) }
-          return (try store.load(), false)
+          let progress: @Sendable (Double) -> Void = { fraction in
+            Task { @MainActor in
+              guard self.cancellation === token, self.busy, !token.cancelled else { return }
+              let next = self.t("Загрузка снимка: ", "Loading snapshot: ") + "\(Int(fraction * 100))%"
+              if self.status != next { self.status = next }
+            }
+          }
+          if let partial = try ScanJournal.recover(journalURL, cancellation: token, progress: progress) { return (partial, true) }
+          return (try store.load(cancellation: token, progress: progress), false)
         }.value
+        try token.check()
         recoveredInterruptedScan = recovery.1
         if let saved = recovery.0 {
           let index = await Task.detached { DiskIndex(report: saved.report) }.value
@@ -232,6 +244,8 @@ import UserNotifications
         } else {
           status = ""
         }
+      } catch is CancellationError {
+        status = t("Загрузка остановлена. Снимок сохранён.", "Loading stopped. Snapshot retained.")
       } catch {
         self.error =
           t("Не удалось открыть сохранённый результат: ", "Could not load saved scan: ")
@@ -372,6 +386,7 @@ import UserNotifications
     busy = true
     isScanning = true
     recommendationGeneration = UUID()
+    recommendationCancellation.cancel()
     recommendations = []
     recommendationsLoading = false
     scanProgress = ScanProgress()

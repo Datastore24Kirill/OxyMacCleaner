@@ -1,6 +1,6 @@
 import Foundation
 
-/// Precomputes expensive URL/category work once per scan, off the UI thread.
+/// Shares scan metadata and computes a bounded page off the UI thread.
 public struct FileBrowserIndex: Sendable {
   public struct Query: Hashable, Sendable {
     public var text = ""
@@ -26,51 +26,78 @@ public struct FileBrowserIndex: Sendable {
     public var hiddenProtected = 0
     public init() {}
   }
-  private let rows: [Row]
+  // Keep the scan's copy-on-write array, rather than duplicating and sorting millions of rows.
+  private let files: [FileRecord]
+  private let excluded: [String]
+  private let quarantine: String
+  private let downloads: String
   public init(files: [FileRecord], excluded: [String], quarantine: String, downloads: String,
               cancellation: Cancellation = Cancellation()) throws {
-    var values: [Row] = []
-    values.reserveCapacity(files.count)
-    // Current classification rules depend on parent components, extension and these exact leaf names.
-    // Hidden/extensionless leaves retain their whole name in the key.
-    let namedLeaves: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2"]
-    var classifications: [String: (Bool, String)] = [:]
-    for (index, file) in files.enumerated() {
-      if index % 256 == 0 { try cancellation.check() }
-      let path = file.path as NSString
-      let leaf = path.lastPathComponent.lowercased(), ext = path.pathExtension.lowercased()
-      let leafKey = leaf.hasPrefix(".") || ext.isEmpty || namedLeaves.contains(leaf) ? leaf : "*." + ext
-      let key = path.deletingLastPathComponent + "/" + leafKey
-      let classification: (Bool, String)
-      if let cached = classifications[key] { classification = cached }
-      else {
-        classification = (QuarantineStore.protected(file.path), file.category)
-        classifications[key] = classification
-      }
-      let selectable = !classification.0 && file.links == 1
-        && !Scanner.inside(file.path, quarantine)
-        && !excluded.contains { Scanner.inside(file.path, $0) }
-      values.append(Row(file: file, category: classification.1, selectable: selectable,
-        search: file.path.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current),
-        download: Scanner.inside(file.path, downloads)))
-    }
-    rows = values.sorted { $0.file.bytes == $1.file.bytes ? $0.file.path < $1.file.path : $0.file.bytes > $1.file.bytes }
+    try cancellation.check()
+    self.files = files; self.excluded = excluded; self.quarantine = quarantine; self.downloads = downloads
   }
-  public func filter(_ query: Query, now: Date = Date(), cancellation: Cancellation = Cancellation()) throws -> Result {
+  public func filter(_ query: Query, now: Date = Date(), cancellation: Cancellation = Cancellation(),
+                     progress: @Sendable (Double) -> Void = { _ in }) throws -> Result {
     let search = query.text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     let cutoff = now.addingTimeInterval(-Double(query.olderThanDays) * 86400)
     var result = Result()
-    for (index, row) in rows.enumerated() {
-      if index % 256 == 0 { try cancellation.check() }
-      guard (!query.archivesAndDownloads || row.category == "Archive" || row.download),
-        (query.archivesAndDownloads || query.category == "all" || row.category == query.category),
-        row.file.bytes >= Int64(query.minimumMB) * 1_000_000,
-        (query.olderThanDays == 0 || row.file.modified < cutoff),
-        search.isEmpty || row.search.contains(search) else { continue }
-      if !row.selectable && !query.showProtected && query.category != FileCategory.docker.rawValue { result.hiddenProtected += 1; continue }
-      result.matches += 1; result.bytes += row.category == FileCategory.docker.rawValue ? max(0, row.file.allocated) : row.file.bytes
-      if result.rows.count < max(1, query.limit) { result.rows.append(row) }
+    var classifications: [String: (String, Bool)] = [:]
+    let named: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2"]
+    let limit = max(1, query.limit)
+    // A bounded heap: the worst visible row is at the root. Memory is O(page size).
+    func better(_ a: Row, _ b: Row) -> Bool {
+      a.file.bytes == b.file.bytes ? a.file.path < b.file.path : a.file.bytes > b.file.bytes
     }
+    func insert(_ row: Row) {
+      if result.rows.count < limit {
+        result.rows.append(row)
+        var i = result.rows.count - 1
+        while i > 0 {
+          let parent = (i - 1) / 2
+          guard better(result.rows[parent], result.rows[i]) else { break }
+          result.rows.swapAt(i, parent); i = parent
+        }
+      } else if better(row, result.rows[0]) {
+        result.rows[0] = row
+        var i = 0
+        while i * 2 + 1 < result.rows.count {
+          var child = i * 2 + 1
+          if child + 1 < result.rows.count && better(result.rows[child], result.rows[child + 1]) { child += 1 }
+          guard better(result.rows[i], result.rows[child]) else { break }
+          result.rows.swapAt(i, child); i = child
+        }
+      }
+    }
+    for (index, file) in files.enumerated() {
+      if index % 256 == 0 { try cancellation.check() }
+      if index % 8192 == 0 { progress(Double(index) / Double(max(1, files.count))) }
+      guard file.bytes >= Int64(query.minimumMB) * 1_000_000,
+        query.olderThanDays == 0 || file.modified < cutoff,
+        search.isEmpty || file.path.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(search) else { continue }
+      let path = file.path as NSString, leaf = (file.path as NSString).lastPathComponent.lowercased()
+      let ext = path.pathExtension.lowercased()
+      let key = path.deletingLastPathComponent + "/" + (leaf.hasPrefix(".") || ext.isEmpty || named.contains(leaf) ? leaf : "*." + ext)
+      let classification: (String, Bool)
+      if let cached = classifications[key] { classification = cached }
+      else {
+        classification = (file.category, QuarantineStore.protected(file.path))
+        if classifications.count >= 4096 { classifications.removeAll(keepingCapacity: true) }
+        classifications[key] = classification
+      }
+      let category = classification.0
+      let download = Scanner.inside(file.path, downloads)
+      guard !query.archivesAndDownloads || category == "Archive" || download,
+        query.archivesAndDownloads || query.category == "all" || category == query.category else { continue }
+      let selectable = file.links == 1 && !classification.1
+        && !Scanner.inside(file.path, quarantine) && !excluded.contains { Scanner.inside(file.path, $0) }
+      if !selectable && !query.showProtected && query.category != FileCategory.docker.rawValue { result.hiddenProtected += 1; continue }
+      result.matches += 1
+      result.bytes += category == FileCategory.docker.rawValue ? max(0, file.allocated) : file.bytes
+      insert(Row(file: file, category: category, selectable: selectable, search: "", download: download))
+    }
+    try cancellation.check()
+    result.rows.sort(by: better)
+    progress(1)
     return result
   }
 }

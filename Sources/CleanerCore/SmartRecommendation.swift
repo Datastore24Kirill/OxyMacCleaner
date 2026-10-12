@@ -109,7 +109,7 @@ public enum SmartRecommendations {
     }
     for c in personal {
       add(c.rule.rawValue + ":" + c.id, section: "personal", path: c.file.path,
-          title: c.file.name, owner: t("Личный файл; владелец неизвестен", "Personal file; owner unknown"),
+          title: c.file.name, owner: DataOwnership.identify(c.file.path).label(russian: russian),
           bytes: c.file.bytes, date: snapshotDate,
           evidence: [t("Не изменялся \(c.ageDays) дней; правило \(c.rule.rawValue)", "Unmodified for \(c.ageDays) days; rule \(c.rule.rawValue)")],
           blockers: c.file.links != 1 || QuarantineStore.protected(c.file.path) ? [t("Защищённый файл или жёсткая ссылка", "Protected file or hard link")] : [],
