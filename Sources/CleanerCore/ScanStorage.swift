@@ -16,7 +16,9 @@ public struct SavedScan: Codable, Sendable {
     self.roots = roots
     self.volumeID = volumeID
     self.report = report
-    self.progress = progress
+    var measured = progress
+    if measured.allocatedBytes == nil { measured.allocatedBytes = report.files.reduce(0) { $0 + max(0, $1.allocated) } }
+    self.progress = measured
   }
 }
 public struct ScanStore: Sendable {
@@ -76,7 +78,7 @@ public struct ScanStore: Sendable {
       let snapshot = try PropertyListDecoder().decode(SavedScan.self, from: Data(contentsOf: url))
       guard snapshot.version == 1 else { throw CleanerError.message("Unsupported scan snapshot version") }
       try validate(snapshot.report)
-      return snapshot
+      return SavedScan(roots: snapshot.roots, volumeID: snapshot.volumeID, report: snapshot.report, progress: snapshot.progress, date: snapshot.date)
     }
     try handle.seek(toOffset: 0)
     var buffer = Data(); var metadata: Metadata?; var report = ScanReport(); var ended = false

@@ -88,6 +88,8 @@ public struct ScanProgress: Codable, Sendable {
   public var files = 0
   public var directories = 0
   public var bytes: Int64 = 0
+  /// Sum of st_blocks, not unique APFS extents or guaranteed reclaimable space.
+  public var allocatedBytes: Int64? = nil
   public var issues = 0
   public var currentPath = ""
   public var categories: [String: Int64] = [:]
@@ -108,6 +110,7 @@ public enum Scanner {
   ) -> ScanReport {
     var result = ScanReport()
     var snapshot = ScanProgress()
+    snapshot.allocatedBytes = 0
     let started = ProcessInfo.processInfo.systemUptime
     var lastEmission = started
     func emit(_ force: Bool = false) {
@@ -146,6 +149,7 @@ public enum Scanner {
       }
       for file in previous.files where retained(file.path) {
         result.files.append(file); snapshot.files += 1; snapshot.bytes += file.bytes
+        snapshot.allocatedBytes = (snapshot.allocatedBytes ?? 0) + max(0, file.allocated)
         snapshot.categories[file.category, default: 0] += file.bytes
         if file.links > 1 { seen.insert(Identity(device: file.device, inode: file.inode)) }
         var parent = (file.path as NSString).deletingLastPathComponent
@@ -217,6 +221,7 @@ public enum Scanner {
             do { try record(f) } catch { journalFailed = true; addIssue("Recovery journal unavailable: " + error.localizedDescription) }
           }
           result.files.append(f); snapshot.files += 1; snapshot.bytes += f.bytes
+          snapshot.allocatedBytes = (snapshot.allocatedBytes ?? 0) + max(0, f.allocated)
           snapshot.categories[f.category, default: 0] += f.bytes
           var parent = (path as NSString).deletingLastPathComponent
           while inside(parent, root.path) {

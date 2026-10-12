@@ -31,6 +31,7 @@ public enum ScanReconciliation {
     report.checkpoint = nil; report.complete = false; report.folders = [:]
     var progress = saved.progress
     progress.files = report.files.count; progress.bytes = report.total; progress.categories = [:]
+    progress.allocatedBytes = report.files.reduce(0) { $0 + max(0, $1.allocated) }
     for file in report.files {
       progress.categories[file.category, default: 0] += file.bytes
       var parent = (file.path as NSString).deletingLastPathComponent

@@ -322,15 +322,17 @@ struct RootView: View {
             vm.t("Найдено файлов", "Files found"),
             "\(vm.isScanning ? (vm.scanProgress?.files ?? 0) : vm.report.files.count)")
           metric(
-            vm.t("Логический объём", "Logical size"),
-            size(vm.isScanning ? (vm.scanProgress?.bytes ?? 0) : vm.report.total))
+            vm.t("Заявленный размер", "Logical size"),
+            size(vm.scanProgress?.bytes ?? vm.report.total))
+          metric(vm.t("Выделено файлам", "Allocated to files"),
+            vm.scanProgress?.allocatedBytes.map(size) ?? "—")
           metric(
             vm.t("В карантине", "In quarantine"),
             size(vm.entries.filter { $0.state == "quarantined" }.reduce(0) { $0 + $1.bytes }))
         }
         note(
-          "Размер файлов не равен гарантированно освобождаемому месту: APFS может совместно хранить данные. Карантин пока занимает диск.",
-          "File sizes are not guaranteed recoverable space: APFS may share blocks. Quarantine still occupies disk."
+          "Заявленный размер разреженных файлов может превышать ёмкость диска. Выделенные блоки APFS могут быть общими. Занятое место показано на индикаторе диска выше; карантин пока занимает диск.",
+          "Sparse files can have a logical size larger than disk capacity. APFS allocated blocks may be shared. Disk usage is shown above; quarantine still occupies disk."
         )
         if !vm.report.issues.isEmpty {
           DisclosureGroup(

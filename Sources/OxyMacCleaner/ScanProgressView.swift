@@ -82,12 +82,15 @@ struct ScanProgressView: View {
           )
           .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
         }
-        HStack(spacing: 24) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading, spacing: 10) {
           metric("\(progress.files.formatted())", vm.t("файлов проверено", "files scanned"))
-          metric(size(progress.bytes), vm.t("объём файлов", "file size"))
+          metric(size(progress.bytes), vm.t("заявленный размер", "logical file size"))
+          metric(progress.allocatedBytes.map(size) ?? "—", vm.t("выделено файлам", "allocated to files"))
           metric("\(progress.directories.formatted())", vm.t("папок пройдено", "folders visited"))
           if progress.issues > 0 { metric("\(progress.issues)", vm.t("пропусков", "skipped")) }
         }
+        Text(vm.t("Заявленный размер может превышать ёмкость диска: виртуальные диски и разреженные файлы занимают меньше. Выделенные блоки тоже могут быть общими в APFS — это не обещание экономии.", "Logical size can exceed disk capacity: virtual disks and sparse files use less space. Allocated blocks may also be shared by APFS; this is not guaranteed savings."))
+          .font(.caption).foregroundStyle(.secondary)
         GeometryReader { geometry in
           HStack(spacing: 0) {
             ForEach(segments, id: \.key) { item in
@@ -159,8 +162,8 @@ struct ScanProgressView: View {
         if active {
           Text(
             vm.t(
-              "Обход файлов · общий объём работы станет известен после обхода. Полоса показывает состав найденного объёма.",
-              "Enumerating files · total work is not yet known. The bar shows the scanned size breakdown."
+              "Обход файлов · общий объём работы станет известен после обхода. Полоса показывает состав заявленных размеров.",
+              "Enumerating files · total work is not yet known. The bar shows the logical-size breakdown."
             )
           )
           .font(.system(size: 10)).foregroundStyle(.secondary)
