@@ -4,11 +4,13 @@
 
 Native, local-first Mac cleanup and developer workspace inspection. **Free and open source.**
 
-[Download 1.0 for Apple Silicon](https://github.com/Datastore24Kirill/OxyMacCleaner/releases/tag/v1.0.0) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
+[Download 1.1 for Apple Silicon](https://github.com/Datastore24Kirill/OxyMacCleaner/releases/tag/v1.1.0) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 1.0 — local cleanup with explicit review
+## 1.1 — scalable disk review and grounded explanations
 
-Stable core release for macOS 14+ on Apple Silicon. [Release notes](docs/release-1.0.0.md) · [Acceptance and limitations](docs/ACCEPTANCE-1.0-RU.md) · [First launch](docs/FIRST-LAUNCH-RU.md).
+Stable core release for macOS 14+ on Apple Silicon. [Release notes](docs/release-1.1.0.md) · [Acceptance and limitations](docs/ACCEPTANCE-1.1-RU.md) · [First launch](docs/FIRST-LAUNCH-RU.md).
+
+Version 1.1 adds cancellable file filtering with progress, on-demand folder maps, ownership hints, agent storage breakdowns, guarded Python cache rules and local-model highlights restricted to verified facts.
 
 Unified recommendations explain ownership, evidence, risk and recovery. A combined preview removes known path/inode overlaps and preserves the retained duplicate copy. Large plans calculate in the background. Nothing is automatically selected or deleted. Unknown sizes and aggregate-folder uncertainty are visible.
 
@@ -45,7 +47,7 @@ The stable release covers the explicitly accepted core workflows. Developer ID/n
 
 ## Install
 
-Download `OxyMacCleaner-1.0.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-1.1.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
 The app is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
