@@ -41,15 +41,16 @@ public enum FileCategory: String, CaseIterable, Sendable {
   public var english: String { self == .other ? "Other files" : rawValue }
   /// Includes relocated Docker Desktop disks; no disk contents are opened.
   public static func isDockerData(_ path: String) -> Bool {
-    let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents.map { $0.lowercased() }
+    let parts = (path as NSString).standardizingPath.components(separatedBy: "/").map { $0.lowercased() }
     return parts.contains("com.docker.docker") || parts.contains("group.com.docker")
       || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2")
   }
   public static func classify(_ path: String) -> Self {
-    let url = URL(fileURLWithPath: path)
+    let url = URL(fileURLWithPath: path, isDirectory: false)
     let parts = url.pathComponents.map { $0.lowercased() }
     let lower = path.lowercased()
-    if isDockerData(path) { return .docker }
+    if parts.contains("com.docker.docker") || parts.contains("group.com.docker")
+      || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2") { return .docker }
     if parts.contains("deriveddata") { return .derivedData }
     if parts.contains(where: { $0.hasSuffix(".xcarchive") }) { return .xcodeArchive }
     if lower.contains("/steamapps/") || lower.contains("/gog games/")
