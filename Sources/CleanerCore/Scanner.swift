@@ -90,6 +90,7 @@ public struct ScanProgress: Codable, Sendable {
   public var bytes: Int64 = 0
   /// Sum of st_blocks, not unique APFS extents or guaranteed reclaimable space.
   public var allocatedBytes: Int64? = nil
+  public var allocatedCategories: [String: Int64]? = nil
   public var issues = 0
   public var currentPath = ""
   public var categories: [String: Int64] = [:]
@@ -111,6 +112,7 @@ public enum Scanner {
     var result = ScanReport()
     var snapshot = ScanProgress()
     snapshot.allocatedBytes = 0
+    snapshot.allocatedCategories = [:]
     let started = ProcessInfo.processInfo.systemUptime
     var lastEmission = started
     func emit(_ force: Bool = false) {
@@ -151,6 +153,7 @@ public enum Scanner {
         result.files.append(file); snapshot.files += 1; snapshot.bytes += file.bytes
         snapshot.allocatedBytes = (snapshot.allocatedBytes ?? 0) + max(0, file.allocated)
         snapshot.categories[file.category, default: 0] += file.bytes
+        snapshot.allocatedCategories?[file.category, default: 0] += max(0, file.allocated)
         if file.links > 1 { seen.insert(Identity(device: file.device, inode: file.inode)) }
         var parent = (file.path as NSString).deletingLastPathComponent
         while rootPaths.contains(where: { inside(parent, $0) }) {
@@ -223,6 +226,7 @@ public enum Scanner {
           result.files.append(f); snapshot.files += 1; snapshot.bytes += f.bytes
           snapshot.allocatedBytes = (snapshot.allocatedBytes ?? 0) + max(0, f.allocated)
           snapshot.categories[f.category, default: 0] += f.bytes
+          snapshot.allocatedCategories?[f.category, default: 0] += max(0, f.allocated)
           var parent = (path as NSString).deletingLastPathComponent
           while inside(parent, root.path) {
             result.folders[parent, default: 0] += f.bytes
@@ -284,7 +288,7 @@ public enum Scanner {
     _ files: [FileRecord], cancellation: Cancellation, progress: @escaping (Int) -> Void = { _ in }
   ) throws -> [[FileRecord]] {
     let sizes = Dictionary(
-      grouping: files.filter { $0.bytes > 0 && $0.links == 1 }, by: { $0.bytes })
+      grouping: files.filter { $0.bytes > 0 && $0.links == 1 && !FileCategory.isDockerData($0.path) }, by: { $0.bytes })
     var output: [[FileRecord]] = []
     var count = 0
     for group in sizes.values where group.count > 1 {

@@ -33,6 +33,11 @@ struct FileBrowserView: View {
           Button(vm.t("Сбросить фильтры", "Reset filters")) { query = .init() }
         } label: { Label(vm.t("Фильтры", "Filters"), systemImage: "line.3.horizontal.decrease") }
       }
+      if query.category == FileCategory.docker.rawValue {
+        Text(vm.t("Диск Docker содержит контейнеры, образы и данные, включая базы данных. Здесь доступен только просмотр. Очистите ненужные объекты в Docker Desktop; не удаляйте виртуальный диск целиком.", "Docker disks contain containers, images and data, including databases. Review only here. Remove unwanted objects in Docker Desktop; do not delete the entire virtual disk."))
+          .font(.callout).foregroundStyle(.secondary)
+        Link(vm.t("Как освободить место в Docker", "How to reclaim Docker space"), destination: URL(string: "https://docs.docker.com/desktop/troubleshoot-and-support/faqs/macfaqs/#what-if-the-file-is-too-big")!)
+      }
       HStack {
         Label("\(result.matches) " + vm.t("файлов", "files"), systemImage: "doc.on.doc")
         Text(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
@@ -67,7 +72,13 @@ struct FileBrowserView: View {
               Text(row.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(row.file.path)
             }
             Spacer()
-            Text(ByteCountFormatter.string(fromByteCount: row.file.bytes, countStyle: .file)).monospacedDigit()
+            VStack(alignment: .trailing) {
+              Text(ByteCountFormatter.string(fromByteCount: row.category == FileCategory.docker.rawValue ? row.file.allocated : row.file.bytes, countStyle: .file)).monospacedDigit()
+              if row.category == FileCategory.docker.rawValue {
+                Text(vm.t("Выделено на диске", "Allocated on disk")).font(.caption)
+                Text(vm.t("Заявлено: ", "Logical: ") + ByteCountFormatter.string(fromByteCount: row.file.bytes, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
+              }
+            }
             Menu { FileActions(path: row.file.path, file: row.file) } label: { Image(systemName: "ellipsis.circle") }.fixedSize()
               .accessibilityLabel(vm.t("Действия с файлом", "File actions"))
           }.padding(.vertical, 4).contextMenu { FileActions(path: row.file.path, file: row.file) }

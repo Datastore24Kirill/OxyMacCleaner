@@ -33,7 +33,7 @@ public struct FileBrowserIndex: Sendable {
     values.reserveCapacity(files.count)
     // Current classification rules depend on parent components, extension and these exact leaf names.
     // Hidden/extensionless leaves retain their whole name in the key.
-    let namedLeaves: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved"]
+    let namedLeaves: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2"]
     var classifications: [String: (Bool, String)] = [:]
     for (index, file) in files.enumerated() {
       if index % 256 == 0 { try cancellation.check() }
@@ -67,8 +67,8 @@ public struct FileBrowserIndex: Sendable {
         row.file.bytes >= Int64(query.minimumMB) * 1_000_000,
         (query.olderThanDays == 0 || row.file.modified < cutoff),
         search.isEmpty || row.search.contains(search) else { continue }
-      if !row.selectable && !query.showProtected { result.hiddenProtected += 1; continue }
-      result.matches += 1; result.bytes += row.file.bytes
+      if !row.selectable && !query.showProtected && query.category != FileCategory.docker.rawValue { result.hiddenProtected += 1; continue }
+      result.matches += 1; result.bytes += row.category == FileCategory.docker.rawValue ? max(0, row.file.allocated) : row.file.bytes
       if result.rows.count < max(1, query.limit) { result.rows.append(row) }
     }
     return result

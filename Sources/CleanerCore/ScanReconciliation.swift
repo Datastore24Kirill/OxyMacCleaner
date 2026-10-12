@@ -30,10 +30,11 @@ public enum ScanReconciliation {
     report.files.removeAll { file in removed.contains { Scanner.inside(file.path, $0) } }
     report.checkpoint = nil; report.complete = false; report.folders = [:]
     var progress = saved.progress
-    progress.files = report.files.count; progress.bytes = report.total; progress.categories = [:]
+    progress.files = report.files.count; progress.bytes = report.total; progress.categories = [:]; progress.allocatedCategories = [:]
     progress.allocatedBytes = report.files.reduce(0) { $0 + max(0, $1.allocated) }
     for file in report.files {
       progress.categories[file.category, default: 0] += file.bytes
+      progress.allocatedCategories?[file.category, default: 0] += max(0, file.allocated)
       var parent = (file.path as NSString).deletingLastPathComponent
       while saved.roots.contains(where: { Scanner.inside(parent, $0.path) }) {
         report.folders[parent, default: 0] += file.bytes

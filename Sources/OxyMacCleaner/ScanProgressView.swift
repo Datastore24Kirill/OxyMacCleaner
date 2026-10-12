@@ -8,7 +8,7 @@ struct ScanProgressView: View {
   let active: Bool
   @State private var showCategories = false
   private var ranked: [(key: String, value: Int64)] {
-    progress.categories.filter { $0.value > 0 }.sorted {
+    (progress.allocatedCategories ?? progress.categories).filter { $0.value > 0 }.sorted {
       $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
     }
   }
@@ -29,7 +29,7 @@ struct ScanProgressView: View {
       .cyan, .purple, .mint, .indigo, .pink, .teal, .brown, .green, .blue, .orange, .yellow, .red,
       .purple, .gray, .secondary,
     ]
-    return palette[index]
+    return palette[index % palette.count]
   }
   private var title: String {
     switch progress.phase {
@@ -95,7 +95,7 @@ struct ScanProgressView: View {
           HStack(spacing: 0) {
             ForEach(segments, id: \.key) { item in
               color(item.key).frame(
-                width: geometry.size.width * Double(item.value) / Double(max(1, progress.bytes))
+                width: geometry.size.width * Double(item.value) / Double(max(1, progress.allocatedCategories == nil ? progress.bytes : (progress.allocatedBytes ?? 0)))
               )
               .help(label(item.key) + " · " + size(item.value))
             }
@@ -129,7 +129,7 @@ struct ScanProgressView: View {
                   Text(size(item.value)).monospacedDigit()
                   Text(
                     String(
-                      format: "%.1f%%", Double(item.value) * 100 / Double(max(1, progress.bytes)))
+                      format: "%.1f%%", Double(item.value) * 100 / Double(max(1, progress.allocatedCategories == nil ? progress.bytes : (progress.allocatedBytes ?? 0))))
                   )
                   .foregroundStyle(.secondary).frame(width: 55, alignment: .trailing)
                   Button(vm.t("Файлы", "Files")) {
@@ -162,8 +162,8 @@ struct ScanProgressView: View {
         if active {
           Text(
             vm.t(
-              "Обход файлов · общий объём работы станет известен после обхода. Полоса показывает состав заявленных размеров.",
-              "Enumerating files · total work is not yet known. The bar shows the logical-size breakdown."
+              "Обход файлов · общий объём работы станет известен после обхода. Полоса показывает выделенное файлам место; это не оценка возможной очистки.",
+              "Enumerating files · total work is not yet known. The bar shows allocated file space, not reclaimable space."
             )
           )
           .font(.system(size: 10)).foregroundStyle(.secondary)

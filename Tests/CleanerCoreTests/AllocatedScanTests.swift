@@ -21,6 +21,7 @@ final class AllocatedScanTests: XCTestCase {
     let saved = SavedScan(roots: [root], volumeID: "fixture", report: report, progress: latest)
     let adjusted = ScanReconciliation.removing(report.files.map(\.path), from: saved)
     XCTAssertEqual(adjusted.progress.allocatedBytes, 0)
+    XCTAssertEqual(adjusted.progress.allocatedCategories, [:])
   }
   func testLegacyProgressLoadsAndAllocationIsRecoveredFromRecords() throws {
     var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(ScanProgress())) as? [String: Any])
@@ -31,6 +32,7 @@ final class AllocatedScanTests: XCTestCase {
     report.files = [FileRecord(path: "/fixture/a", bytes: 1_000_000, allocated: 4096, modified: Date(), inode: 1, device: 1, links: 1)]
     let saved = SavedScan(roots: [URL(fileURLWithPath: "/fixture")], volumeID: "test", report: report, progress: old)
     XCTAssertEqual(saved.progress.allocatedBytes, 4096)
+    XCTAssertEqual(saved.progress.allocatedCategories?[FileCategory.other.rawValue], 4096)
     let encoded = try JSONEncoder().encode(saved.progress)
     XCTAssertEqual(try JSONDecoder().decode(ScanProgress.self, from: encoded).allocatedBytes, 4096)
   }

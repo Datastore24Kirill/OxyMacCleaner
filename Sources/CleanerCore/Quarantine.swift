@@ -110,6 +110,7 @@ public final class QuarantineStore: @unchecked Sendable {
   }
   // Only the dedicated archive operation may enter the standard Xcode Archives tree.
   private static func protected(_ path: String, archiveStorage: Bool) -> Bool {
+    if FileCategory.isDockerData(path) { return true }
     let url = URL(fileURLWithPath: path).standardizedFileURL
     let components = url.pathComponents.map { $0.lowercased() }
     let archives = FileManager.default.homeDirectoryForCurrentUser

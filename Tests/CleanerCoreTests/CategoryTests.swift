@@ -3,6 +3,28 @@ import XCTest
 @testable import CleanerCore
 
 final class CategoryTests: XCTestCase {
+  func testDockerOwnershipAndRelocatedDiskProtection() throws {
+    for path in ["/Users/u/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw",
+                 "/Volumes/External/VM/Docker.qcow2", "/VM/Docker.raw", "/Users/u/.docker/config.json"] {
+      XCTAssertEqual(FileCategory.classify(path), .docker)
+      XCTAssertTrue(QuarantineStore.protected(path))
+    }
+    XCTAssertNotEqual(FileCategory.classify("/Photos/camera.raw"), .docker)
+    XCTAssertNotEqual(FileCategory.classify("/Downloads/Docker.raw.notes"), .docker)
+    // Records intentionally do not exist: duplicate detection must never open Docker disks.
+    let records = ["/VM/Docker.raw", "/External/Docker.raw"].enumerated().map { i, path in
+      FileRecord(path: path, bytes: 1_000_000, allocated: 4096, modified: Date(), inode: UInt64(i + 1), device: 1, links: 1)
+    }
+    XCTAssertTrue(try Scanner.duplicates(records, cancellation: Cancellation()).isEmpty)
+    let index = try FileBrowserIndex(files: records, excluded: [], quarantine: "/quarantine", downloads: "/Downloads")
+    var query = FileBrowserIndex.Query()
+    XCTAssertEqual(try index.filter(query).matches, 0)
+    query.category = FileCategory.docker.rawValue
+    let result = try index.filter(query)
+    XCTAssertEqual(result.matches, 2)
+    XCTAssertEqual(result.bytes, 8192)
+    XCTAssertTrue(result.rows.allSatisfy { !$0.selectable })
+  }
   func testMediaAndDocuments() {
     for (path, expected) in [
       ("/Photos/IMG.HEIC", FileCategory.images), ("/Movies/a.MKV", .video),

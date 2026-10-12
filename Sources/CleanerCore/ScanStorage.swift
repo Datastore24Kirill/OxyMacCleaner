@@ -18,6 +18,10 @@ public struct SavedScan: Codable, Sendable {
     self.report = report
     var measured = progress
     if measured.allocatedBytes == nil { measured.allocatedBytes = report.files.reduce(0) { $0 + max(0, $1.allocated) } }
+    if measured.allocatedCategories == nil {
+      measured.allocatedCategories = [:]
+      for file in report.files { measured.allocatedCategories?[file.category, default: 0] += max(0, file.allocated) }
+    }
     self.progress = measured
   }
 }

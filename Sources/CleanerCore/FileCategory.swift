@@ -7,6 +7,7 @@ public enum FileCategory: String, CaseIterable, Sendable {
   case applications = "Applications"
   case games = "Games"
   case appData = "App Data"
+  case docker = "Docker Data"
   case caches = "Caches"
   case images = "Images"
   case video = "Video"
@@ -25,6 +26,7 @@ public enum FileCategory: String, CaseIterable, Sendable {
     case .applications: return "Программы"
     case .games: return "Данные игр"
     case .appData: return "Данные приложений"
+    case .docker: return "Данные Docker"
     case .caches: return "Кэши"
     case .images: return "Фото и изображения"
     case .video: return "Видео"
@@ -37,10 +39,17 @@ public enum FileCategory: String, CaseIterable, Sendable {
     }
   }
   public var english: String { self == .other ? "Other files" : rawValue }
+  /// Includes relocated Docker Desktop disks; no disk contents are opened.
+  public static func isDockerData(_ path: String) -> Bool {
+    let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents.map { $0.lowercased() }
+    return parts.contains("com.docker.docker") || parts.contains("group.com.docker")
+      || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2")
+  }
   public static func classify(_ path: String) -> Self {
     let url = URL(fileURLWithPath: path)
     let parts = url.pathComponents.map { $0.lowercased() }
     let lower = path.lowercased()
+    if isDockerData(path) { return .docker }
     if parts.contains("deriveddata") { return .derivedData }
     if parts.contains(where: { $0.hasSuffix(".xcarchive") }) { return .xcodeArchive }
     if lower.contains("/steamapps/") || lower.contains("/gog games/")
