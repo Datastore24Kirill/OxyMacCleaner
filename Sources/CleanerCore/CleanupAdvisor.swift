@@ -22,12 +22,19 @@ public enum CleanupAdvisor {
     var seen = Set<String>()
     var output: [CleanupCandidate] = []
     for file in files {
+      // Cheap necessary conditions first: do not inspect ownership of millions
+      // of small/current files that cannot match either recommendation rule.
+      let age = Int(now.timeIntervalSince(file.modified) / 86400)
+      let ext = (file.path as NSString).pathExtension.lowercased()
+      let oldInstaller = age >= 90 && Scanner.inside(file.path, downloads)
+        && ["dmg", "pkg", "xip", "ipa"].contains(ext)
+      guard oldInstaller || (file.bytes >= 500_000_000 && age >= 180) else { continue }
       guard file.bytes > 0, file.links == 1, file.modified <= now,
         locations.contains(where: { Scanner.inside(file.path, $0) }),
         !QuarantineStore.protected(file.path),
         !exclusions.contains(where: { Scanner.inside(file.path, $0) })
       else { continue }
-      let url = URL(fileURLWithPath: file.path)
+      let url = URL(fileURLWithPath: file.path, isDirectory: false)
       let parts = url.pathComponents.map { $0.lowercased() }
       guard blocked.isDisjoint(with: parts),
         !parts.contains(where: {
@@ -39,7 +46,6 @@ public enum CleanupAdvisor {
       guard [.images, .video, .audio, .documents, .archive, .other].contains(category) else {
         continue
       }
-      let age = Int(now.timeIntervalSince(file.modified) / 86400)
       let rule: CleanupCandidate.Rule
       if Scanner.inside(file.path, downloads),
         ["dmg", "pkg", "xip", "ipa"].contains(url.pathExtension.lowercased()), age >= 90
