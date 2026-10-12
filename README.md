@@ -4,13 +4,13 @@
 
 Native, local-first Mac cleanup and developer workspace inspection. **Free and open source.**
 
-[Download the Apple Silicon preview](https://github.com/Datastore24Kirill/OxyMacCleaner/releases) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
+[Download 1.0 for Apple Silicon](https://github.com/Datastore24Kirill/OxyMacCleaner/releases/tag/v1.0.0) · [Техническое задание](docs/SPEC-RU.md) · [Implementation status](docs/STATUS.md) · [Privacy](docs/PRIVACY.md)
 
-## 0.9.0 Preview — implemented
+## 1.0 — local cleanup with explicit review
 
-New in 0.9.0: explicit evidence checks for every summary claim, chronological user statements, review-only tool requests and separate transfer/review panels. Semantic mode remains Preview. [Release details](docs/release-0.9.0.md).
+Stable core release for macOS 14+ on Apple Silicon. [Release notes](docs/release-1.0.0.md) · [Acceptance and limitations](docs/ACCEPTANCE-1.0-RU.md) · [First launch](docs/FIRST-LAUNCH-RU.md).
 
-Previous milestone 0.2.0: separate continuation/clean-context actions, locally generated source excerpts with validated citations, Cursor file transcripts, and verified in-app update installation with progress and rollback. [Release details](docs/release-0.2.0.md).
+Unified recommendations explain ownership, evidence, risk and recovery. A combined preview removes known path/inode overlaps and preserves the retained duplicate copy. Large plans calculate in the background. Nothing is automatically selected or deleted. Unknown sizes and aggregate-folder uncertainty are visible.
 
 Native JSONL histories up to 1 GB: bounded streaming import, private disk snapshots, progress/cancellation and incremental model input. Originals remain unchanged.
 
@@ -41,13 +41,13 @@ Safety audit: generic cleanup now protects user Library, media libraries, signin
 - Ollama installer assistant: official GitHub release, SHA-256 validation, code signature and Gatekeeper assessment. Reuses existing installations.
 - Local model download progress/cancellation; no automatic cloud fallback. Model metadata must identify a local GGUF model.
 
-This is an early implementation milestone, **not completion of the version-one specification**. Database-backed agent adapters, further cache discovery, broader accessibility auditing and signed distribution remain open. Grounded context extraction passed short and multi-part synthetic 7B cases; semantic quality is not certified on real histories. Original histories are retained.
+The stable release covers the explicitly accepted core workflows. Developer ID/notarization remain deferred; database-backed agent mutation and universal cache discovery are not supported. Semantic context rewriting remains **Preview**, requires manual review and does not guarantee lossless compression. Original histories are retained. See the [release checklist](docs/RELEASE-GATES-RU.md) for exact scope.
 
 ## Install
 
-Download `OxyMacCleaner-0.9.1-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
+Download `OxyMacCleaner-1.0.0-macOS-arm64.zip`, extract the app and move it to Applications. No Python, Swift or Xcode installation is needed to run it. Verify the archive against `SHA256SUMS.txt` if desired.
 
-The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
+The app is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening it. Do not disable Gatekeeper or SIP. Signing remains an open distribution task.
 
 [Инструкция первого запуска](docs/FIRST-LAUNCH-RU.md) · [Сверка ТЗ и ограничения](docs/READINESS-RU.md)
 
@@ -56,10 +56,10 @@ The preview is ad-hoc signed, not Developer ID signed or notarized. macOS may bl
 1. Choose a disk (the startup disk is selected by default) or use the optional folder picker for a small test. Nothing is moved automatically.
 2. Review files and duplicates; keep at least one copy per duplicate group.
 3. Moving a file into quarantine **does not free its disk space**. Restore first to verify the workflow on a disposable file.
-4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after integrity and retention checks), agent storage, credentials and system paths are excluded from cleanup in this preview. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Already-quarantined objects can be relocated to another local volume after verification; initial quarantine still requires the same volume.
+4. Project files inside Git repositories, package internals (except explicitly selected whole Xcode archives after integrity and retention checks), agent storage, credentials and system paths are excluded from cleanup in this release. Ordinary folders can be quarantined on the same volume after integrity checks; project and system folders are excluded. Already-quarantined objects can be relocated to another local volume after verification; initial quarantine still requires the same volume.
 5. To prepare an agent handoff, import an exported inactive session, configure a local model, review the result and paste it into a new chat. Existing chats are not rewritten.
 
-APFS clones/snapshots mean logical file sizes are not a guarantee of reclaimable storage. Large scans currently retain file metadata in memory. Only the first 2,000 filtered files are rendered; narrow the search to access more results.
+APFS clones/snapshots mean logical file sizes are not a guarantee of reclaimable storage. Large scans currently retain file metadata in memory. Large lists use paging; narrow filters to focus your review.
 
 ## Build and test
 
@@ -91,7 +91,7 @@ Building requires Xcode 26 or later to compile the Icon Composer asset; running 
 
 A guided access check appears on first launch and after each release update, and is always available from Settings. macOS Full Disk Access must be granted by the user in System Settings. The app does not reset TCC, write its database, or bypass user consent. The probe opens three protected directory handles and closes them without enumerating contents; it reports observed access, not a definitive global permission flag. Missing directories produce an unconfirmed result.
 
-Preview releases are ad-hoc signed: macOS may require granting access again after replacement. Reuse one Developer ID identity for production builds via `OXYMAC_SIGNING_IDENTITY`; signing alone is not notarization. Never replace the designated requirement with an identifier-only rule. Until signed releases are available, follow the in-app recovery instructions for the exact installed copy.
+Current releases are ad-hoc signed: macOS may require granting access again after replacement. Reuse one Developer ID identity for production builds via `OXYMAC_SIGNING_IDENTITY`; signing alone is not notarization. Never replace the designated requirement with an identifier-only rule. Until signed releases are available, follow the in-app recovery instructions for the exact installed copy.
 
 File classification includes 15 categories. Embedded media in app bundles and recognized game libraries stays with its container. The scan legend shows the five largest categories and a remainder; the complete breakdown and per-category file filter are available in the UI. Classification is informational, not a cleanup recommendation.
 
@@ -100,11 +100,3 @@ Completed and cancelled scan results are saved locally and restored on launch. T
 Ordinary folders can be moved to quarantine from the disk-map list context menu after inspection and confirmation. Folder transfers and restore destinations must stay on the same volume. Close apps using the folder first. Git projects, service data, app packages, links and protected descendants remain blocked. Use “Check interrupted operations” in Quarantine to reconcile interrupted transfer/restore journal records.
 
 Cleanup opportunities currently offer two review-only rules for old installers and large unmodified personal files. Each candidate has a reason; modification time is not treated as last use, and candidate bytes are not presented as guaranteed savings. No automatic selection or deletion is performed.
-
-## 1.0 RC1
-
-Кандидат первой версии: техническая версия **0.9.0**, предварительный релиз. [Конечный чек-лист](docs/RELEASE-GATES-RU.md), [результаты приёмки](docs/ACCEPTANCE-RC1-RU.md), [первый запуск](docs/FIRST-LAUNCH-RU.md). Developer ID отложен; свободный пересказ контекста экспериментальный.
-
-## 1.0 RC2 / 0.9.1
-
-Unified review catalog with versioned rules, evidence, risk groups and a combined preview. No automatic deletion. [Release notes](docs/release-0.9.1.md), [rule quality and limits](docs/SMART-CLEANUP-QUALITY-RU.md).

@@ -14,15 +14,17 @@ final class SmartRecommendationTests: XCTestCase {
   }
   func catalog(_ files: [FileRecord] = [], exclusions: [String] = [],
                archives: ArchiveInventory = ArchiveInventory(), derived: [DerivedCache] = [],
-               derivedIssue: String? = nil, duplicates: [[FileRecord]] = []) -> [SmartRecommendation] {
+               derivedIssue: String? = nil, duplicates: [[FileRecord]] = [],
+               pinned: Set<String> = [], checked: Bool = true,
+               simulators: SimulatorInventory = SimulatorInventory(), simulatorIssue: String? = nil) -> [SmartRecommendation] {
     let home = URL(fileURLWithPath: "/Users/smart-fixture")
     return SmartRecommendations.catalog(
       personal: CleanupAdvisor.candidates(files: files, home: home, exclusions: [], now: date),
-      snapshotDate: date, archives: archives, archiveDate: date, keep: 1, pinned: [],
-      derived: derived, derivedDate: date, derivedIssue: derivedIssue,
+      snapshotDate: checked ? date : nil, archives: archives, archiveDate: checked ? date : nil, keep: 1, pinned: pinned,
+      derived: derived, derivedDate: checked ? date : nil, derivedIssue: derivedIssue,
       duplicates: duplicates, duplicateDate: date, projects: [], projectDate: nil, projectIssue: nil,
-      worktrees: [], worktreeDate: nil, worktreeIssue: nil, simulators: SimulatorInventory(),
-      simulatorDate: nil, simulatorIssue: nil, testDevices: [], testDate: nil, testIssue: nil,
+      worktrees: [], worktreeDate: nil, worktreeIssue: nil, simulators: simulators,
+      simulatorDate: checked ? date : nil, simulatorIssue: simulatorIssue, testDevices: [], testDate: nil, testIssue: nil,
       exclusions: exclusions, russian: false, now: date)
   }
   func file(_ path: String, days: Int = 200, bytes: Int64 = 600_000_000, links: UInt64 = 1) -> FileRecord {
@@ -145,6 +147,87 @@ final class SmartRecommendationTests: XCTestCase {
     XCTAssertEqual(result.filter(\.selectable).map(\.title), ["shutdown"])
     XCTAssertEqual(result.filter { $0.group == .blocked }.count, 3)
     XCTAssertEqual(RecommendationPreview(result).unknownSizeCount, 1)
+  }
+
+  func testLabelledDevelopmentRules() {
+    var cases: [(String, Bool, Bool)] = []
+    func record(_ label: String, _ items: [SmartRecommendation], _ expected: Bool, path: String? = nil) {
+      let actual = items.contains { $0.selectable && (path == nil || $0.path == path) }
+      cases.append((label, actual, expected))
+    }
+    let old = XcodeArchive(path: "/fixture/old.xcarchive", name: "old", bundleID: "app", team: "team",
+      version: "1", build: "1", created: date.addingTimeInterval(-86400), bytes: 100, dsymCount: 1, issues: [])
+    let new = XcodeArchive(path: "/fixture/new.xcarchive", name: "new", bundleID: "app", team: "team",
+      version: "1", build: "2", created: date, bytes: 100, dsymCount: 1, issues: [])
+    var inventory = ArchiveInventory(); inventory.complete = true; inventory.archives = [old,new]
+    record("archive over limit", catalog(archives: inventory), true, path: old.path)
+    record("archive last retained", catalog(archives: inventory), false, path: new.path)
+    record("archive pinned", catalog(archives: inventory, pinned: [old.path]), false, path: old.path)
+    record("archive excluded", catalog(exclusions: [old.path], archives: inventory), false, path: old.path)
+    record("archive missing timestamp", catalog(archives: inventory, checked: false), false)
+    inventory.complete = false
+    record("archive incomplete inventory", catalog(archives: inventory), false)
+    inventory.complete = true
+    inventory.archives = [XcodeArchive(path: old.path, name: "unknown", bundleID: nil, team: nil,
+      version: nil, build: nil, created: nil, bytes: 100, dsymCount: 0, issues: ["unreadable"])]
+    record("archive unknown identity", catalog(archives: inventory), false)
+
+    func cache(_ category: String = "Index.noindex", age: Double = 601, issues: Int = 0, bytes: Int64 = 100) -> DerivedCache {
+      DerivedCache(path: DerivedData.root.appendingPathComponent("OxyLabelFixture/" + category).path,
+        project: "fixture", workspace: "/fixture", category: category, bytes: bytes,
+        modified: date.addingTimeInterval(-age), issues: issues)
+    }
+    record("derived idle index", catalog(derived: [cache()]), true)
+    record("derived idle intermediates", catalog(derived: [cache("Build/Intermediates.noindex")]), true)
+    record("derived logs review", catalog(derived: [cache("Logs")]), true)
+    XCTAssertEqual(catalog(derived: [cache("Logs")]).first?.group, .review)
+    record("derived recent boundary", catalog(derived: [cache(age: 600)]), false)
+    record("derived traversal error", catalog(derived: [cache(issues: 1)]), false)
+    record("derived empty", catalog(derived: [cache(bytes: 0)]), false)
+    record("derived unknown category", catalog(derived: [cache("SourcePackages")]), false)
+    record("derived missing timestamp", catalog(derived: [cache()], checked: false), false)
+    record("derived source error", catalog(derived: [cache()], derivedIssue: "offline"), false)
+    record("derived excluded parent", catalog(exclusions: [DerivedData.root.path], derived: [cache()]), false)
+
+    for (state, available, valid, expected) in [
+      ("Shutdown", false, true, true), ("Booted", false, true, false),
+      ("Creating", false, true, false), ("Shutdown", true, true, false),
+      ("Shutdown", false, false, false)
+    ] {
+      var sim = SimulatorInventory()
+      sim.devices = [SimulatorDevice(udid: valid ? UUID().uuidString : "bad", name: "fixture", state: state, isAvailable: available)]
+      record("device \(state) available=\(available) valid=\(valid)", catalog(simulators: sim), expected)
+    }
+    var sim = SimulatorInventory()
+    sim.devices = [SimulatorDevice(udid: UUID().uuidString, name: "fixture", state: "Shutdown", isAvailable: false)]
+    record("device source unavailable", catalog(simulators: sim, simulatorIssue: "offline"), false)
+    record("device not inspected", catalog(checked: false, simulators: sim), false)
+    for (days, state, deletable, expected) in [(90, "Ready", true, true), (89, "Ready", true, false), (90, "Ready", false, false), (90, "Deleting", true, false)] {
+      sim.devices = []
+      sim.runtimes = [SimulatorRuntime(identifier: UUID().uuidString, runtimeIdentifier: "fixture",
+        version: "1", build: "1", state: state, deletable: deletable, sizeBytes: 100,
+        lastUsedAt: ISO8601DateFormatter().string(from: date.addingTimeInterval(-Double(days)*86400)))]
+      record("runtime days=\(days) state=\(state) deletable=\(deletable)", catalog(simulators: sim), expected)
+    }
+    var tp=0, fp=0, tn=0, fn=0
+    for (label, actual, expected) in cases {
+      XCTAssertEqual(actual, expected, label)
+      if expected { if actual { tp += 1 } else { fn += 1 } }
+      else { if actual { fp += 1 } else { tn += 1 } }
+    }
+    print("SMART_DEVELOPMENT_QUALITY fixtures=\(cases.count) TP=\(tp) FP=\(fp) TN=\(tn) FN=\(fn)")
+  }
+
+  func testComponentBoundariesAndRetainedParentProtection() {
+    XCTAssertEqual(SpaceEstimate.disjointPaths(["/a", "/a/file", "/ab/file", "/a-x", "/a/../a", "/z"]), ["/a", "/a-x", "/ab/file", "/z"])
+    XCTAssertEqual(SpaceEstimate.disjointPaths(["/", "/a/b"]), ["/"])
+    let preview = RecommendationPreview([
+      item("folder", path: "/a"), item("neighbour", path: "/ab", bytes: 200),
+      item("duplicate", path: "/copy", retained: ["/a/keep"])
+    ])
+    XCTAssertFalse(preview.objects.contains { $0.id == "folder" })
+    XCTAssertEqual(preview.knownLogicalBytes, 300)
+    XCTAssertEqual(preview.rejectedCount, 1)
   }
 
 }

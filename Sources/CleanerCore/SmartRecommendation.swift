@@ -49,11 +49,12 @@ public struct RecommendationPreview: Sendable {
   public init(_ selected: [SmartRecommendation]) {
     var ids = Set<String>()
     let unique = selected.filter { ids.insert($0.id).inserted }
-    let reserved = unique.filter(\.selectable).flatMap(\.retainedPaths)
+    let reservedAncestors = Set(unique.filter(\.selectable).flatMap(\.retainedPaths)
+      .flatMap { SpaceEstimate.ancestors($0, includingSelf: true) })
     let allowed = unique.filter { item in
-      item.selectable && !reserved.contains { keeper in
-        item.path.map { Scanner.inside(keeper, $0) } ?? false
-      }
+      item.selectable && !(item.path.map {
+        reservedAncestors.contains(URL(fileURLWithPath: $0).standardizedFileURL.path)
+      } ?? false)
     }
     let roots = Set(SpaceEstimate.disjointPaths(allowed.compactMap(\.path)))
     var paths = Set<String>(); var identities = Set<String>()

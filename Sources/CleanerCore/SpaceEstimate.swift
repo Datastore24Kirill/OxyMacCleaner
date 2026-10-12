@@ -17,8 +17,20 @@ public struct SpaceEstimate: Sendable {
     }
     self.logical = logical; self.allocated = allocated; hardLinked = linked; self.count = count
   }
+  /// Component boundaries matter: /a must not exclude /ab. O(depth), not O(selection count).
+  static func ancestors(_ path: String, includingSelf: Bool) -> [String] {
+    var url = URL(fileURLWithPath: path).standardizedFileURL
+    var result: [String] = includingSelf ? [url.path] : []
+    while url.path != "/" {
+      url.deleteLastPathComponent()
+      result.append(url.path)
+    }
+    return result
+  }
   public static func disjointPaths(_ paths: [String]) -> [String] {
     let unique = Set(paths.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
-    return unique.filter { path in !unique.contains { $0 != path && Scanner.inside(path, $0) } }.sorted()
+    return unique.filter { path in
+      !ancestors(path, includingSelf: false).contains(where: unique.contains)
+    }.sorted()
   }
 }

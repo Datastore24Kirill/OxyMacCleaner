@@ -8,6 +8,10 @@ struct SmartRecommendationsView: View {
   @State private var query = ""
   @State private var limit = 50
   @State private var previewing = false
+  @State private var loading = false
+  @State private var previewLoading = false
+  @State private var generation = UUID()
+  @State private var previewReport: RecommendationPreview?
   private func size(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
   private func title(_ group: SmartRecommendation.Group) -> String {
     switch group {
@@ -24,8 +28,11 @@ struct SmartRecommendationsView: View {
       HStack {
         Text(vm.t("Выбрано: ", "Selected: ") + "\(selected.count)")
         Button(vm.t("Снять выбор", "Clear selection")) { selected = [] }.disabled(selected.isEmpty)
-        Button(vm.t("Общий предпросмотр…", "Combined preview…")) { previewing = true }
-          .disabled(selected.isEmpty || vm.busy)
+        Button(vm.t("Общий предпросмотр…", "Combined preview…")) { preparePreview() }
+          .disabled(selected.isEmpty || vm.busy || loading || previewLoading)
+      }
+      if loading || previewLoading {
+        HStack { ProgressView().controlSize(.small); Text(vm.t("Подготавливаем план…", "Preparing review plan…")) }
       }
       let matching = catalog.filter { query.isEmpty || ($0.title + ($0.path ?? "") + $0.owner).localizedCaseInsensitiveContains(query) }
       ForEach(SmartRecommendation.Group.allCases, id: \.rawValue) { group in
@@ -41,6 +48,7 @@ struct SmartRecommendationsView: View {
       if catalog.isEmpty { Text(vm.t("Обновите сводку. Дополнительные источники проверяются в своих разделах.", "Refresh the summary. Additional sources are inspected in their own sections.")).foregroundStyle(.secondary) }
     }
     .onAppear { reload() }
+    .onDisappear { generation = UUID() }
     .onChange(of: vm.busy) { _, busy in if !busy { reload() } }
     .onChange(of: vm.recommendationsRevision) { _, _ in reload() }
     .onChange(of: vm.exclusions) { _, _ in reload() }
@@ -53,7 +61,7 @@ struct SmartRecommendationsView: View {
       HStack {
         Toggle(item.title, isOn: Binding(get: { selected.contains(item.id) }, set: {
           if $0 { selected.insert(item.id) } else { selected.remove(item.id) }
-        })).toggleStyle(.checkbox).disabled(!item.selectable || vm.busy)
+        })).toggleStyle(.checkbox).disabled(!item.selectable || vm.busy || loading || previewLoading)
         Spacer()
         Text(item.bytes.map(size) ?? vm.t("Размер неизвестен", "Size unknown")).font(.caption)
       }
@@ -67,7 +75,7 @@ struct SmartRecommendationsView: View {
           Text(item.conditions.joined(separator: "\n"))
           Text(item.recovery)
           Text(item.rule + " · v\(item.version) · " + (item.checkedAt?.formatted() ?? vm.t("Не проверено", "Not inspected")))
-          Text(item.evidenceComplete ? vm.t("Метаданные заполнены; это не гарантия безопасности", "Metadata complete; not a safety guarantee") : vm.t("Доказательства или размер неполные", "Evidence or size incomplete"))
+          Text(item.evidenceComplete ? vm.t("Метаданные заполнены; это не гарантия безопасности", "Metadata complete; not a safety guarantee") : vm.t("Не все условия выполнены или размер неизвестен", "Some conditions are unmet or size is unknown"))
         }.font(.caption).textSelection(.enabled)
       }
       Button(vm.t("Посмотреть в разделе", "Review in section")) { open(item.section) }.disabled(vm.busy)
@@ -75,7 +83,7 @@ struct SmartRecommendationsView: View {
     }
   }
   private var preview: some View {
-    let report = RecommendationPreview(catalog.filter { selected.contains($0.id) })
+    let report = previewReport ?? RecommendationPreview([])
     return VStack(alignment: .leading, spacing: 14) {
       Text(vm.t("Предпросмотр выбранного", "Selection preview")).font(.title2.bold())
       Text("\(report.objects.count) · " + size(report.knownLogicalBytes) + vm.t(" — известный логический объём", " — known logical size"))
@@ -105,16 +113,48 @@ struct SmartRecommendationsView: View {
   private func open(_ section: String) {
     if section == "personal" { vm.page = "files" } else { vm.openOpportunity(section) }
   }
+  private func preparePreview() {
+    let items = catalog.filter { selected.contains($0.id) }
+    let token = generation
+    let selection = selected
+    previewLoading = true
+    Task {
+      let report = await Task.detached(priority: .userInitiated) { RecommendationPreview(items) }.value
+      guard token == generation else { return }
+      previewLoading = false
+      guard selection == selected else { return }
+      previewReport = report
+      previewing = true
+    }
+  }
   private func reload() {
-    catalog = SmartRecommendations.catalog(personal: vm.recommendations, snapshotDate: vm.snapshotDate,
-      archives: vm.archiveInventory, archiveDate: vm.archiveScanDate, keep: vm.archiveKeep,
-      pinned: vm.pinnedArchives, derived: vm.derivedCaches, derivedDate: vm.derivedReadAt,
-      derivedIssue: vm.derivedReadIssue, duplicates: vm.duplicates, duplicateDate: vm.duplicatesReadAt,
-      projects: vm.projectData, projectDate: vm.projectDataDate, projectIssue: vm.projectDataIssue,
-      worktrees: vm.worktreeReviews, worktreeDate: vm.worktreeReadAt, worktreeIssue: vm.worktreeIssue,
-      simulators: vm.simulatorInventory, simulatorDate: vm.simulatorReadAt, simulatorIssue: vm.simulatorReadIssue,
-      testDevices: vm.testDevices, testDate: vm.testDeviceReadAt, testIssue: vm.testDeviceIssue,
-      exclusions: vm.exclusions, russian: vm.language != "en")
-    selected = []
+    let token = UUID(); generation = token
+    selected = []; loading = true; previewLoading = false
+    previewing = false; previewReport = nil
+    let personal = vm.recommendations, snapshotDate = vm.snapshotDate
+    let archives = vm.archiveInventory, archiveDate = vm.archiveScanDate
+    let keep = vm.archiveKeep, pinned = vm.pinnedArchives
+    let derived = vm.derivedCaches, derivedDate = vm.derivedReadAt, derivedIssue = vm.derivedReadIssue
+    let duplicates = vm.duplicates, duplicateDate = vm.duplicatesReadAt
+    let projects = vm.projectData, projectDate = vm.projectDataDate, projectIssue = vm.projectDataIssue
+    let worktrees = vm.worktreeReviews, worktreeDate = vm.worktreeReadAt, worktreeIssue = vm.worktreeIssue
+    let simulators = vm.simulatorInventory, simulatorDate = vm.simulatorReadAt, simulatorIssue = vm.simulatorReadIssue
+    let testDevices = vm.testDevices, testDate = vm.testDeviceReadAt, testIssue = vm.testDeviceIssue
+    let exclusions = vm.exclusions, russian = vm.language != "en"
+    Task {
+      let result = await Task.detached(priority: .userInitiated) {
+        SmartRecommendations.catalog(personal: personal, snapshotDate: snapshotDate,
+      archives: archives, archiveDate: archiveDate, keep: keep,
+      pinned: pinned, derived: derived, derivedDate: derivedDate,
+      derivedIssue: derivedIssue, duplicates: duplicates, duplicateDate: duplicateDate,
+      projects: projects, projectDate: projectDate, projectIssue: projectIssue,
+      worktrees: worktrees, worktreeDate: worktreeDate, worktreeIssue: worktreeIssue,
+      simulators: simulators, simulatorDate: simulatorDate, simulatorIssue: simulatorIssue,
+      testDevices: testDevices, testDate: testDate, testIssue: testIssue,
+      exclusions: exclusions, russian: russian)
+      }.value
+      guard token == generation else { return }
+      catalog = result; loading = false
+    }
   }
 }

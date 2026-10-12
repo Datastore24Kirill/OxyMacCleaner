@@ -152,7 +152,7 @@ struct RootView: View {
         Text(vm.t("ЛОКАЛЬНО · ПОД ВАШИМ КОНТРОЛЕМ", "LOCAL · UNDER YOUR CONTROL")).font(
           .system(size: 9, weight: .semibold)
         ).foregroundStyle(.secondary)
-        Text("0.9.1 · 1.0 RC2").font(.caption).foregroundStyle(.secondary)
+        Text("1.0.0").font(.caption).foregroundStyle(.secondary)
       }.padding(18).frame(width: 240).background(.thinMaterial)
       VStack(alignment: .leading, spacing: 16) {
         HStack {
@@ -343,7 +343,7 @@ struct RootView: View {
           }.oxyHelp(.disclosure)
         }
         card {
-          Label(vm.t("Кандидат первой версии", "Release candidate"), systemImage: "testtube.2").font(
+          Label(vm.t("Возможности первой версии", "Version one capabilities"), systemImage: "checkmark.seal").font(
             .headline)
           note(
             "Карантин файлов и обычных папок на одном диске готов. DerivedData и архивы очищаются в разделе Xcode. Симуляторы удаляются штатным simctl после подтверждения. Истории агентов импортируются вручную; базы чатов не изменяются.",

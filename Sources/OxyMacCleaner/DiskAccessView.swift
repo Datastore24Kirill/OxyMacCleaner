@@ -54,8 +54,8 @@ struct DiskAccessView: View {
         .font(.callout)
         Text(
           vm.t(
-            "В этой Preview-сборке нет Developer ID: сохранение разрешения между обновлениями пока не гарантируется. Приложение не сбрасывает ваши разрешения автоматически.",
-            "This preview has no Developer ID signature: permissions may not persist across updates. The app never resets your permissions automatically."
+            "В этой сборке нет Developer ID: сохранение разрешения между обновлениями пока не гарантируется. Приложение не сбрасывает ваши разрешения автоматически.",
+            "This build has no Developer ID signature: permissions may not persist across updates. The app never resets your permissions automatically."
           )
         )
         .font(.caption).foregroundStyle(.secondary)
