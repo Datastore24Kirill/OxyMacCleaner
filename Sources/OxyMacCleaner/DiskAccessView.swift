@@ -3,7 +3,9 @@ import SwiftUI
 
 struct DiskAccessView: View {
   @EnvironmentObject var vm: AppModel
+  @EnvironmentObject var updater: AppUpdater
   @Environment(\.dismiss) var dismiss
+  @State private var copiedPath = false
   private var available: Bool { vm.diskAccess?.state == .available }
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
@@ -44,11 +46,15 @@ struct DiskAccessView: View {
           Button(vm.t("Показать приложение", "Show app in Finder")) {
             vm.reveal(Bundle.main.bundlePath)
           }.oxyHelp(.finder)
+          Button(vm.t(copiedPath ? "Путь скопирован" : "Копировать путь", copiedPath ? "Path copied" : "Copy path")) {
+            NSPasteboard.general.clearContents()
+            copiedPath = NSPasteboard.general.setString(Bundle.main.bundlePath, forType: .string)
+          }.help(vm.t("В диалоге «+» нажмите ⇧⌘G и вставьте путь к этой копии приложения.", "In the + dialog, press ⇧⌘G and paste the path to this copy of the app."))
         }
         Text(
           vm.t(
-            "Доступ проверяется при каждом запуске, даже если эта версия уже проверялась. Если галочка уже включена, но проверка показывает отказ: полностью закройте приложение и запустите эту копию. Если отказ остаётся — удалите только старую запись OxyMac Cleaner кнопкой «−», добавьте эту копию через «+» и снова запустите её.",
-            "Access is checked at every launch, even if this version was reviewed before. If the toggle is enabled but access is denied, quit and reopen this copy. If access is still denied, remove only the old OxyMac Cleaner entry with “−”, add this copy with “+”, and reopen it."
+            "После выдачи доступа нажмите «Перезапустить приложение». Если галочка уже включена, а отказ остаётся, повторно добавьте эту копию через «+». Если это не помогло, удалите только старую запись OxyMac Cleaner кнопкой «−» и добавьте приложение заново.",
+            "After granting access, click Restart app. If the toggle is already enabled but access is denied, add this copy again with +. If that does not help, remove only the old OxyMac Cleaner entry with − and add the app again."
           )
         )
         .font(.callout)
@@ -59,10 +65,26 @@ struct DiskAccessView: View {
           )
         )
         .font(.caption).foregroundStyle(.secondary)
+        DisclosureGroup(vm.t("Результат проверки", "Check details")) {
+          ForEach(vm.diskAccess?.checks ?? [], id: \.path) { check in
+            HStack {
+              Text(URL(fileURLWithPath: check.path).lastPathComponent)
+              Spacer()
+              Text(check.error == 0 ? vm.t("Доступно", "Accessible")
+                : String(cString: strerror(check.error)) + " (\(check.error))")
+                .foregroundStyle(.secondary)
+            }.font(.caption)
+          }
+          Text(vm.t("Это результат открытия папок текущим процессом, а не чтение галочки из настроек macOS.", "These are directory-open results from this process, not the toggle state in macOS settings."))
+            .font(.caption).foregroundStyle(.secondary)
+        }
       }
       HStack {
         if !available {
           Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }.oxyHelp(.recheck)
+          Button(vm.t("Перезапустить приложение", "Restart app")) { vm.restartForDiskAccess() }
+            .disabled(vm.busy || vm.contextRunning || updater.installing || vm.restartingForAccess)
+            .help(vm.t("После изменения доступа закрывает и запускает эту же копию. Недоступно во время операций. Разрешения не изменяет.", "Quits and reopens this copy after access changes. Unavailable during operations. Does not change permissions."))
           if let date = vm.diskAccessCheckedAt {
             Text(date.formatted(date: .omitted, time: .standard)).font(.caption).foregroundStyle(
               .secondary)

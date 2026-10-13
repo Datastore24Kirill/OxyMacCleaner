@@ -6,6 +6,7 @@ import UserNotifications
   @Published var showDiskAccess = false
   @Published var diskAccess: DiskAccess.Result?
   @Published var diskAccessCheckedAt: Date?
+  @Published var restartingForAccess = false
   var diskAccessAcknowledged = false
   var pendingDiskScan = false
   var permissionBuild: String {
@@ -31,6 +32,24 @@ import UserNotifications
   func openDiskSettings() {
     NSWorkspace.shared.open(
       URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+  }
+  func restartForDiskAccess() {
+    guard !busy, !contextRunning, !restartingForAccess else { return }
+    do {
+      let helper = Process()
+      helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+      helper.arguments = ["-c", AppRestart.script, "oxy-restart",
+        String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundlePath]
+      helper.standardInput = FileHandle.nullDevice
+      helper.standardOutput = FileHandle.nullDevice
+      helper.standardError = FileHandle.nullDevice
+      try helper.run()
+      restartingForAccess = true
+      NSApplication.shared.terminate(nil)
+    } catch {
+      self.error = t("Не удалось запустить перезапуск: ", "Could not start restart helper: ")
+        + error.localizedDescription
+    }
   }
   @Published var archiveSymbols: [String: ArchiveSymbolReport] = [:]
   func checkArchiveSymbols(_ archive: XcodeArchive) {
