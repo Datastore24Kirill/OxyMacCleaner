@@ -26,6 +26,22 @@ final class ReviewExpansionTests: XCTestCase {
     let changed = try FileBrowserIndex(files: [file], excluded: [file.path], quarantine: "/q", downloads: "/d")
     XCTAssertEqual(try changed.filter(query).matches, 0)
   }
+  func testSecondPageIsPreparedWithFirstWithoutChangingVisibleSelection() throws {
+    let files = (1...700).map { FileRecord(path: "/Users/test/Downloads/\($0).zip", bytes: Int64($0), allocated: 1, modified: .distantPast, inode: UInt64($0), device: 1, links: 1) }
+    let index = try FileBrowserIndex(files: files, excluded: [], quarantine: "/q", downloads: "/d")
+    var query = FileBrowserIndex.Query()
+    let first = try index.filter(query)
+    XCTAssertEqual(first.rows.count, 200)
+    query.limit = 400
+    let progress = BoundedCache<String, [Double]>(capacity: 1, budget: 100)
+    let next = try index.filter(query) { value in
+      progress.insert((progress.value(for: "values") ?? []) + [value], for: "values", cost: 1)
+    }
+    XCTAssertEqual(progress.value(for: "values"), [1])
+    XCTAssertEqual(next.rows.count, 400)
+    XCTAssertEqual(Array(next.rows.prefix(200)).map(\.file), first.rows.map(\.file))
+    XCTAssertEqual(next.matches, first.matches)
+  }
   func testSearchPreservesCaseDiacriticsAndUnicodePaths() throws {
     let paths = ["/Users/test/Downloads/Café.zip", "/Users/test/Downloads/CAFÉ-2.zip", "/Users/test/Downloads/日本語.zip", "/Users/test/Downloads/Архив.zip"]
     let files = paths.enumerated().map { FileRecord(path: $0.element, bytes: Int64($0.offset + 1), allocated: 1, modified: .distantPast, inode: UInt64($0.offset), device: 1, links: 1) }

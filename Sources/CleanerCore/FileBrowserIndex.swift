@@ -47,7 +47,10 @@ public struct FileBrowserIndex: Sendable {
     var result = Result()
     var classifications: [String: (String, Bool)] = [:]
     let named: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2"]
-    let limit = max(1, query.limit)
+    let requestedLimit = max(1, query.limit)
+    // The first page also prepares the next 200 rows during the same scan.
+    let prefetch = query.limit == 200 && query.olderThanDays == 0
+    let limit = prefetch ? 400 : requestedLimit
     // A bounded heap: the worst visible row is at the root. Memory is O(page size).
     func better(_ a: Row, _ b: Row) -> Bool {
       a.file.bytes == b.file.bytes ? a.file.path < b.file.path : a.file.bytes > b.file.bytes
@@ -103,6 +106,11 @@ public struct FileBrowserIndex: Sendable {
     result.rows.sort(by: better)
     progress(1)
     try cancellation.check()
+    if prefetch {
+      var next = query; next.limit = 400
+      results.insert(result, for: next, cost: result.rows.count)
+      result.rows = Array(result.rows.prefix(requestedLimit))
+    }
     if query.olderThanDays == 0 { results.insert(result, for: query, cost: result.rows.count) }
     return result
   }
