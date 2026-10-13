@@ -155,22 +155,35 @@ public struct DiskNode: Identifiable, Sendable {
 }
 public struct DiskIndex: Sendable {
   private let report: ScanReport
+  private let pages = BoundedCache<String, ([DiskNode], [String: FileRecord])>(capacity: 4, budget: 8000)
   public init(report: ScanReport) { self.report = report }
   public func nodes(in parent: String, cancellation: Cancellation = Cancellation()) throws -> ([DiskNode], [String: FileRecord]) {
+    try cancellation.check()
+    if let cached = pages.value(for: parent) { return cached }
+    let prefix = parent == "/" ? "/" : parent + "/"
+    let prefixBytes = Array(prefix.utf8)
+    func directChild(_ path: String) -> Bool {
+      let bytes = path.utf8
+      guard bytes.starts(with: prefixBytes) else { return false }
+      let rest = bytes.dropFirst(prefixBytes.count)
+      return !rest.isEmpty && !rest.contains(47)
+    }
     var nodes: [DiskNode] = [], files: [String: FileRecord] = [:]
     for (index, entry) in report.folders.enumerated() {
       if index % 256 == 0 { try cancellation.check() }
-      if entry.key != parent && (entry.key as NSString).deletingLastPathComponent == parent {
+      if directChild(entry.key) {
         nodes.append(DiskNode(path: entry.key, bytes: entry.value, directory: true))
       }
     }
     for (index, file) in report.files.enumerated() {
       if index % 256 == 0 { try cancellation.check() }
-      if (file.path as NSString).deletingLastPathComponent == parent {
+      if directChild(file.path) {
         nodes.append(DiskNode(path: file.path, bytes: file.bytes, directory: false)); files[file.path] = file
       }
     }
     nodes.sort { $0.bytes == $1.bytes ? $0.path < $1.path : $0.bytes > $1.bytes }
+    try cancellation.check()
+    pages.insert((nodes, files), for: parent, cost: nodes.count)
     return (nodes, files)
   }
   // Compatibility for small callers; the UI uses cancellable per-folder loading.

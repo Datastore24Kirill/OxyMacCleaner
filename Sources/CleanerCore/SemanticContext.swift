@@ -16,7 +16,7 @@ public enum ContextCategory: String, Codable, CaseIterable, Sendable {
     }
   }
 }
-public struct ContextFact: Codable, Sendable, Equatable {
+public struct ContextFact: Codable, Sendable, Hashable {
   public let category: ContextCategory
   public let text: String
   public let line: Int

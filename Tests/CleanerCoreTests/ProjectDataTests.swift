@@ -153,4 +153,28 @@ final class ProjectDataTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("pyproject.toml").path))
   }
 
+  func testStandalonePythonConfigurationsKeepSignatureAndRevalidationGuards() throws {
+    for (marker, text, folder) in [("pytest.ini", "[pytest]", ".pytest_cache"), ("ruff.toml", "line-length = 88", ".ruff_cache"), (".ruff.toml", "", ".ruff_cache")] {
+      let config = root.appendingPathComponent(marker)
+      try Data(text.utf8).write(to: config)
+      let cache = root.appendingPathComponent(folder)
+      try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+      try Data(".next/\n.pytest_cache/\n.ruff_cache/\n".utf8).write(to: root.appendingPathComponent(".gitignore"))
+      var item = try XCTUnwrap(ProjectData.inventory(root).first { $0.path.path == cache.path })
+      XCTAssertFalse(item.cleanable)
+      try Data("Signature: 8a477f597d28d172789f06886806bc55\n".utf8).write(to: cache.appendingPathComponent("CACHEDIR.TAG"))
+      try Data("cache".utf8).write(to: cache.appendingPathComponent("cache.bin"))
+      item = try XCTUnwrap(ProjectData.inventory(root).first { $0.path.path == cache.path })
+      XCTAssertTrue(item.cleanable)
+      let plan = try ProjectData.prepare(item, exclusions: [], now: later, run: run, idle: {})
+      try Data((text + "\n# changed").utf8).write(to: config)
+      XCTAssertThrowsError(try ProjectData.remove(plan, exclusions: [], now: later, run: run, idle: {}))
+      let updated = try ProjectData.prepare(item, exclusions: [], now: later, run: run, idle: {})
+      try ProjectData.remove(updated, exclusions: [], now: later, run: run, idle: {})
+      XCTAssertTrue(FileManager.default.fileExists(atPath: config.path))
+      XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+      try FileManager.default.removeItem(at: config)
+    }
+  }
+
 }

@@ -30,6 +30,12 @@ public enum ProjectData {
       recovery: "mypy · Повторная проверка типов пересоздаст кэш и займёт больше времени / Type checking regenerates the cache and takes longer.", cleanable: true),
     .init(id: "Python Ruff cache", path: ".ruff_cache", marker: "pyproject.toml",
       recovery: "ruff check · Следующий запуск пересоздаёт кэш / The next run recreates the cache.", cleanable: true),
+    .init(id: "Python pytest cache (pytest.ini)", path: ".pytest_cache", marker: "pytest.ini",
+      recovery: "pytest · Кэш пересоздаётся; история прошлых ошибок теряется / Cache is recreated; previous failed-test state is lost.", cleanable: true),
+    .init(id: "Python Ruff cache (ruff.toml)", path: ".ruff_cache", marker: "ruff.toml",
+      recovery: "ruff check · Следующий запуск пересоздаёт кэш / The next run recreates the cache.", cleanable: true),
+    .init(id: "Python Ruff cache (.ruff.toml)", path: ".ruff_cache", marker: ".ruff.toml",
+      recovery: "ruff check · Следующий запуск пересоздаёт кэш / The next run recreates the cache.", cleanable: true),
     .init(id: "Composer dependencies", path: "vendor", marker: "composer.json",
       recovery: "composer install · Нужны lock-файл и доступ к источникам; возможны локальные правки / Requires lockfile and registry access; local edits may exist.", cleanable: false),
     .init(id: "Bundler dependencies", path: "vendor/bundle", marker: "Gemfile",
@@ -89,7 +95,9 @@ public enum ProjectData {
     let data = try marker(main)
     var markers = [main]
     if rule.id.hasPrefix("Python ") && rule.cleanable {
-      guard let text = String(data: data, encoding: .utf8), text.contains("[") else {
+      guard let text = String(data: data, encoding: .utf8), !text.contains("\0"),
+        (rule.marker != "pyproject.toml" || text.contains("[")),
+        (rule.marker != "pytest.ini" || text.contains("[pytest]")) else {
         throw CleanerError.message("Python project metadata is unavailable")
       }
       let tag = root.appendingPathComponent(rule.path).appendingPathComponent("CACHEDIR.TAG")

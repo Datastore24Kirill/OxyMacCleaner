@@ -43,7 +43,7 @@ struct ContextResultView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Label(vm.t("Готово к переносу", "Ready to transfer"), systemImage: "text.badge.checkmark").font(.headline)
+        Label(vm.t("Результат для проверки", "Result for review"), systemImage: "text.badge.checkmark").font(.headline)
         Spacer()
         Text(size(sourceBytes) + " → " + size(resultBytes)).font(.headline.monospacedDigit())
       }
@@ -53,6 +53,7 @@ struct ContextResultView: View {
         Text(vm.t("Сравниваем UTF-8 байты, не токены. Это сокращение текста для переноса, не освобождение диска.", "Comparison uses UTF-8 bytes, not tokens. This reduces transferred text, not disk usage.")).font(.caption).foregroundStyle(.secondary)
       }
       if let audit = vm.contextAudit {
+        ContextCoverageView(facts: audit.facts, output: vm.output)
         Text(vm.t("Черновик со ссылками: \(audit.facts.count). Реплики пользователя сохранены по порядку; сообщения агента подписаны отдельно.", "Cited draft: \(audit.facts.count) entries. User statements retain their order; agent reports are attributed separately.")).font(.callout)
         Text(vm.t("Перед переносом сверьте актуальность. Проверка той же моделью не гарантирует точность.", "Review currency before transfer. Review by the same model does not guarantee accuracy.")).font(.caption).foregroundStyle(.secondary)
         if vm.output != audit.text {

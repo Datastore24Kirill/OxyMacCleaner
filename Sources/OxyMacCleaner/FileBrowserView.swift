@@ -3,6 +3,7 @@ import SwiftUI
 
 struct FileBrowserView: View {
   @EnvironmentObject var vm: AppModel
+  @State private var ownership = OwnershipCatalog()
   @State private var query = FileBrowserIndex.Query()
   @State private var result = FileBrowserIndex.Result()
   @State private var loading = false
@@ -72,7 +73,8 @@ struct FileBrowserView: View {
             Image(systemName: row.selectable ? "doc.fill" : "lock.doc.fill").foregroundStyle(row.selectable ? Color.teal : Color.secondary)
             VStack(alignment: .leading, spacing: 3) {
               Text(row.file.name).lineLimit(1)
-              Text(DataOwnership.identify(row.file.path, home: vm.home).label(russian: vm.language != "en")).font(.caption2).foregroundStyle(.secondary)
+              let owner = ownership.identify(row.file.path, home: vm.home, russian: vm.language != "en")
+              Text(owner.label(russian: vm.language != "en")).font(.caption2).foregroundStyle(.secondary).help(owner.evidence)
               Text(row.file.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(row.file.path)
             }
             Spacer()
@@ -98,6 +100,13 @@ struct FileBrowserView: View {
           Label(vm.t("В карантин", "Quarantine") + " (\(selectedRows.count))", systemImage: "archivebox")
         }.buttonStyle(.borderedProminent).tint(.teal).disabled(selectedRows.isEmpty || loading || vm.busy)
       }
+    }.task(id: vm.dataProject) {
+      let roots = [URL(fileURLWithPath: "/Applications"), vm.home.appendingPathComponent("Applications")]
+      let projects = [vm.dataProject, vm.worktreeRepository].compactMap { $0 }
+      let token = Cancellation()
+      if let catalog = try? await withTaskCancellationHandler(operation: {
+        try await Task.detached { try OwnershipCatalog.load(appRoots: roots, projectRoots: projects, cancellation: token) }.value
+      }, onCancel: { token.cancel() }), !Task.isCancelled { ownership = catalog }
     }.onAppear {
       query.category = vm.categoryFilter; query.text = vm.search
     }.task(id: request) {
@@ -119,7 +128,7 @@ struct FileBrowserView: View {
         guard current == request else { return }
         result = output; loading = false
       } catch {
-        if !Task.isCancelled { failure = error is CancellationError ? vm.t("Подготовка остановлена. Измените фильтр для повторного поиска.", "Preparation stopped. Change a filter to search again.") : error.localizedDescription; loading = false }
+        if !Task.isCancelled { failure = error is CancellationError ? vm.t("Подготовка остановлена. Нажмите «Повторить» или измените фильтр.", "Preparation stopped. Retry or change a filter.") : error.localizedDescription; loading = false }
       }
     }
   }

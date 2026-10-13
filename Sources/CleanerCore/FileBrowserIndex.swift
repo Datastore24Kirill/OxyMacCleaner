@@ -27,6 +27,7 @@ public struct FileBrowserIndex: Sendable {
     public init() {}
   }
   // Keep the scan's copy-on-write array, rather than duplicating and sorting millions of rows.
+  private let results = BoundedCache<Query, Result>(capacity: 4, budget: 1600)
   private let files: [FileRecord]
   private let excluded: [String]
   private let quarantine: String
@@ -38,6 +39,9 @@ public struct FileBrowserIndex: Sendable {
   }
   public func filter(_ query: Query, now: Date = Date(), cancellation: Cancellation = Cancellation(),
                      progress: @Sendable (Double) -> Void = { _ in }) throws -> Result {
+    try cancellation.check()
+    // Age-based queries depend on the caller's clock, so never reuse those results.
+    if query.olderThanDays == 0, let cached = results.value(for: query) { progress(1); return cached }
     let search = query.text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     let cutoff = now.addingTimeInterval(-Double(query.olderThanDays) * 86400)
     var result = Result()
@@ -73,7 +77,7 @@ public struct FileBrowserIndex: Sendable {
       if index % 8192 == 0 { progress(Double(index) / Double(max(1, files.count))) }
       guard file.bytes >= Int64(query.minimumMB) * 1_000_000,
         query.olderThanDays == 0 || file.modified < cutoff,
-        search.isEmpty || file.path.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(search) else { continue }
+        search.isEmpty || (file.path.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) as NSString).range(of: search, options: .literal).location != NSNotFound else { continue }
       let path = file.path as NSString, leaf = (file.path as NSString).lastPathComponent.lowercased()
       let ext = path.pathExtension.lowercased()
       let key = path.deletingLastPathComponent + "/" + (leaf.hasPrefix(".") || ext.isEmpty || named.contains(leaf) ? leaf : "*." + ext)
@@ -98,6 +102,8 @@ public struct FileBrowserIndex: Sendable {
     try cancellation.check()
     result.rows.sort(by: better)
     progress(1)
+    try cancellation.check()
+    if query.olderThanDays == 0 { results.insert(result, for: query, cost: result.rows.count) }
     return result
   }
 }
