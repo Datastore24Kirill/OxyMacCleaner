@@ -211,9 +211,14 @@ struct RootView: View {
           case "quarantine": quarantine
           case "history":
             ScrollView {
-              Text(vm.logs.reversed().joined(separator: "\n\n")).font(
-                .system(.caption, design: .monospaced)
-              ).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+              if vm.logs.isEmpty {
+                Text(vm.t("Операций пока нет. Здесь появятся результаты выполненных действий.", "No operations yet. Results of completed actions will appear here."))
+                  .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+              } else {
+                Text(vm.logs.reversed().joined(separator: "\n\n")).font(
+                  .system(.caption, design: .monospaced)
+                ).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+              }
             }
           case "settings": settings
           default: overview
@@ -468,23 +473,23 @@ struct RootView: View {
               HStack {
                 Text(url.path).font(.caption).lineLimit(2)
                 Spacer()
-                Button(vm.t("Посмотреть файлы", "View files")) {
+                Button(vm.t("Сканировать папку агента", "Scan agent folder")) {
                   vm.scan([url])
                   vm.page = "files"
-                }.oxyHelp(.agentSize).disabled(vm.busy)
+                }.help(vm.t("Запускает новый обход папки агента и обновляет снимок файлов. Затем открывает результаты в разделе файлов.", "Starts a new scan of the agent folder and updates the file snapshot, then opens the results in Files.")).disabled(vm.busy)
               }
             }
           }
           if ["codex", "claude", "cursor", "gemini", "continue", "cline", "roo", "aider", "opencode"].contains(vm.agent) {
             if vm.agent != "opencode" { SessionCatalogView() }
             else { Text(vm.t("Выберите JSON, созданный командой opencode export для одной сессии. База данных не читается.", "Choose JSON from opencode export for one session. The database is not read.")).font(.caption) }
-            Button(vm.t("Открыть историю агента…", "Open agent history…")) {
+            Button(vm.t("Открыть файл истории агента…", "Open agent history file…")) {
               vm.importTranscript(native: true)
             }.disabled(vm.busy).help(vm.t(
               "Выберите одну историю поддерживаемого агента. JSON — до 30 MB; JSONL — до 1 GB. Только чтение; оригинал и неизвестные записи сохраняются.",
               "Choose one supported agent history. JSON up to 30 MB; JSONL up to 1 GB. Read only; original and unknown records are preserved."))
           }
-          Button(vm.t("Импортировать одну сессию", "Import one session")) { vm.importTranscript() }
+          Button(vm.t("Импортировать TXT / MD / JSON / JSONL…", "Import TXT / MD / JSON / JSONL…")) { vm.importTranscript() }
             .oxyHelp(.importSession)
             .disabled(vm.busy)
           note(
@@ -610,9 +615,10 @@ struct RootView: View {
         .fixedSize()
         Spacer()
         Button(
-          vm.t("Удалить все архивы из карантина…", "Permanently delete quarantined archives…"),
+          vm.t("Удалить архивы во всём карантине…", "Delete archives across all quarantine…"),
           role: .destructive
-        ) { vm.eraseQuarantinedArchives() }.oxyHelp(.eraseArchives)
+        ) { vm.eraseQuarantinedArchives() }
+          .help(vm.t("Удаляет архивы во всём карантине после подтверждения, независимо от поиска и выбранных строк. Восстановить удалённое из приложения нельзя.", "Deletes archives across all quarantine after confirmation, regardless of search or selected rows. Deleted items cannot be restored by the app."))
           .disabled(
             vm.busy || !vm.entries.contains { $0.state == "quarantined" && $0.isArchive }
           )
@@ -668,6 +674,10 @@ struct RootView: View {
         Text("English").tag("en")
       }.oxyHelp(.language)
       Section(vm.t("Исключения", "Exclusions")) {
+        if vm.exclusions.isEmpty {
+          Text(vm.t("Исключений пока нет. Добавляйте их через «Защитить / исключить» в меню файла.", "No exclusions yet. Add them using Protect / exclude in a file’s menu."))
+            .foregroundStyle(.secondary)
+        }
         ForEach(vm.exclusions, id: \.self) { p in
           HStack {
             Text(p).font(.caption)

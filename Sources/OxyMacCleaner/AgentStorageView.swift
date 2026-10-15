@@ -11,12 +11,15 @@ struct AgentStorageView: View {
     GroupBox(vm.t("Что занимает место у агента", "Agent storage breakdown")) {
       VStack(alignment: .leading, spacing: 10) {
         Text(vm.t("Размеры из последнего снимка. Категория определена по расположению и формату, а не по содержимому. Неполный обход может пропустить данные.", "Sizes come from the latest snapshot. Categories are inferred from paths and formats, not contents. Partial scans may omit data.")).font(.caption).foregroundStyle(.secondary)
-        if loading { ProgressView() }
-        ForEach(AgentDataKind.allCases, id: \.self) { kind in
-          HStack {
-            Text(kind.title(russian: vm.language != "en"))
-            Spacer()
-            Text("\(counts[kind, default: 0]) · " + ByteCountFormatter.string(fromByteCount: totals[kind, default: 0], countStyle: .file)).monospacedDigit()
+        if loading {
+          ProgressView(vm.t("Считаем размеры по сохранённому снимку…", "Calculating sizes from the saved snapshot…"))
+        } else {
+          ForEach(AgentDataKind.allCases, id: \.self) { kind in
+            HStack {
+              Text(kind.title(russian: vm.language != "en"))
+              Spacer()
+              Text("\(counts[kind, default: 0]) · " + ByteCountFormatter.string(fromByteCount: totals[kind, default: 0], countStyle: .file)).monospacedDigit()
+            }
           }
         }
         Text(vm.t("Оптимизация создаёт отдельный пересказ выбранной истории. Истории, рабочие базы и кэши здесь не удаляются: для удаления нужна отдельная проверка объекта. Папка с названием cache сама по себе не доказывает безопасность.", "Optimization creates a separate summary of the selected history. Histories, working databases and caches are not deleted here: removal requires a separate object check. A folder named cache alone does not prove safety.")).font(.caption)

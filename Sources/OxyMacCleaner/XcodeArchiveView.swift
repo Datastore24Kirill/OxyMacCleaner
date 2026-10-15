@@ -6,7 +6,7 @@ struct XcodeArchiveView: View {
   @State private var query = ""
   @State private var selected: Set<String> = []
   @State private var onlyReview = false
-  @State private var archivePage = 0
+  @State private var pagination = ArchivePagination()
   private var decisions: [String: ArchiveRetention.Decision] {
     ArchiveRetention.decisions(
       vm.archiveInventory.archives, keep: vm.archiveKeep, pinned: vm.pinnedArchives)
@@ -52,15 +52,15 @@ struct XcodeArchiveView: View {
       }
       if !archives.isEmpty {
         HStack {
-          Button(vm.t("Назад", "Previous")) { archivePage -= 1 }.oxyHelp(.previous).disabled(
-            archivePage == 0)
+          Button(vm.t("Назад", "Previous")) { pagination.page -= 1 }.oxyHelp(.previous).disabled(
+            pagination.page == 0)
           Text(
-            vm.t("Страница ", "Page ") + "\(archivePage + 1)/\(max(1, (archives.count + 9) / 10))")
-          Button(vm.t("Далее", "Next")) { archivePage += 1 }.oxyHelp(.next).disabled(
-            (archivePage + 1) * 10 >= archives.count)
+            vm.t("Страница ", "Page ") + "\(pagination.page + 1)/\(max(1, (archives.count + 9) / 10))")
+          Button(vm.t("Далее", "Next")) { pagination.page += 1 }.oxyHelp(.next).disabled(
+            (pagination.page + 1) * 10 >= archives.count)
         }
       }
-      ForEach(archives.dropFirst(archivePage * 10).prefix(10)) { archive in
+      ForEach(archives.dropFirst(pagination.page * 10).prefix(10)) { archive in
         archiveRow(archive)
       }
       Text(
@@ -71,10 +71,13 @@ struct XcodeArchiveView: View {
       ).font(.caption).foregroundStyle(.secondary)
     }
     .modifier(InventoryLoading(isLoaded: vm.archiveScanDate != nil, load: vm.scanArchives))
-    .onChange(of: query) { _, _ in archivePage = 0; selected = [] }
-    .onChange(of: onlyReview) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: query) { _, _ in pagination.page = 0; selected = [] }
+    .onChange(of: onlyReview) { _, _ in pagination.page = 0; selected = [] }
     .onChange(of: vm.pinnedArchives) { _, _ in selected.subtract(vm.pinnedArchives) }
-    .onChange(of: vm.archiveInventory.archives.count) { _, _ in archivePage = 0; selected = [] }
+    .onChange(of: archives.map(\.path), initial: true) { _, paths in
+      pagination.update(paths: paths)
+      selected = []
+    }
   }
   @ViewBuilder private var selectionActions: some View {
       let chosen = archives.filter { selected.contains($0.path) && ArchiveRetention.permits(decisions[$0.path], explicitlySelected: true) }

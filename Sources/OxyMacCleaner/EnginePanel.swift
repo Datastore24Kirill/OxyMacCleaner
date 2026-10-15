@@ -27,6 +27,7 @@ struct EnginePanel: View {
               Button(vm.t("Проверить состояние", "Check status")) { vm.refreshModels() }.oxyHelp(.checkEngine)
             }.disabled(vm.busy || vm.engineChecking)
             if vm.busy && vm.pullingModel == nil {
+              Text(vm.t("Текущая операция приложения", "Current app operation")).font(.caption).foregroundStyle(.secondary)
               ProgressView(); Text(vm.status)
             }
           }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -69,6 +70,11 @@ struct EnginePanel: View {
     HStack {
       VStack(alignment: .leading) {
         Text(title).font(.headline)
+        if name == "qwen2.5:7b" {
+          Text(vm.t("Рекомендуемая для контекста", "Recommended for context")).font(.caption).foregroundStyle(.secondary)
+        } else if name == "qwen2.5:3b" {
+          Text(vm.t("Не рекомендуем для контекста: не прошла проверку качества", "Not recommended for context: failed quality checks")).font(.caption).foregroundStyle(.secondary)
+        }
         Text(vm.models.contains(name) ? vm.t("Установлена", "Installed") : size).font(.caption).foregroundStyle(.secondary)
       }
       Spacer()
