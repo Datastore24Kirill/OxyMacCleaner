@@ -64,4 +64,43 @@ final class PathClassificationOptimizationTests: XCTestCase {
       XCTAssertEqual(QuarantineStore.protectedSnapshotPath(path), QuarantineStore.protected(path), path)
     }
   }
+
+  func testUnicodeProtectionUsesPOSIXSeparatorsAndExactSecurityBoundaries() {
+    let cases: [(String, Bool)] = [
+      ("/Users/test/проект/Library/payload", true),
+      ("/Users/test/项目/.SSH/key", true),
+      ("/Users/test/👩🏽‍💻/Application.APP/payload", true),
+      ("/Users/test/Cafe\u{301}/.git/config", true),
+      ("/Users/test/Café/Library-extra/payload", false),
+      ("/Users/test/项目/.ssh-extra/payload", false),
+      ("/Users/test/项目/Application.app-extra/payload", false),
+      ("/Users/test/项目/记录.SWIFT", true),
+      ("/Users/test/项目/记录.swift-extra", false),
+      ("/Volumes/Данные/System/payload", true),
+      ("/Volumes/Данные/System-extra/payload", false),
+      ("/Users/test/项目/plain/../Library/payload", true),
+      ("/Users/test/项目/Library/../plain", false),
+      ("/Users/test/项目//.git/config", true),
+      // A combining scalar in a child name cannot conceal its protected parent.
+      ("/Users/test/Library/\u{301}payload", true),
+      ("/Users/test/Library/\u{FE0F}payload", true),
+      ("/Users/test/.ssh/\u{301}payload", true),
+      ("/Users/test/.git/\u{FE0F}config", true),
+      ("/Users/test/Application.app/\u{301}payload", true),
+      ("/Users/test/项目/Photo.photoslibrary/\u{FE0F}payload", true),
+      ("/Users/test/项目/Backup.xcarchive/\u{301}payload", true),
+      ("/Users/test/.ssh-extra/\u{301}payload", false),
+      ("/Users/test/.git\u{301}/payload", false),
+      ("/Users/test/Application.app-extra/\u{301}payload", false),
+      ("/Users/test/Library\u{301}/payload", false),
+      ("/Users/test/Library／payload", false),
+      ("/Users/test/Library∕payload", false),
+      ("/Users/test/Library/payload", true),
+      ("/Users/test/Library-extra/payload", false),
+    ]
+    for (path, expected) in cases {
+      XCTAssertEqual(QuarantineStore.protected(path), expected, path)
+      XCTAssertEqual(QuarantineStore.protectedSnapshotPath(path), expected, path)
+    }
+  }
 }

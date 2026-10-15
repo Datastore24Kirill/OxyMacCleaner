@@ -138,7 +138,10 @@ public final class QuarantineStore: @unchecked Sendable {
       guard let dot = component.lastIndex(of: "."), dot != component.startIndex else { return "" }
       return String(component[component.index(after: dot)...])
     }
-    let components = ["/"] + lower.split(separator: "/").map(String.init)
+    // POSIX separators are bytes, even when the following scalar would join
+    // the slash into a Unicode grapheme. Never hide a protected parent that way.
+    let components = ["/"] + lower.utf8.split(separator: 47)
+      .map { String(decoding: $0, as: UTF8.self) }
     if components.contains("com.docker.docker") || components.contains("group.com.docker")
       || components.contains(".docker") || components.contains("docker.raw") || components.contains("docker.qcow2") { return true }
     if components.contains("library") {
