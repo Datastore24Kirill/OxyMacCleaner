@@ -1,6 +1,32 @@
-# Implementation status — 0.4.14 Preview
+# OxyMac Cleaner — текущий статус
 
-This is an implementation milestone, not completion of the version-one specification. Historical release notes describe their release, not current capabilities.
+Обновлено 15 октября 2026. Этот раздел — единый источник текущего состояния выпуска. ТЗ описывает требования, план интеллектуальной очистки — дорожную карту, документы приёмки — доказательства для конкретных сборок. Записи ниже сохраняют историю и не отменяют эту сводку.
+
+| Состояние | Версия / результат |
+|---|---|
+| Публичный релиз | **1.1.0 (57)**; публичный 1.2 ещё не создан |
+| Установлено локально | **1.2.0 (58)**; запуск штатным помощником обновления подтверждён, настройки и снимок сохранены |
+| Подготовленная сборка | **1.2.0 (59)**; собрана и упакована, не установлена; новые элементы окна доступа не прошли живую UI-приёмку |
+| Доступ к диску | В build 58 подтверждены три пробы защищённых папок после повторного добавления и запуска. Перенос разрешения на новую ad-hoc подпись не проверен и не гарантируется |
+| Доказательства | Для build 58: 246 тестов и CI macOS 14/26. Для build 59: сборка, упаковка, подпись, четыре DiskAccessTests и сценарий перезапуска; это не полный повтор приёмки 58 |
+| Блокер UI-приёмки | Служба автоматизации падает при открытии раздела агентов; падение самого Cleaner этим не установлено |
+
+Подробности и хронология: [приёмка 1.2](ACCEPTANCE-1.2-RU.md). Публичные возможности 1.1: [приёмка 1.1](ACCEPTANCE-1.1-RU.md). Точная матрица форматов агентов: [AGENT-ADAPTERS-RU.md](AGENT-ADAPTERS-RU.md).
+
+## Ближайшая работа
+
+1. 15 октября исправлены исходники пагинации и раздельного отображения размеров; публикация результата и ошибки защищены проверкой токена и текущего запроса. Целевой прогон `FileBrowser|ReviewExpansion`: **17 тестов, 0 ошибок, 19,423 с**; Debug-сборка успешна. Живая UI-проверка пока не подтверждена.
+2. Проверить актуальную сборку после исправлений, установку и перезапуск; повторить пробы доступа. Не прерывать пользовательские операции ради установки.
+3. Закрыть живую UI-приёмку сводки агентов, объяснений, контекста, следующих страниц файлов и новых элементов окна доступа. До этого выпуск 1.2 удержан.
+4. Следующим архитектурным этапом — индекс на диске и чтение частями. Замер build 58 требует около 6 ГБ памяти; LRU-кэш не устранил эту стоимость.
+
+Изменения 15 октября ещё не упакованы в новую Release-сборку: `dist` остаётся build 59, установленная копия — build 58. HTML-прототип [окна доступа](prototypes/disk-access.html) подготовлен, но не внедрён в приложение и визуально не проверен.
+
+Developer ID отложен по решению пользователя. Свободный пересказ без потери смысла, универсальное определение владельцев и автоматическое удаление не заявляются.
+
+## Историческая сводка — 0.4.14 Preview
+
+Следующая таблица и записи до раздела исторических выпусков отражают состояние соответствующих этапов, а не текущую очередь релиза. Границы публичной 1.0 зафиксированы отдельно в [RELEASE-GATES-RU.md](RELEASE-GATES-RU.md).
 
 | Area | Implemented | Remaining |
 |---|---|---|
@@ -32,14 +58,14 @@ Explicit unlabelled decision changes, restrictions and pending work survive mode
 
 Related decision pairs compare the nearest earlier signal sharing literal terms with a later restriction/change. This works across read chunks but is not semantic conflict resolution; source roles/project identity still require review. At most the first 200 signals and 50 pairs are considered. Composer/Bundler/Gradle/Maven and requirements-based Python catalogs are review-only and avoid overlapping paths. Project markers and owners are displayed. Permission, stale-data and activity errors have RU/EN guidance. See [acceptance](ACCEPTANCE-0.4.7-RU.md).
 
-## Next work
+## Исторический список дальнейших работ — этап 0.4.x
 
 1. Broader semantic conflict detection and real-history quality cases. Full-history review now indexes explicit change/test phrases with source offsets, progress and cancellation. It does not resolve contradictory requirements; long records are inspected only through a bounded prefix and reported.
 2. User VoiceOver check complete; broader assistive-technology testing remains; all sections have keyboard commands, selected-state labels and VoiceOver heading focus. Cancellation/destination/disk-space errors have RU/EN guidance.
 3. More native agent formats and broader disk failure tests. Both saved-stop and crash-journal resume reuse committed subtrees; an unfinished subtree is rescanned. APFS shared-block ownership remains unknown.
 4. Developer ID signing remains deferred. No permission continuity claim for ad-hoc builds.
 
-## Agent capability matrix
+## Историческая матрица агентов — этап 0.4.x
 
 All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and Claude Code also support selected native JSONL files (see AGENT-ADAPTERS-RU.md); metadata-only Codex/Claude session discovery is implemented since 0.1.20. The catalog identifies known default locations when present; absence does not mean an agent is not installed. Installation variants and IDE profiles need separate validation.
 
@@ -66,7 +92,7 @@ All 11 agents support **explicit text-export import**. Since 0.1.19, Codex and C
 
 ## Historical milestones
 
-The following sections record earlier releases; use the current table above for remaining work.
+The following sections record earlier releases; use «Ближайшая работа» at the top for the current release queue.
 
 ## 0.1.1 update
 
@@ -332,7 +358,7 @@ UI 0.4.15 проверен на собственном коротком диал
 
 ## 1.2 — кандидат следующего этапа, build 58
 
-Ограниченный кэш результатов файлов и карты, сверка известных владельцев с метаданными приложений/выбранных проектов, самостоятельные конфигурации pytest/Ruff, раздельная проверка ссылок и дословных формулировок контекста. [Приёмка и оставшиеся проверки](ACCEPTANCE-1.2-RU.md). Локально установлена 1.2.0 (58), штатный помощник подтвердил запуск; настройки и сохранённый снимок сохранены. Публичная версия остаётся 1.1. Проверка Full Disk Access показала отказ при включённой галочке; восстановление через системный диалог не завершено. UI-приёмка также остаётся открытой из-за падения SkyComputerUseService. Выпуск 1.2 удержан.
+Ограниченный кэш результатов файлов и карты, сверка известных владельцев с метаданными приложений/выбранных проектов, самостоятельные конфигурации pytest/Ruff, раздельная проверка ссылок и дословных формулировок контекста. [Приёмка и оставшиеся проверки](ACCEPTANCE-1.2-RU.md). Локально установлена 1.2.0 (58), штатный помощник подтвердил запуск; настройки и сохранённый снимок сохранены. Публичная версия остаётся 1.1. При первой проверке после установки Full Disk Access показал отказ при включённой галочке; восстановление завершено позднее, см. дополнение 13 октября ниже. UI-приёмка также остаётся открытой из-за падения SkyComputerUseService. Выпуск 1.2 удержан.
 
 
 13 октября, продолжение: в установленной 1.2.0 (58) живой проверкой подтверждён доступ к защищённым папкам после повторного добавления/запуска. Подготовлен, но не установлен build 59 с перезапуском и подробностями проверки доступа. UI-приёмка агентов всё ещё блокируется падением службы автоматизации; публичный релиз остаётся 1.1. См. последнее дополнение в приёмке 1.2.

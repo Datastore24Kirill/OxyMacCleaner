@@ -11,6 +11,7 @@ struct FileBrowserView: View {
   @State private var fraction = 0.0
   @State private var activeToken: Cancellation?
   @State private var failure: String?
+  @State private var loadedRequest: Request?
   private var request: Request { Request(retry: retry, revision: vm.reportRevision, exclusions: vm.exclusions, archives: vm.page == "archives", query: query) }
   private struct Request: Hashable { let retry: Int; let revision: Int; let exclusions: [String]; let archives: Bool; let query: FileBrowserIndex.Query }
   var body: some View {
@@ -26,7 +27,7 @@ struct FileBrowserView: View {
           }.frame(maxWidth: 220)
         }
         Menu {
-          Picker(vm.t("Размер", "Size"), selection: $query.minimumMB) {
+          Picker(vm.t("Заявленный размер", "Logical size"), selection: $query.minimumMB) {
             Text(vm.t("Любой", "Any")).tag(0); Text("≥ 100 MB").tag(100); Text("≥ 1 GB").tag(1000)
           }
           Picker(vm.t("Не изменялись", "Unmodified for"), selection: $query.olderThanDays) {
@@ -44,11 +45,16 @@ struct FileBrowserView: View {
       }
       HStack {
         Label("\(result.matches) " + vm.t("файлов", "files"), systemImage: "doc.on.doc")
-        Text(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
+        VStack(alignment: .leading) {
+          Text(vm.t("Заявлено: ", "Logical: ") + ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
+          Text(vm.t("Выделено: ", "Allocated: ") + ByteCountFormatter.string(fromByteCount: result.allocatedBytes, countStyle: .file)).monospacedDigit()
+        }
         Spacer()
         Button(vm.t("Папки на карте", "Explore folders")) { vm.page = "map" }
         if loading { ProgressView(value: fraction).frame(width: 90); Text("\(Int(fraction * 100))%").font(.caption); Button(vm.t("Остановить", "Stop")) { activeToken?.cancel() } }
       }.font(.callout)
+      Text(vm.t("Сортировка и фильтр размера — по заявленному размеру. Выделенные блоки APFS могут быть общими: это не обещание освобождаемого места.", "Size sorting and filtering use logical size. APFS blocks may be shared: allocated space is not guaranteed reclaimable space."))
+        .font(.caption).foregroundStyle(.secondary)
       if query.minimumMB > 0 || query.olderThanDays > 0 {
         Text(vm.t("Фильтры: ", "Filters: ") + "≥ \(query.minimumMB) MB · " + vm.t("без изменений от ", "unmodified for ") + "\(query.olderThanDays) " + vm.t("дней", "days")).font(.caption)
       }
@@ -79,10 +85,9 @@ struct FileBrowserView: View {
             }
             Spacer()
             VStack(alignment: .trailing) {
-              Text(ByteCountFormatter.string(fromByteCount: row.category == FileCategory.docker.rawValue ? row.file.allocated : row.file.bytes, countStyle: .file)).monospacedDigit()
-              if row.category == FileCategory.docker.rawValue {
-                Text(vm.t("Выделено на диске", "Allocated on disk")).font(.caption)
-                Text(vm.t("Заявлено: ", "Logical: ") + ByteCountFormatter.string(fromByteCount: row.file.bytes, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
+              Text(ByteCountFormatter.string(fromByteCount: row.file.bytes, countStyle: .file)).monospacedDigit()
+              if row.file.allocated != row.file.bytes || row.category == FileCategory.docker.rawValue {
+                Text(vm.t("Выделено: ", "Allocated: ") + ByteCountFormatter.string(fromByteCount: row.file.allocated, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
               }
             }
             Menu { FileActions(path: row.file.path, file: row.file) } label: { Image(systemName: "ellipsis.circle") }.fixedSize()
@@ -112,7 +117,12 @@ struct FileBrowserView: View {
     }.task(id: request) {
       let current = request
       let token = Cancellation(); activeToken = token
-      vm.selected = []; loading = true; fraction = 0; failure = nil; result = .init()
+      let expanding = loadedRequest.map {
+        $0.revision == current.revision && $0.exclusions == current.exclusions
+          && $0.archives == current.archives && current.query.isPageExpansion(of: $0.query)
+      } ?? false
+      if !expanding { vm.selected = []; result = .init() }
+      loading = true; fraction = 0; failure = nil
       do {
         try await Task.sleep(for: .milliseconds(100))
         try token.check()
@@ -125,10 +135,12 @@ struct FileBrowserView: View {
           } }.value
         } onCancel: { token.cancel() }
         try Task.checkCancellation()
-        guard current == request else { return }
-        result = output; loading = false
+        try token.check()
+        guard current == request, activeToken === token else { return }
+        vm.selected.formIntersection(Set(output.rows.filter(\.selectable).map { $0.file.path }))
+        result = output; loadedRequest = current; loading = false
       } catch {
-        if !Task.isCancelled { failure = error is CancellationError ? vm.t("Подготовка остановлена. Нажмите «Повторить» или измените фильтр.", "Preparation stopped. Retry or change a filter.") : error.localizedDescription; loading = false }
+        if !Task.isCancelled, current == request, activeToken === token { failure = error is CancellationError ? vm.t("Подготовка остановлена. Нажмите «Повторить» или измените фильтр.", "Preparation stopped. Retry or change a filter.") : error.localizedDescription; loading = false }
       }
     }
   }

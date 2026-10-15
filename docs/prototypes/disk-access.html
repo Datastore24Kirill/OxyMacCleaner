@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OxyMac Cleaner — прототип доступа к диску</title>
+<style>
+:root { color-scheme: light; --bg:#edf3f6; --surface:#fff; --soft:#f3f6f8; --text:#172c38; --muted:#4f6472; --border:#cedae1; --accent:#00687b; --accent-bg:#dff5f8; --warn:#854800; --warn-bg:#fff0db; --shadow:0 20px 80px #15374712; }
+:root[data-theme="dark"] { color-scheme:dark; --bg:#101820; --surface:#1b2832; --soft:#24333e; --text:#eff7fb; --muted:#b2c5d1; --border:#4b626f; --accent:#78e5f2; --accent-bg:#183d47; --warn:#ffce8a; --warn-bg:#44321e; --shadow:0 20px 80px #0004; }
+*{box-sizing:border-box} body {margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text)}
+button,select{font:inherit}button,select,summary{cursor:pointer}button,select{border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);padding:10px 14px}button:hover{background:var(--soft)}:focus-visible{outline:3px solid var(--accent);outline-offset:4px}button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:650}button.primary:hover{filter:brightness(.93)}button:disabled{cursor:wait;opacity:.65} [hidden]{display:none!important}
+.shell{max-width:960px;margin:36px auto;padding:0 24px}.prototype{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:32px}.tag{font-size:13px;color:var(--muted)}.controls{display:flex;gap:16px;flex-wrap:wrap}.controls label{display:grid;gap:5px;font-size:13px;color:var(--muted)}
+.card{max-width:640px;margin:0 auto;padding:32px;border:1px solid var(--border);border-radius:24px;background:var(--surface);box-shadow:var(--shadow)}.brand{color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.04em;margin:0 0 24px}.icon{width:58px;height:58px;display:grid;place-items:center;border-radius:17px;background:var(--accent-bg);color:var(--accent);font-size:28px;margin-bottom:22px}h1{font-size:28px;line-height:1.2;margin:0 0 16px;letter-spacing:-.03em}p{margin:0 0 16px}.status{font-size:18px;font-weight:650;display:flex;gap:10px;align-items:center}.status.warning{color:var(--warn)}.description,.note{color:var(--muted)}.note{font-size:13px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}details{border-top:1px solid var(--border);margin-top:26px;padding-top:18px}summary{font-weight:600;padding:4px 0}.recovery{padding-top:18px}.recovery ol{padding-left:22px}.recovery li{padding:0 0 12px}.recovery .actions{margin:12px 0 16px}.path{background:var(--soft);border-radius:8px;padding:12px;overflow-wrap:anywhere;font:13px/1.5 ui-monospace,monospace}.diagnostic{font-size:13px;color:var(--muted);margin:18px 0 0}.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;flex:none}.feedback{max-width:640px;margin:20px auto;background:var(--accent-bg);border-radius:12px;padding:16px;color:var(--text)}.footer{max-width:640px;margin:20px auto;color:var(--muted);font-size:13px}.sample{background:var(--soft);padding:12px;border-radius:10px}
+@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation:none}}@media(max-width:560px){.shell{margin:20px auto;padding:0 16px}.card{padding:24px}.actions button{width:100%}.controls{width:100%}.controls label{flex:1}h1{font-size:25px}}@media(prefers-contrast:more){:root{--border:currentColor}.card{box-shadow:none}button{border-width:2px}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="prototype">
+<div><strong>Доступ к диску</strong><div class="tag">Интерактивный прототип · OxyMac Cleaner</div></div>
+<div class="controls">
+<label for="state">Состояние<select id="state"><option value="checking">Проверка</option><option value="available">Доступ подтверждён</option><option value="limited" selected>Доступ ограничен</option><option value="unknown">Не удалось проверить</option></select></label>
+<label for="theme">Оформление<select id="theme"><option value="light">Светлое</option><option value="dark">Тёмное</option></select></label>
+</div>
+</header>
+<section class="card" aria-labelledby="title">
+<p class="brand">OXYMAC CLEANER</p>
+<div class="icon" aria-hidden="true">▤</div>
+<h1 id="title">Доступ к диску</h1>
+<div aria-live="polite" aria-atomic="true">
+<p class="status" id="status"></p>
+<p class="description" id="description"></p>
+</div>
+<p class="note" id="scope">Проверяем доступ к трём защищённым папкам. Успешная проверка не означает, что доступны абсолютно все файлы.</p>
+<div class="actions" id="actions"></div>
+<details id="recovery">
+<summary>Доступ уже включён, но проверка не проходит?</summary>
+<div class="recovery">
+<ol>
+<li>После изменения доступа перезапустите приложение. Если идёт сканирование или очистка, сначала дождитесь окончания операции.</li>
+<li>Если отказ остаётся, добавьте именно установленную копию OxyMac Cleaner через «+» в разделе «Полный доступ к диску».</li>
+</ol>
+<div class="actions"><button type="button" data-action="restart">Перезапустить приложение</button><button type="button" data-action="recheck">Проверить снова</button></div>
+<p class="note">В диалоге «+» нажмите ⇧⌘G и вставьте путь к приложению.</p>
+<p class="path">/Users/ваше-имя/Applications/OxyMac Cleaner.app</p>
+<p class="note">Путь здесь — пример. В приложении будет показан путь к запущенной копии.</p>
+<div class="actions"><button type="button" data-action="finder">Показать приложение</button><button type="button" data-action="copy">Копировать путь</button></div>
+<p class="note">После обновления macOS может снова запросить доступ. Cleaner не меняет ваши разрешения самостоятельно.</p>
+<details><summary>Что проверяется</summary><p class="diagnostic">Приложение пробует открыть защищённые папки без чтения содержимого. Проверка отражает доступ текущего процесса, а не положение переключателя в настройках macOS.</p><p class="diagnostic">В рабочем приложении здесь будут результаты по каждой проверенной папке, время проверки и причины отказа.</p></details>
+</div>
+</details>
+</section>
+<p class="feedback" id="feedback" role="status" hidden></p>
+<p class="footer">Это макет интерфейса. Кнопки показывают сценарий: они не открывают настройки, не читают диск, не копируют путь и не перезапускают приложение. Переходы между состояниями задаются переключателем сверху.</p>
+</main>
+<script>
+const states={
+checking:{text:'Проверяем доступ…',description:'Обычно это занимает несколько секунд. Содержимое файлов не читается.',symbol:'',buttons:[],recovery:false},
+available:{text:'Проверенные папки доступны',description:'Можно приступать к сканированию. Если отдельные папки окажутся недоступны, покажем их в результате.',symbol:'✓',buttons:[['scan','Начать сканирование',true]],recovery:false},
+limited:{text:'Доступ к части папок закрыт',description:'Разрешите полный доступ к диску в настройках macOS. Либо начните проверку сейчас — недоступные папки будут пропущены.',symbol:'!',buttons:[['settings','Открыть настройки macOS',true],['partial','Сканировать доступное',false]],recovery:true},
+unknown:{text:'Не удалось проверить доступ',description:'Контрольные папки отсутствуют или проверке помешала другая ошибка. Это ещё не означает, что разрешение выключено.',symbol:'?',buttons:[['recheck','Повторить проверку',true],['partial','Сканировать доступное',false]],recovery:true}
+};
+const messages={settings:'В приложении откроется раздел macOS «Конфиденциальность и безопасность → Полный доступ к диску». После возврата доступ проверится автоматически.',scan:'Сценарий: окно доступа закрывается, начинается сканирование выбранного диска.',partial:'Сценарий: начинается сканирование доступных файлов. Пропущенные папки будут явно отмечены в результате.',restart:'Сценарий: Cleaner завершает работу и запускает эту же установленную копию. Во время операций эта кнопка будет недоступна.',recheck:'Сценарий: повторная проверка. Для просмотра результата выберите нужное состояние сверху.',finder:'Сценарий: Finder показывает установленную копию приложения.',copy:'Сценарий: копируется точный путь к установленной копии. В этом макете буфер обмена не меняется.'};
+const stateSelect=document.getElementById('state'),status=document.getElementById('status'),actions=document.getElementById('actions'),feedback=document.getElementById('feedback');
+function render(){const key=stateSelect.value,s=states[key];status.replaceChildren();status.classList.toggle('warning',key==='limited');if(key==='checking'){const spinner=document.createElement('span');spinner.className='spinner';spinner.setAttribute('aria-hidden','true');status.append(spinner);}else{const symbol=document.createElement('span');symbol.textContent=s.symbol;symbol.setAttribute('aria-hidden','true');status.append(symbol);}status.append(document.createTextNode(s.text));document.getElementById('description').textContent=s.description;actions.replaceChildren();for(const [id,label,primary]of s.buttons){const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.action=id;if(primary)b.className='primary';actions.append(b);}document.getElementById('recovery').hidden=!s.recovery;feedback.hidden=true;}
+stateSelect.addEventListener('change',render);document.getElementById('theme').addEventListener('change',e=>document.documentElement.dataset.theme=e.target.value);
+document.addEventListener('click',e=>{const button=e.target.closest('button[data-action]');if(!button)return;feedback.textContent=messages[button.dataset.action];feedback.hidden=false;});
+render();
+</script>
+</body>
+</html>

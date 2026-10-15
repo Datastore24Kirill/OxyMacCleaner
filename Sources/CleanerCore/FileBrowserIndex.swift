@@ -11,6 +11,13 @@ public struct FileBrowserIndex: Sendable {
     public var showProtected = false
     public var limit = 200
     public init() {}
+    /// Pagination preserves selection only when the filter itself is unchanged.
+    public func isPageExpansion(of previous: Self) -> Bool {
+      guard limit > previous.limit else { return false }
+      var samePage = self
+      samePage.limit = previous.limit
+      return samePage == previous
+    }
   }
   public struct Row: Sendable {
     public let file: FileRecord
@@ -23,6 +30,7 @@ public struct FileBrowserIndex: Sendable {
     public var rows: [Row] = []
     public var matches = 0
     public var bytes: Int64 = 0
+    public var allocatedBytes: Int64 = 0
     public var hiddenProtected = 0
     public init() {}
   }
@@ -99,7 +107,8 @@ public struct FileBrowserIndex: Sendable {
         && !Scanner.inside(file.path, quarantine) && !excluded.contains { Scanner.inside(file.path, $0) }
       if !selectable && !query.showProtected && query.category != FileCategory.docker.rawValue { result.hiddenProtected += 1; continue }
       result.matches += 1
-      result.bytes += category == FileCategory.docker.rawValue ? max(0, file.allocated) : file.bytes
+      result.bytes += max(0, file.bytes)
+      result.allocatedBytes += max(0, file.allocated)
       insert(Row(file: file, category: category, selectable: selectable, search: "", download: download))
     }
     try cancellation.check()
