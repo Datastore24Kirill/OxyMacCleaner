@@ -13,20 +13,44 @@ import UserNotifications
     (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") + ":"
       + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")
   }
-  func checkDiskAccess() {
-    diskAccess = DiskAccess.check()
-    diskAccessCheckedAt = Date()
+  @Published var checkingDiskAccess = false
+  private var accessRecheckRequested = false
+  private var accessCompletions: [(DiskAccess.Result) -> Void] = []
+  func checkDiskAccess(completion: ((DiskAccess.Result) -> Void)? = nil) {
+    if let completion { accessCompletions.append(completion) }
+    // Startup, activation and manual checks share one in-flight filesystem probe.
+    guard !checkingDiskAccess else {
+      accessRecheckRequested = true
+      return
+    }
+    checkingDiskAccess = true
+    Task { [weak self] in
+      var result = await Task.detached(priority: .userInitiated) { DiskAccess.check() }.value
+      guard let self else { return }
+      while self.accessRecheckRequested {
+        self.accessRecheckRequested = false
+        result = await Task.detached(priority: .userInitiated) { DiskAccess.check() }.value
+      }
+      self.diskAccess = result
+      self.diskAccessCheckedAt = Date()
+      self.checkingDiskAccess = false
+      let completions = self.accessCompletions
+      self.accessCompletions.removeAll()
+      completions.forEach { $0(result) }
+    }
   }
   private var startupAccessChecked = false
   func prepareDiskAccess() {
     guard !startupAccessChecked else { return }
     startupAccessChecked = true
-    checkDiskAccess()
-    if diskAccess?.state == .available {
-      diskAccessAcknowledged = true
-      UserDefaults.standard.set(permissionBuild, forKey: "permissionReviewedBuild")
-    } else {
-      showDiskAccess = true
+    checkDiskAccess { [weak self] result in
+      guard let self else { return }
+      if result.state == .available {
+        self.diskAccessAcknowledged = true
+        UserDefaults.standard.set(self.permissionBuild, forKey: "permissionReviewedBuild")
+      } else if !self.diskAccessAcknowledged {
+        self.showDiskAccess = true
+      }
     }
   }
   func openDiskSettings() {
@@ -402,11 +426,19 @@ import UserNotifications
   func reveal(_ path: String) {
     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
   }
-  func scan(_ explicit: [URL]? = nil, resume: Bool = false) {
+  func scan(_ explicit: [URL]? = nil, resume: Bool = false, accessVerified: Bool = false) {
     let prior = resume ? report : nil
     guard !busy else { return }
     if explicit == nil && volumeID != "custom" {
-      checkDiskAccess()
+      if !accessVerified {
+        let requestedVolume = volumeID
+        let requestedRoots = roots
+        checkDiskAccess { [weak self] _ in
+          guard let self, self.volumeID == requestedVolume, self.roots == requestedRoots else { return }
+          self.scan(explicit, resume: resume, accessVerified: true)
+        }
+        return
+      }
       if diskAccess?.state != .available && !diskAccessAcknowledged {
         pendingDiskScan = true
         showDiskAccess = true

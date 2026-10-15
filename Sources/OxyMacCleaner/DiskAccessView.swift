@@ -19,7 +19,11 @@ struct DiskAccessView: View {
       Label(status, systemImage: available ? "checkmark.shield" : "info.circle")
         .foregroundStyle(available ? Color.teal : Color.orange)
         .fixedSize(horizontal: false, vertical: true)
-      if available {
+      if vm.checkingDiskAccess {
+        ProgressView(vm.t("Проверяем доступ…", "Checking access…"))
+        Text(vm.t("Проверка выполняется в фоне. Окно можно закрыть.", "The check runs in the background. You can close this window."))
+          .font(.caption).foregroundStyle(.secondary)
+      } else if available {
         Text(vm.t("Можно приступать к сканированию.", "You can start scanning."))
           .foregroundStyle(.secondary)
       } else {
@@ -157,7 +161,7 @@ struct DiskAccessView: View {
   }
 
   @ViewBuilder private var footerStatus: some View {
-    if !available {
+    if !available && !vm.checkingDiskAccess {
       VStack(alignment: .leading, spacing: 6) {
         if limited {
           Button(vm.t("Проверить снова", "Check again")) { vm.checkDiskAccess() }.oxyHelp(.recheck)
@@ -183,6 +187,7 @@ struct DiskAccessView: View {
   }
 
   private var status: String {
+    if vm.checkingDiskAccess { return vm.t("Проверяем доступ этой копии приложения", "Checking access for this copy of the app") }
     switch vm.diskAccess?.state {
     case .available:
       return vm.t("Проверенные защищённые папки доступны", "Checked protected directories are accessible")

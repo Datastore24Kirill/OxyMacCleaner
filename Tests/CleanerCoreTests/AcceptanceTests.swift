@@ -129,9 +129,13 @@ final class AcceptanceTests: XCTestCase {
       try FileManager.default.createDirectory(at: binary.deletingLastPathComponent(), withIntermediateDirectories: true)
       try (healthy ? "#!/bin/sh\nprintf ready > \"$2\"\n" : "#!/bin/sh\nexit 1\n").write(to: binary, atomically: true, encoding: .utf8)
       try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: binary.path)
+      let launcher = root.appendingPathComponent("launcher")
+      // Emulate open -n -W: wait for the fixture app and preserve its arguments.
+      try "#!/bin/sh\nif [ \"$1\" = -n ]; then\n  [ \"$2\" = -W ] && [ \"$4\" = --args ] || exit 9\n  exec \"$3/Contents/MacOS/OxyMacCleaner\" \"$5\" \"$6\"\nfi\nexit 0\n".write(to: launcher, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launcher.path)
       let script = root.appendingPathComponent("install.sh")
-      // Stub only GUI reopening; production move/handshake/rollback code is executed unchanged.
-      try UpdateInstaller.script.replacingOccurrences(of: "/usr/bin/open", with: "/usr/bin/true").write(to: script, atomically: true, encoding: .utf8)
+      // Stub only Launch Services; production move/handshake/rollback code is unchanged.
+      try UpdateInstaller.script.replacingOccurrences(of: "/usr/bin/open", with: "\"" + launcher.path + "\"").write(to: script, atomically: true, encoding: .utf8)
       let process = Process(); process.executableURL = URL(fileURLWithPath: "/bin/sh")
       process.arguments = [script.path, "99999999", app.path, next.path, stage.path]
       try process.run(); process.waitUntilExit(); XCTAssertEqual(process.terminationStatus, 0)

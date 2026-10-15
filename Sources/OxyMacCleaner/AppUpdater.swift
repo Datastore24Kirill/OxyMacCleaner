@@ -112,14 +112,14 @@ private final class UpdateRedirect: NSObject, URLSessionTaskDelegate {
         FileManager.default.createFile(atPath: log.path, contents: nil)
         let handle = try FileHandle(forWritingTo: log); process.standardOutput = handle; process.standardError = handle
         try process.run(); launched = true
-        status = "Перезапускаем. При сбое вернётся предыдущая версия."
+        status = "Перезапускаем. Предыдущая версия сохранена для восстановления."
         NSApplication.shared.terminate(nil)
       } catch { status = error.localizedDescription }
     }
   }
   func localizedStatus(russian: Bool) -> String {
     guard !russian else { return ErrorPresentation.message(status, russian: true) }
-    let labels = ["Проверяем релизы…": "Checking releases…", "Установлена актуальная версия": "You are up to date", "Скачиваем обновление…": "Downloading update…", "Проверяем сборку…": "Verifying update…", "Перезапускаем. При сбое вернётся предыдущая версия.": "Restarting. The previous version will be restored if launch fails."]
+    let labels = ["Проверяем релизы…": "Checking releases…", "Установлена актуальная версия": "You are up to date", "Скачиваем обновление…": "Downloading update…", "Проверяем сборку…": "Verifying update…", "Перезапускаем. Предыдущая версия сохранена для восстановления.": "Restarting. The previous version is retained for recovery."]
     if status.hasPrefix("Доступна версия ") { return "Version available: " + status.dropFirst("Доступна версия ".count) }
     return labels[status] ?? ErrorPresentation.message(status, russian: false)
   }
