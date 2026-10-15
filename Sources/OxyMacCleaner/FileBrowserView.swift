@@ -68,7 +68,7 @@ struct FileBrowserView: View {
         select: { vm.selected = Set(result.rows.filter(\.selectable).map { $0.file.path }) },
         clear: { vm.selected = [] }, shownOnly: true)
       if let failure { HStack { Text(failure).foregroundStyle(.orange); Button(vm.t("Повторить", "Retry")) { retry += 1 } } }
-      if result.rows.isEmpty && !loading {
+      if result.rows.isEmpty && !loading && failure == nil {
         ContentUnavailableView(vm.t("Нет подходящих файлов", "No matching files"), systemImage: "doc.text.magnifyingglass",
           description: Text(vm.snapshotDate == nil ? vm.t("Сначала запустите сканирование в Обзоре.", "Run a scan from Overview first.") : vm.t("Измените фильтры. Защищённые данные скрыты по умолчанию.", "Adjust filters. Protected data is hidden by default.")))
       } else {

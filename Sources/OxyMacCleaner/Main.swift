@@ -29,26 +29,26 @@ import CoreServices
         CommandMenu(vm.t("Размер окна", "Window size")) {
           Button(vm.t("Компактное · 1000 × 700", "Compact · 1000 × 700")) {
             NSApplication.shared.mainWindow?.setContentSize(NSSize(width: 1000, height: 700))
-          }.disabled(updater.installing)
+          }.disabled(updater.installing || vm.restartingForAccess)
           Button(vm.t("Обычное · 1180 × 800", "Standard · 1180 × 800")) {
             NSApplication.shared.mainWindow?.setContentSize(NSSize(width: 1180, height: 800))
-          }.disabled(updater.installing)
+          }.disabled(updater.installing || vm.restartingForAccess)
         }
         CommandMenu(vm.t("Разделы", "Sections")) {
-          Button(vm.t("Обзор", "Overview")) { vm.page = "overview" }.keyboardShortcut("1").disabled(updater.installing)
-          Button(vm.t("Карта диска", "Disk map")) { vm.page = "map" }.keyboardShortcut("2").disabled(updater.installing)
-          Button(vm.t("Xcode и проекты", "Xcode and projects")) { vm.page = "developer" }.keyboardShortcut("3").disabled(updater.installing)
-          Button(vm.t("Агенты и контекст", "Agents and context")) { vm.page = "agents" }.keyboardShortcut("4").disabled(updater.installing)
-          Button(vm.t("Карантин", "Quarantine")) { vm.page = "quarantine" }.keyboardShortcut("5").disabled(updater.installing)
-          Button(vm.t("Файлы и папки", "Files and folders")) { vm.page = "files" }.keyboardShortcut("6").disabled(updater.installing)
-          Button(vm.t("Дубликаты", "Duplicates")) { vm.page = "duplicates" }.keyboardShortcut("7").disabled(updater.installing)
-          Button(vm.t("Возможности очистки", "Cleanup opportunities")) { vm.page = "advisor" }.keyboardShortcut("8").disabled(updater.installing)
-          Button(vm.t("Локальный движок", "Local engine")) { vm.page = "engine" }.keyboardShortcut("9").disabled(updater.installing)
-          Button(vm.t("История операций", "Operation history")) { vm.page = "history" }.keyboardShortcut("0").disabled(updater.installing)
-          Button(vm.t("Архивы и загрузки", "Archives and downloads")) { vm.page = "archives" }.keyboardShortcut("1", modifiers: [.command, .shift]).disabled(updater.installing)
+          Button(vm.t("Обзор", "Overview")) { vm.page = "overview" }.keyboardShortcut("1").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Карта диска", "Disk map")) { vm.page = "map" }.keyboardShortcut("2").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Xcode и проекты", "Xcode and projects")) { vm.page = "developer" }.keyboardShortcut("3").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Агенты и контекст", "Agents and context")) { vm.page = "agents" }.keyboardShortcut("4").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Карантин", "Quarantine")) { vm.page = "quarantine" }.keyboardShortcut("5").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Файлы и папки", "Files and folders")) { vm.page = "files" }.keyboardShortcut("6").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Дубликаты", "Duplicates")) { vm.page = "duplicates" }.keyboardShortcut("7").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Возможности очистки", "Cleanup opportunities")) { vm.page = "advisor" }.keyboardShortcut("8").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Локальный движок", "Local engine")) { vm.page = "engine" }.keyboardShortcut("9").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("История операций", "Operation history")) { vm.page = "history" }.keyboardShortcut("0").disabled(updater.installing || vm.restartingForAccess)
+          Button(vm.t("Архивы и загрузки", "Archives and downloads")) { vm.page = "archives" }.keyboardShortcut("1", modifiers: [.command, .shift]).disabled(updater.installing || vm.restartingForAccess)
           Divider()
           Button(vm.t("Остановить операцию", "Stop operation")) { vm.cancel() }.keyboardShortcut(".").disabled(!vm.busy || updater.installing)
-          Button(vm.t("Настройки", "Settings")) { vm.page = "settings" }.keyboardShortcut(",").disabled(updater.installing)
+          Button(vm.t("Настройки", "Settings")) { vm.page = "settings" }.keyboardShortcut(",").disabled(updater.installing || vm.restartingForAccess)
         }
       }
   }
@@ -231,7 +231,7 @@ struct RootView: View {
           Spacer()
         }.padding(.bottom, 16)
       }.padding(.horizontal, 28)
-    }.disabled(updater.installing).sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
+    }.disabled(updater.installing || vm.restartingForAccess).sheet(isPresented: $vm.showDiskAccess) { DiskAccessView().environmentObject(vm) }
       .sheet(isPresented: Binding(get: { vm.error != nil }, set: { if !$0 { vm.error = nil } })) {
         ErrorRecoveryView(raw: vm.error ?? "").environmentObject(vm)
       }

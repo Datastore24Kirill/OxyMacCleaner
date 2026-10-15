@@ -36,17 +36,50 @@ import UserNotifications
   func restartForDiskAccess() {
     guard !busy, !contextRunning, !restartingForAccess else { return }
     do {
+      let logs = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("OxyMacCleaner/Logs", isDirectory: true)
+      try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+      let log = logs.appendingPathComponent("restart-\(UUID().uuidString).log")
+      guard FileManager.default.createFile(atPath: log.path, contents: nil) else {
+        throw CocoaError(.fileWriteUnknown)
+      }
+      let handle = try FileHandle(forWritingTo: log)
+      defer { try? handle.close() }
       let helper = Process()
       helper.executableURL = URL(fileURLWithPath: "/bin/sh")
       helper.arguments = ["-c", AppRestart.script, "oxy-restart",
         String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundlePath]
       helper.standardInput = FileHandle.nullDevice
-      helper.standardOutput = FileHandle.nullDevice
-      helper.standardError = FileHandle.nullDevice
+      helper.standardOutput = handle
+      helper.standardError = handle
+      helper.terminationHandler = { [weak self] process in
+        let status = process.terminationStatus
+        Task { @MainActor [weak self] in
+          guard let self, self.restartingForAccess else { return }
+          self.restartingForAccess = false
+          self.showDiskAccess = true
+          self.error = self.t("Перезапуск не завершён. Закройте приложение через ⌘Q и откройте снова. Код: ",
+            "Restart did not complete. Quit with ⌘Q and reopen the app. Code: ")
+            + "\(status). " + self.t("Журнал: ", "Log: ") + log.path
+        }
+      }
       try helper.run()
       restartingForAccess = true
-      NSApplication.shared.terminate(nil)
+      showDiskAccess = false
+      // Let SwiftUI dismiss the permission sheet before asking AppKit to quit.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        guard let self, self.restartingForAccess else { return }
+        guard !self.busy, !self.contextRunning else {
+          self.restartingForAccess = false
+          if helper.isRunning { helper.terminate() }
+          self.showDiskAccess = true
+          self.error = self.t("Перезапуск отменён: началась другая операция.", "Restart cancelled: another operation started.")
+          return
+        }
+        NSApplication.shared.terminate(nil)
+      }
     } catch {
+      restartingForAccess = false
       self.error = t("Не удалось запустить перезапуск: ", "Could not start restart helper: ")
         + error.localizedDescription
     }
