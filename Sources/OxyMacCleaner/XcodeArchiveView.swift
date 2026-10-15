@@ -18,6 +18,9 @@ struct XcodeArchiveView: View {
           || ($0.bundleID ?? "").localizedCaseInsensitiveContains(query))
     }
   }
+  private var pageArchives: [XcodeArchive] {
+    Array(archives.dropFirst(pagination.page * 10).prefix(10))
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       SectionIntro(icon: "archivebox.fill", title: vm.t("Архивы приложений", "Application archives"), subtitle: vm.t("Выберите ненужные сборки. Архивы выпущенных версий могут понадобиться для разбора сбоев.", "Choose unneeded builds. Released archives may be needed to diagnose crashes."))
@@ -60,13 +63,13 @@ struct XcodeArchiveView: View {
             (pagination.page + 1) * 10 >= archives.count)
         }
       }
-      ForEach(archives.dropFirst(pagination.page * 10).prefix(10)) { archive in
+      ForEach(pageArchives) { archive in
         archiveRow(archive)
       }
       Text(
         vm.t(
-          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Свежие изменения за последние 10 минут защищены. Копия и проверка символов необязательны. На странице показано 10 архивов.",
-          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Changes within the last 10 minutes are protected. Backup and symbol checks are optional. 10 archives per page."
+          "«Сверх лимита» означает только повод для проверки, а не безопасное удаление. Архивы и dSYM выпущенных версий могут понадобиться для разбора сбоев. Свежие изменения за последние 10 минут защищены. Копия и проверка символов необязательны. На странице архивов: \(pageArchives.count).",
+          "Beyond the limit means review, not safe deletion. Released archives and dSYMs may be needed to diagnose crashes. Changes within the last 10 minutes are protected. Backup and symbol checks are optional. Archives on this page: \(pageArchives.count)."
         )
       ).font(.caption).foregroundStyle(.secondary)
     }

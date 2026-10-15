@@ -10,6 +10,13 @@ struct TestSimulatorView: View {
   @State private var confirming = false
   @State private var measuring = false
   @State private var stopMeasurement = false
+  private var sizeSummary: String {
+    let sizes = vm.testDevices.compactMap { vm.testDeviceSizes[$0.id] }
+    let count = vm.testDevices.count
+    guard !sizes.isEmpty else { return "\(count) · " + vm.t("размеры не измерены", "sizes not measured") }
+    let total = ByteCountFormatter.string(fromByteCount: sizes.reduce(0, +), countStyle: .file)
+    return "\(count) · " + vm.t("измерено ", "measured ") + "\(sizes.count)/\(count): " + total
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(vm.t("Тестовые симуляторы Xcode", "Xcode test simulators")).font(.title2.bold())
@@ -24,7 +31,7 @@ struct TestSimulatorView: View {
           .help(vm.t("Удаляет только отмеченные выключенные тестовые устройства через simctl. Завершите тесты и закройте Xcode перед удалением.", "Deletes selected shut-down test devices via simctl. Stop tests and close Xcode first."))
       }.disabled(vm.busy)
       if measuring { Button(vm.t("Остановить подсчёт", "Stop measuring")) { stopMeasurement = true }.help(vm.t("Останавливает после текущего устройства.", "Stops after the current device.")) }
-      Text("\(vm.testDevices.count) · " + ByteCountFormatter.string(fromByteCount: vm.testDeviceSizes.values.reduce(0,+), countStyle: .file) + vm.t(" измерено", " measured"))
+      Text(sizeSummary)
       if vm.testDeviceReadAt != nil && vm.testDevices.isEmpty && vm.testDeviceIssue == nil && report.isEmpty {
         Text(vm.t("Тестовых симуляторов пока нет. Xcode создаст их при необходимости.", "No test simulators yet. Xcode creates them when needed."))
       }
@@ -52,6 +59,7 @@ struct TestSimulatorView: View {
     }.modifier(InventoryLoading(isLoaded: vm.testDeviceReadAt != nil, load: refresh))
     .confirmationDialog(vm.t("Удалить выбранные тестовые устройства без восстановления?", "Permanently delete selected test devices?"), isPresented: $confirming, titleVisibility: .visible) {
       Button(vm.t("Удалить", "Delete"), role: .destructive) { remove() }
+      Button(vm.t("Отмена", "Cancel"), role: .cancel) { }
     } message: {
       Text(vm.t("Устройств: ", "Devices: ") + "\(selected.count). " + vm.t("Сохранённые внутри данные будут потеряны. Xcode создаст необходимые тестовые копии при следующих запусках тестов.", "Their stored data will be lost. Xcode creates required test copies on later test runs."))
     }
