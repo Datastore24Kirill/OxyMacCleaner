@@ -49,14 +49,23 @@ public enum FileCategory: String, CaseIterable, Sendable {
     // Paths in scan records are absolute. Split UTF-8 directly: Foundation URL
     // component parsing is disproportionately expensive for millions of records.
     let lower = path.lowercased()
-    let parts = lower.utf8.split(separator: 47).map { String(decoding: $0, as: UTF8.self) }
-    func contains(_ part: String) -> Bool { lower.range(of: part, options: .literal) != nil }
+    // Keep empty components so repeated separators, relative paths, and the final
+    // separator retain the exact boundaries of the former "/directory/" checks.
+    let parts = lower.utf8.split(separator: 47, omittingEmptySubsequences: false)
+      .map { String(decoding: $0, as: UTF8.self) }
+    func containsDirectory(_ sequence: [String]) -> Bool {
+      guard parts.count > sequence.count + 1 else { return false }
+      for start in 1..<(parts.count - sequence.count) {
+        if sequence.indices.allSatisfy({ parts[start + $0] == sequence[$0] }) { return true }
+      }
+      return false
+    }
     if parts.contains("com.docker.docker") || parts.contains("group.com.docker")
       || parts.contains(".docker") || parts.contains("docker.raw") || parts.contains("docker.qcow2") { return .docker }
     if parts.contains("deriveddata") { return .derivedData }
     if parts.contains(where: { $0.hasSuffix(".xcarchive") }) { return .xcodeArchive }
-    if contains("/steamapps/") || contains("/gog games/")
-      || contains("/epic games/") || contains("/library/application support/minecraft/")
+    if containsDirectory(["steamapps"]) || containsDirectory(["gog games"])
+      || containsDirectory(["epic games"]) || containsDirectory(["library", "application support", "minecraft"])
     {
       return .games
     }
@@ -72,8 +81,8 @@ public enum FileCategory: String, CaseIterable, Sendable {
     {
       return .system
     }
-    if contains("/library/application support/") || contains("/library/containers/")
-      || contains("/library/group containers/")
+    if containsDirectory(["library", "application support"]) || containsDirectory(["library", "containers"])
+      || containsDirectory(["library", "group containers"])
     {
       return .appData
     }

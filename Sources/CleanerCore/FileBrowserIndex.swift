@@ -54,7 +54,7 @@ public struct FileBrowserIndex: Sendable {
     let cutoff = now.addingTimeInterval(-Double(query.olderThanDays) * 86400)
     var result = Result()
     var classifications: [String: (String, Bool)] = [:]
-    let named: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2"]
+    let named: Set<String> = ["package.swift", "package.resolved", "podfile.lock", "cartfile.resolved", "docker.raw", "docker.qcow2", "com.docker.docker", "group.com.docker", "backups.backupdb"]
     let requestedLimit = max(1, query.limit)
     // The first page also prepares the next 200 rows during the same scan.
     let prefetch = query.limit == 200 && query.olderThanDays == 0
@@ -89,13 +89,15 @@ public struct FileBrowserIndex: Sendable {
       guard file.bytes >= Int64(query.minimumMB) * 1_000_000,
         query.olderThanDays == 0 || file.modified < cutoff,
         search.isEmpty || (file.path.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) as NSString).range(of: search, options: .literal).location != NSNotFound else { continue }
-      let path = file.path as NSString, leaf = (file.path as NSString).lastPathComponent.lowercased()
-      let ext = path.pathExtension.lowercased()
-      let key = path.deletingLastPathComponent + "/" + (leaf.hasPrefix(".") || ext.isEmpty || named.contains(leaf) ? leaf : "*." + ext)
+      let slash = file.path.lastIndex(of: "/")
+      let leaf = String(slash.map { file.path[file.path.index(after: $0)...] } ?? file.path[...]).lowercased()
+      let ext = leaf.lastIndex(of: ".").map { String(leaf[leaf.index(after: $0)...]) } ?? ""
+      let parent = slash.map { String(file.path[...$0]) } ?? ""
+      let key = parent + (leaf.hasPrefix(".") || ext.isEmpty || named.contains(leaf) ? leaf : "*." + ext)
       let classification: (String, Bool)
       if let cached = classifications[key] { classification = cached }
       else {
-        classification = (file.category, QuarantineStore.protected(file.path))
+        classification = (file.category, QuarantineStore.protectedSnapshotPath(file.path))
         if classifications.count >= 4096 { classifications.removeAll(keepingCapacity: true) }
         classifications[key] = classification
       }

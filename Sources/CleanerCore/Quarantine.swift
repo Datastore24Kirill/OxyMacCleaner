@@ -110,13 +110,42 @@ public final class QuarantineStore: @unchecked Sendable {
   }
   // Only the dedicated archive operation may enter the standard Xcode Archives tree.
   private static func protected(_ path: String, archiveStorage: Bool) -> Bool {
-    if FileCategory.isDockerData(path) { return true }
-    let url = URL(fileURLWithPath: path).standardizedFileURL
-    let components = url.pathComponents.map { $0.lowercased() }
-    let archives = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Developer/Xcode/Archives").path
-    if components.contains("library") && !(archiveStorage && Scanner.inside(url.path, archives)) {
-      return true
+    protectedNormalizedPath(URL(fileURLWithPath: path).standardizedFileURL.path, archiveStorage: archiveStorage)
+  }
+  /// Scan records normally contain absolute lexical paths. Avoid URL conversion in the
+  /// metadata-only browser; unusual paths still use the canonical public policy.
+  static func protectedSnapshotPath(_ path: String) -> Bool {
+    var bytes = path.utf8.makeIterator()
+    guard bytes.next() == 47 else { return protected(path) }
+    var componentLength = 0
+    var onlyDots = true
+    while let byte = bytes.next() {
+      if byte == 47 {
+        if componentLength == 0 || (onlyDots && componentLength <= 2) { return protected(path) }
+        componentLength = 0
+        onlyDots = true
+      } else {
+        componentLength += 1
+        if byte != 46 { onlyDots = false }
+      }
+    }
+    if onlyDots && componentLength > 0 && componentLength <= 2 { return protected(path) }
+    return protectedNormalizedPath(path, archiveStorage: false)
+  }
+  private static func protectedNormalizedPath(_ path: String, archiveStorage: Bool) -> Bool {
+    let lower = path.lowercased()
+    func pathExtension(_ component: String) -> String {
+      guard let dot = component.lastIndex(of: "."), dot != component.startIndex else { return "" }
+      return String(component[component.index(after: dot)...])
+    }
+    let components = ["/"] + lower.split(separator: "/").map(String.init)
+    if components.contains("com.docker.docker") || components.contains("group.com.docker")
+      || components.contains(".docker") || components.contains("docker.raw") || components.contains("docker.qcow2") { return true }
+    if components.contains("library") {
+      guard archiveStorage else { return true }
+      let archives = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Developer/Xcode/Archives").path
+      if !Scanner.inside(path, archives) { return true }
     }
     let blocked: Set<String> = [
       ".git", ".svn", ".hg", ".ssh", ".gnupg", ".aws", ".azure", "keychains",
@@ -131,10 +160,11 @@ public final class QuarantineStore: @unchecked Sendable {
       "sparsebundle", "backupbundle", "vmwarevm", "pvm",
     ]
     if !blocked.isDisjoint(with: components)
-      || components.contains(where: { packages.contains(URL(fileURLWithPath: $0).pathExtension) }) {
+      || components.contains(where: { packages.contains(pathExtension($0)) }) {
       return true
     }
-    let name = url.lastPathComponent.lowercased()
+    let name = components.last ?? ""
+    let ext = pathExtension(name)
     if name == ".env" || name.hasPrefix(".env.")
       || ["package.swift", "package.resolved", "podfile", "podfile.lock", "cartfile",
           "cartfile.resolved", ".netrc", ".npmrc", ".pypirc"].contains(name)
@@ -142,12 +172,12 @@ public final class QuarantineStore: @unchecked Sendable {
           "keychain", "keychain-db", "swift", "m", "mm", "h", "c", "cc", "cpp", "hpp",
           "py", "js", "jsx", "ts", "tsx", "rs", "go", "kt", "java", "dart", "cs",
           "pbxproj", "xcconfig", "entitlements", "storyboard", "xib", "sparseimage"
-      ].contains(url.pathExtension.lowercased()) {
+      ].contains(ext) {
       return true
     }
     // Apply system-root rules to mounted disks as well as the startup disk.
     let systemPath = components.count >= 3 && components[1] == "volumes"
-      ? "/" + components.dropFirst(3).joined(separator: "/") : url.path.lowercased()
+      ? "/" + components.dropFirst(3).joined(separator: "/") : lower
     return ["/system", "/library", "/usr", "/bin", "/sbin", "/private", "/dev",
             "/etc", "/var", "/applications", "/opt"].contains {
       Scanner.inside(systemPath, $0)

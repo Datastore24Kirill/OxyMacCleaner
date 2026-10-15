@@ -43,20 +43,18 @@ struct FileBrowserView: View {
           .font(.callout).foregroundStyle(.secondary)
         Link(vm.t("Как освободить место в Docker", "How to reclaim Docker space"), destination: URL(string: "https://docs.docker.com/desktop/troubleshoot-and-support/faqs/macfaqs/#what-if-the-file-is-too-big")!)
       }
-      HStack {
-        Label("\(result.matches) " + vm.t("файлов", "files"), systemImage: "doc.on.doc")
-        VStack(alignment: .leading) {
-          Text(vm.t("Заявлено: ", "Logical: ") + ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
-          Text(vm.t("Выделено: ", "Allocated: ") + ByteCountFormatter.string(fromByteCount: result.allocatedBytes, countStyle: .file)).monospacedDigit()
-        }
-        Spacer()
-        Button(vm.t("Папки на карте", "Explore folders")) { vm.page = "map" }
-        if loading { ProgressView(value: fraction).frame(width: 90); Text("\(Int(fraction * 100))%").font(.caption); Button(vm.t("Остановить", "Stop")) { activeToken?.cancel() } }
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .top) { resultSummary; Spacer(); browserControls }
+        VStack(alignment: .leading, spacing: 10) { resultSummary; browserControls }
       }.font(.callout)
+      if loading {
+        Text(vm.t("Подготовка списка из сохранённого снимка. Повторное сканирование диска не выполняется.", "Preparing the list from the saved snapshot. The disk is not being scanned again."))
+          .font(.caption).foregroundStyle(.secondary)
+      }
       Text(vm.t("Сортировка и фильтр размера — по заявленному размеру. Выделенные блоки APFS могут быть общими: это не обещание освобождаемого места.", "Size sorting and filtering use logical size. APFS blocks may be shared: allocated space is not guaranteed reclaimable space."))
         .font(.caption).foregroundStyle(.secondary)
-      if query.minimumMB > 0 || query.olderThanDays > 0 {
-        Text(vm.t("Фильтры: ", "Filters: ") + "≥ \(query.minimumMB) MB · " + vm.t("без изменений от ", "unmodified for ") + "\(query.olderThanDays) " + vm.t("дней", "days")).font(.caption)
+      if !activeFilters.isEmpty {
+        Text(vm.t("Фильтры: ", "Filters: ") + activeFilters.joined(separator: " · ")).font(.caption)
       }
       if result.hiddenProtected > 0 {
         Text(vm.t("Скрыты защищённые объекты: ", "Protected items hidden: ") + "\(result.hiddenProtected). " + vm.t("Включить просмотр можно в фильтрах.", "Enable review in Filters."))
@@ -95,15 +93,9 @@ struct FileBrowserView: View {
           }.padding(.vertical, 4).contextMenu { FileActions(path: row.file.path, file: row.file) }
         }.listStyle(.inset).clipShape(RoundedRectangle(cornerRadius: 14))
       }
-      HStack {
-        if result.rows.count < result.matches {
-          Button(vm.t("Показать ещё 200", "Show 200 more")) { query.limit += 200 }.disabled(loading)
-        }
-        Text(vm.t("Карантин пока занимает место на диске.", "Quarantine still occupies disk space.")).font(.caption).foregroundStyle(.secondary)
-        Spacer()
-        Button { vm.quarantineSelected(paths: Set(selectedRows.map { $0.file.path })) } label: {
-          Label(vm.t("В карантин", "Quarantine") + " (\(selectedRows.count))", systemImage: "archivebox")
-        }.buttonStyle(.borderedProminent).tint(.teal).disabled(selectedRows.isEmpty || loading || vm.busy)
+      ViewThatFits(in: .horizontal) {
+        HStack { pagination; Spacer(); quarantineButton(selectedRows) }
+        VStack(alignment: .leading, spacing: 10) { pagination; quarantineButton(selectedRows) }
       }
     }.task(id: vm.dataProject) {
       let roots = [URL(fileURLWithPath: "/Applications"), vm.home.appendingPathComponent("Applications")]
@@ -144,4 +136,62 @@ struct FileBrowserView: View {
       }
     }
   }
+
+  private var activeFilters: [String] {
+    var filters: [String] = []
+    if query.minimumMB > 0 { filters.append("≥ \(query.minimumMB) MB") }
+    if query.olderThanDays > 0 {
+      filters.append(vm.t("Без изменений от ", "Unmodified for ") + "\(query.olderThanDays) " + vm.t("дней", "days"))
+    }
+    return filters
+  }
+
+  @ViewBuilder private var resultSummary: some View {
+    if loading && result.rows.isEmpty {
+      Text(vm.t("Готовим список из сохранённого снимка…", "Preparing the list from the saved snapshot…"))
+        .fontWeight(.semibold)
+    } else {
+      VStack(alignment: .leading, spacing: 4) {
+        Label("\(result.matches) " + vm.t("файлов", "files"), systemImage: "doc.on.doc")
+        Text(vm.t("Заявлено: ", "Logical: ") + ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file)).bold().monospacedDigit()
+        Text(vm.t("Выделено: ", "Allocated: ") + ByteCountFormatter.string(fromByteCount: result.allocatedBytes, countStyle: .file)).monospacedDigit()
+      }
+    }
+  }
+
+  private var browserControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Button(vm.t("Папки на карте", "Explore folders")) { vm.page = "map" }
+      if loading {
+        Text(vm.t(result.rows.isEmpty ? "Подготовка списка" : "Загружаем следующие файлы", result.rows.isEmpty ? "Preparing list" : "Loading more files") + " · \(Int(fraction * 100))%")
+          .font(.caption).monospacedDigit()
+        HStack {
+          ProgressView(value: fraction).frame(width: 120)
+          Button(vm.t("Остановить", "Stop")) { activeToken?.cancel() }
+        }
+      }
+    }
+  }
+
+  private var pagination: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      if !result.rows.isEmpty {
+        Text(vm.t("Показано ", "Showing ") + "\(result.rows.count)" + vm.t(" из ", " of ") + "\(result.matches)")
+          .font(.caption).monospacedDigit()
+      }
+      if result.rows.count < result.matches {
+        Button(vm.t(loading ? "Загружаем…" : "Показать ещё 200", loading ? "Loading…" : "Show 200 more")) { query.limit += 200 }
+          .disabled(loading)
+      }
+      Text(vm.t("Карантин пока занимает место на диске.", "Quarantine still occupies disk space."))
+        .font(.caption).foregroundStyle(.secondary)
+    }
+  }
+
+  private func quarantineButton(_ selectedRows: [FileBrowserIndex.Row]) -> some View {
+    Button { vm.quarantineSelected(paths: Set(selectedRows.map { $0.file.path })) } label: {
+      Label(vm.t("В карантин", "Quarantine") + " (\(selectedRows.count))", systemImage: "archivebox")
+    }.buttonStyle(.borderedProminent).tint(.teal).disabled(selectedRows.isEmpty || loading || vm.busy)
+  }
+
 }
