@@ -11,7 +11,7 @@ cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
 python3 - <<'PY'
 import plistlib
 from pathlib import Path
-info={'CFBundleName':'OxyMac Cleaner','CFBundleDisplayName':'OxyMac Cleaner','CFBundleIdentifier':'com.oxyfire.OxyMacCleaner','CFBundleVersion':'59','CFBundleShortVersionString':'1.2.0','CFBundleExecutable':'OxyMacCleaner','CFBundlePackageType':'APPL','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'CFBundleIconFile':'AppIcon','CFBundleIconName':'AppIcon','NSHumanReadableCopyright':'Copyright © 2026 Oxyfire. MIT License.'}
+info={'CFBundleName':'OxyMac Cleaner','CFBundleDisplayName':'OxyMac Cleaner','CFBundleIdentifier':'com.oxyfire.OxyMacCleaner','CFBundleVersion':'60','CFBundleShortVersionString':'1.2.0','CFBundleExecutable':'OxyMacCleaner','CFBundlePackageType':'APPL','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'CFBundleIconFile':'AppIcon','CFBundleIconName':'AppIcon','NSHumanReadableCopyright':'Copyright © 2026 Oxyfire. MIT License.'}
 Path('dist/OxyMac Cleaner.app/Contents/Info.plist').write_bytes(plistlib.dumps(info))
 PY
 swift scripts/icon.swift

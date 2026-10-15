@@ -22,7 +22,8 @@ final class CategoryTests: XCTestCase {
     query.category = FileCategory.docker.rawValue
     let result = try index.filter(query)
     XCTAssertEqual(result.matches, 2)
-    XCTAssertEqual(result.bytes, 8192)
+    XCTAssertEqual(result.bytes, 2_000_000)
+    XCTAssertEqual(result.allocatedBytes, 8192)
     XCTAssertTrue(result.rows.allSatisfy { !$0.selectable })
   }
   func testMediaAndDocuments() {
